@@ -34,11 +34,11 @@ class SqliteUserStore(IUserCredentialStore):
         self._master_key = master_key
 
         # Ensure directory exists with strict permissions (owner-only access).
+        # 0o700 = owner read+write+exec only; group/other denied. This is the
+        # secure default for a credential store directory.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         if self.db_path.parent.exists() and os.name != "nt":
-            # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
-            # 0o700 IS the secure choice (owner read+write+exec, group/other none).
-            os.chmod(self.db_path.parent, 0o700)
+            self.db_path.parent.chmod(0o700)
 
         self._init_db()
 
