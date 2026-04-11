@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from mcp_core.crypto.config_file import (
+from mcp_core.storage.config_file import (
     _with_retry,
     delete_config,
     export_config,
@@ -190,14 +190,14 @@ class TestPBKDF2Migration:
     def test_auto_migrates_legacy_config(self, _temp_config):
         import json
 
-        from mcp_core.crypto.encryption import (
+        from mcp_core.storage.encryption import (
             LEGACY_PBKDF2_ITERATIONS,
             PBKDF2_ITERATIONS,
             decrypt_data,
             derive_file_key,
             encrypt_data,
         )
-        from mcp_core.crypto.machine_id import get_machine_id, get_username
+        from mcp_core.storage.machine_id import get_machine_id, get_username
 
         machine_id = get_machine_id()
         username = get_username()

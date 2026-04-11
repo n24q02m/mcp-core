@@ -2,7 +2,7 @@
 
 import os
 
-from mcp_core.crypto.machine_id import get_machine_id, get_username
+from mcp_core.storage.machine_id import get_machine_id, get_username
 
 
 class TestGetMachineId:

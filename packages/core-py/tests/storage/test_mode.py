@@ -2,12 +2,12 @@
 
 import pytest
 
-from mcp_core.crypto.config_file import (
+from mcp_core.storage.config_file import (
     read_config,
     set_config_path,
     write_config,
 )
-from mcp_core.crypto.mode import clear_mode, get_mode, set_local_mode
+from mcp_core.storage.mode import clear_mode, get_mode, set_local_mode
 
 
 @pytest.fixture(autouse=True)

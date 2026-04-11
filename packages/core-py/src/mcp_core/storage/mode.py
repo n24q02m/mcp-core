@@ -7,7 +7,7 @@ in the existing config.enc encrypted storage.
 import logging
 from typing import Literal
 
-from mcp_core.crypto.config_file import (
+from mcp_core.storage.config_file import (
     delete_config,
     read_config,
     write_config,

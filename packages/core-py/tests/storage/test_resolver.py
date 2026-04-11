@@ -4,8 +4,8 @@ import os
 
 import pytest
 
-from mcp_core.crypto.config_file import set_config_path, write_config
-from mcp_core.crypto.resolver import resolve_config
+from mcp_core.storage.config_file import set_config_path, write_config
+from mcp_core.storage.resolver import resolve_config
 
 
 @pytest.fixture(autouse=True)

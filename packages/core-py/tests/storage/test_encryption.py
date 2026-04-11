@@ -3,7 +3,7 @@
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from mcp_core.crypto.encryption import (
+from mcp_core.storage.encryption import (
     LEGACY_PBKDF2_ITERATIONS,
     PBKDF2_ITERATIONS,
     decrypt_data,

@@ -4,7 +4,7 @@ import os
 import re
 from typing import Literal
 
-from mcp_core.crypto.config_file import read_config
+from mcp_core.storage.config_file import read_config
 
 ConfigSource = Literal["env", "file", "defaults"] | None
 

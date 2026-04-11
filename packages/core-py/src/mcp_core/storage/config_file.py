@@ -12,7 +12,7 @@ from typing import Any
 
 from platformdirs import user_config_dir
 
-from mcp_core.crypto.encryption import (
+from mcp_core.storage.encryption import (
     LEGACY_PBKDF2_ITERATIONS,
     PBKDF2_ITERATIONS,
     decrypt_data,
@@ -20,7 +20,7 @@ from mcp_core.crypto.encryption import (
     derive_passphrase_key,
     encrypt_data,
 )
-from mcp_core.crypto.machine_id import get_machine_id, get_username
+from mcp_core.storage.machine_id import get_machine_id, get_username
 
 _DEFAULT_CONFIG_PATH = Path(user_config_dir("mcp", appauthor=False)) / "config.enc"
 _MAX_RETRIES = 3

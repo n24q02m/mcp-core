@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from mcp_core.crypto.session_lock import (
+from mcp_core.storage.session_lock import (
     SessionInfo,
     acquire_session_lock,
     release_session_lock,
