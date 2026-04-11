@@ -15,6 +15,7 @@ dependencies = [
     "starlette>=0.37.0",
     "pydantic>=2.7.0",
     "loguru>=0.7.0",
+    "platformdirs>=4.0.0",
 ]
 
 [project.optional-dependencies]

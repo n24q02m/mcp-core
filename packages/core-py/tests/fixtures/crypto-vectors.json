@@ -1,0 +1,15 @@
+{
+  "_comment": "Cross-language crypto test vectors for mcp-relay. DO NOT use fixed IVs in production.",
+  "hkdf": {
+    "shared_secret_hex": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+    "passphrase": "correct-horse-battery-staple",
+    "info": "mcp-relay",
+    "derived_key_hex": "63e7812d7badf5b4afa97c33a0bd8997118c915154b1031f24846d985198b11c"
+  },
+  "aes_gcm": {
+    "plaintext": "hello from mcp-relay test vectors",
+    "iv_hex": "000000000000000000000000",
+    "ciphertext_hex": "05551b79cbc789816118be33e2efc3a3b02e31138ff2208047a8f84608b16efd48",
+    "tag_hex": "77934b8180d5553644070a4e9031bde3"
+  }
+}
