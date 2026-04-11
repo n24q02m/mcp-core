@@ -24,4 +24,11 @@ Thumbs.db
 _backup/
 .worktrees/
 *.log
-uv.lock
+.env
+.env.*
+!.env.example
+coverage/
+*.lcov
+
+# Code review graph
+.code-review-graph/
