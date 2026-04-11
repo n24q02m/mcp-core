@@ -30,6 +30,7 @@ dependencies = [
     "pydantic>=2.7.0",
     "loguru>=0.7.0",
     "platformdirs>=4.9.6",
+    "tomli-w>=1.0.0",
 ]
 
 [project.urls]
