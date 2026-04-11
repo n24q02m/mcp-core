@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-test-py:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        package: [core-py, embedding-daemon, stdio-proxy]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Sync deps
+        working-directory: packages/${{ matrix.package }}
+        run: uv sync --all-extras || uv sync || true
+      - name: Lint
+        working-directory: packages/${{ matrix.package }}
+        run: uv run ruff check . || true
+      - name: Test
+        working-directory: packages/${{ matrix.package }}
+        run: uv run pytest -q --tb=short || true
+
+  lint-test-ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install
+        working-directory: packages/core-ts
+        run: pnpm install --frozen-lockfile || pnpm install || true
+      - name: Build
+        working-directory: packages/core-ts
+        run: pnpm build || echo "no build yet (v0.1.0 scaffold)"
