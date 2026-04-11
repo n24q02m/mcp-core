@@ -38,6 +38,26 @@
     ".": {
       "import": "./build/index.js",
       "types": "./build/index.d.ts"
+    },
+    "./crypto": {
+      "import": "./build/crypto/index.js",
+      "types": "./build/crypto/index.d.ts"
+    },
+    "./storage": {
+      "import": "./build/storage/resolver.js",
+      "types": "./build/storage/resolver.d.ts"
+    },
+    "./relay": {
+      "import": "./build/relay/client.js",
+      "types": "./build/relay/client.d.ts"
+    },
+    "./schema": {
+      "import": "./build/schema/types.js",
+      "types": "./build/schema/types.d.ts"
+    },
+    "./oauth": {
+      "import": "./build/oauth/index.js",
+      "types": "./build/oauth/index.d.ts"
     }
   },
   "scripts": {
@@ -49,10 +69,13 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.8.0",
+    "env-paths": "^3.0.0",
     "jose": "^6.2.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.12.2",
     "@vitest/coverage-v8": "^4.1.3",
     "typescript": "^5.9.3",

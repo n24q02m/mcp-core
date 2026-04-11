@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures containing cross-language crypto parity vectors"
+paths = [
+    '''packages/core-py/tests/fixtures/crypto-vectors\.json''',
+    '''packages/core-ts/tests/fixtures/crypto-vectors\.json''',
+]
