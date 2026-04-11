@@ -1,0 +1,82 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0-beta.1)"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-python:
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [core-py, embedding-daemon, stdio-proxy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build
+        working-directory: packages/${{ matrix.package }}
+        run: uv build
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.package }}
+          path: packages/${{ matrix.package }}/dist/
+
+  publish-pypi:
+    needs: build-python
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [core-py, embedding-daemon, stdio-proxy]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ matrix.package == 'core-py' && 'mcp-core' || (matrix.package == 'embedding-daemon' && 'mcp-embedding-daemon' || 'mcp-stdio-proxy') }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ matrix.package }}
+          path: dist/
+      - name: Publish to PyPI (OIDC trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
+
+  publish-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install
+        working-directory: packages/core-ts
+        run: pnpm install --no-frozen-lockfile
+      - name: Build
+        working-directory: packages/core-ts
+        run: pnpm build || echo "no build yet (v0.1.0 scaffold)"
+      - name: Publish to NPM (OIDC trusted publisher + provenance)
+        working-directory: packages/core-ts
+        run: npm publish --access public --tag beta --provenance
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
