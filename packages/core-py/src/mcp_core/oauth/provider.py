@@ -15,6 +15,7 @@ from typing import Protocol
 
 from mcp_core.crypto.ecdh import export_private_key, import_private_key
 from mcp_core.relay.client import RelaySession, create_session, poll_for_result
+from mcp_core.schema.types import RelayConfigSchema
 
 from .jwt_issuer import JWTIssuer
 
@@ -66,7 +67,7 @@ class OAuthProvider:
         self,
         server_name: str,
         relay_base_url: str,
-        relay_schema: dict,
+        relay_schema: RelayConfigSchema,
         jwt_issuer: JWTIssuer,
         cache: IOAuthSessionCache | None = None,
     ):

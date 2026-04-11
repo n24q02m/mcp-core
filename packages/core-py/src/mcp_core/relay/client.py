@@ -49,11 +49,16 @@ def generate_passphrase(word_count: int = 4) -> str:
 
 @dataclass
 class RelaySession:
-    """Active relay session state."""
+    """Active relay session state.
+
+    ``public_key`` is ``None`` for decrypt-only reconstructed sessions (e.g.,
+    the OAuth code-exchange flow, where the original keypair is not retained).
+    Callers that encrypt outgoing payloads must assert ``public_key is not None``.
+    """
 
     session_id: str
     private_key: EllipticCurvePrivateKey
-    public_key: EllipticCurvePublicKey
+    public_key: EllipticCurvePublicKey | None
     passphrase: str
     relay_url: str
 
@@ -62,6 +67,8 @@ async def create_session(
     relay_base_url: str,
     server_name: str,
     schema: RelayConfigSchema,
+    *,
+    oauth_state: dict[str, str] | None = None,
 ) -> RelaySession:
     """Create a new relay session.
 
@@ -69,6 +76,12 @@ async def create_session(
         relay_base_url: Base URL of the relay server.
         server_name: Server identifier.
         schema: Relay config schema for the setup form.
+        oauth_state: Optional OAuth 2.1 authorization request parameters to bind
+            to this session. When provided, the relay server stores the state
+            alongside the session so that the browser consent UI can surface it
+            during the OAuth code-exchange flow. Expected keys mirror the
+            relay-server wire format: ``clientId``, ``redirectUri``, ``state``,
+            ``codeChallenge``, ``codeChallengeMethod``.
 
     Returns:
         RelaySession with session ID, keys, passphrase, and relay URL.
@@ -80,14 +93,18 @@ async def create_session(
     private_key, public_key = generate_key_pair()
     passphrase = generate_passphrase()
 
+    body: dict[str, object] = {
+        "sessionId": session_id,
+        "serverName": server_name,
+        "schema": dict(schema),
+    }
+    if oauth_state is not None:
+        body["oauthState"] = oauth_state
+
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{relay_base_url}/api/sessions",
-            json={
-                "sessionId": session_id,
-                "serverName": server_name,
-                "schema": dict(schema),
-            },
+            json=body,
         )
         if response.status_code >= 400:
             msg = f"Relay session creation failed: {response.status_code}"

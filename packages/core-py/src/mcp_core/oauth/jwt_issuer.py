@@ -6,20 +6,25 @@ from pathlib import Path
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric.rsa import (
+    RSAPrivateKey,
+    RSAPublicKey,
+)
 
 # Keys will be stored outside of the codebase to persist across server restarts
 DEFAULT_KEYS_DIR = Path.home() / ".mcp-relay" / "jwt-keys"
 
 
 class JWTIssuer:
+    private_key: RSAPrivateKey
+    public_key: RSAPublicKey
+
     def __init__(self, server_name: str, keys_dir: Path = DEFAULT_KEYS_DIR):
         self.server_name = server_name
         self.keys_dir = keys_dir
         self.private_key_path = self.keys_dir / f"{server_name}_private.pem"
         self.public_key_path = self.keys_dir / f"{server_name}_public.pem"
 
-        self.private_key = None
-        self.public_key = None
         self._kid = "key-1"
         self._load_or_generate_keys()
 
@@ -28,9 +33,18 @@ class JWTIssuer:
 
         if self.private_key_path.exists() and self.public_key_path.exists():
             with open(self.private_key_path, "rb") as f:
-                self.private_key = serialization.load_pem_private_key(f.read(), password=None)
+                loaded_private = serialization.load_pem_private_key(f.read(), password=None)
+            if not isinstance(loaded_private, RSAPrivateKey):
+                msg = f"Expected RSA private key at {self.private_key_path}, got {type(loaded_private).__name__}"
+                raise TypeError(msg)
+            self.private_key = loaded_private
+
             with open(self.public_key_path, "rb") as f:
-                self.public_key = serialization.load_pem_public_key(f.read())
+                loaded_public = serialization.load_pem_public_key(f.read())
+            if not isinstance(loaded_public, RSAPublicKey):
+                msg = f"Expected RSA public key at {self.public_key_path}, got {type(loaded_public).__name__}"
+                raise TypeError(msg)
+            self.public_key = loaded_public
         else:
             self.private_key = rsa.generate_private_key(
                 public_exponent=65537,
