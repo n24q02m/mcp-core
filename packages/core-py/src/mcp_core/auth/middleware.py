@@ -6,6 +6,7 @@ per MCP Streamable HTTP 2025-11-25 spec + OAuth 2.1 (RFC 9470).
 Allows `/.well-known/*`, `/authorize`, `/token`, `/health` to bypass auth so
 clients can discover the authorization server and complete the OAuth dance.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
@@ -52,9 +53,7 @@ class OAuthMiddleware(BaseHTTPMiddleware):
                 },
                 status_code=401,
                 headers={
-                    "WWW-Authenticate": (
-                        f'Bearer resource_metadata="{self._metadata_url}"'
-                    ),
+                    "WWW-Authenticate": (f'Bearer resource_metadata="{self._metadata_url}"'),
                 },
             )
         token = auth_header.split(" ", 1)[1]
@@ -65,10 +64,7 @@ class OAuthMiddleware(BaseHTTPMiddleware):
                 {"error": "invalid_token"},
                 status_code=401,
                 headers={
-                    "WWW-Authenticate": (
-                        f'Bearer error="invalid_token", '
-                        f'resource_metadata="{self._metadata_url}"'
-                    ),
+                    "WWW-Authenticate": (f'Bearer error="invalid_token", resource_metadata="{self._metadata_url}"'),
                 },
             )
         request.state.principal = principal

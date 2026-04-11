@@ -57,9 +57,7 @@ class TestResolveConfig:
         assert result.config is None
 
     def test_returns_none_when_defaults_incomplete(self):
-        result = resolve_config(
-            "telegram", ["bot_token", "chat_id"], {"bot_token": "partial"}
-        )
+        result = resolve_config("telegram", ["bot_token", "chat_id"], {"bot_token": "partial"})
         assert result.source is None
         assert result.config is None
 

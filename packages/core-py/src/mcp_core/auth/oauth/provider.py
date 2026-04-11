@@ -8,6 +8,7 @@ For Notion delegated mode, see delegated.py.
 Full implementation lands in a follow-up Phase I task. This stub establishes
 the API surface so downstream packages can depend on it.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,16 +21,10 @@ class OAuthProvider:
     jwt_public_key_pem: str
 
     async def handle_authorize(self, request: object) -> object:
-        raise NotImplementedError(
-            "Implementation follows in a Phase I follow-up task"
-        )
+        raise NotImplementedError("Implementation follows in a Phase I follow-up task")
 
     async def handle_token(self, request: object) -> object:
-        raise NotImplementedError(
-            "Implementation follows in a Phase I follow-up task"
-        )
+        raise NotImplementedError("Implementation follows in a Phase I follow-up task")
 
     async def handle_well_known(self, request: object) -> object:
-        raise NotImplementedError(
-            "Implementation follows in a Phase I follow-up task"
-        )
+        raise NotImplementedError("Implementation follows in a Phase I follow-up task")

@@ -43,7 +43,7 @@
   "scripts": {
     "build": "tsc --build tsconfig.build.json",
     "test": "vitest --passWithNoTests",
-    "test:coverage": "vitest --coverage",
+    "test:coverage": "vitest --coverage --passWithNoTests",
     "check": "biome check . && bun run type-check",
     "type-check": "tsc --noEmit"
   },

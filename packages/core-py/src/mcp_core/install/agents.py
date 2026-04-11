@@ -7,6 +7,7 @@ Full implementation lands in a follow-up Phase I task. This stub establishes
 the API surface for the `<server>(action="install_agent", targets=[...])`
 MCP tool action.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -34,11 +35,7 @@ class AgentInstaller:
 
         Returns the path of the file that was modified.
         """
-        raise NotImplementedError(
-            "Implementation follows in a Phase I follow-up task"
-        )
+        raise NotImplementedError("Implementation follows in a Phase I follow-up task")
 
     def uninstall(self, target: AgentName) -> Path:
-        raise NotImplementedError(
-            "Implementation follows in a Phase I follow-up task"
-        )
+        raise NotImplementedError("Implementation follows in a Phase I follow-up task")

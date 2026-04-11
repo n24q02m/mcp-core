@@ -7,6 +7,7 @@ stdio transport (e.g., Antigravity) to use HTTP-only MCP servers.
 Spawned by the agent as a stdio MCP server. Reads MCP_CORE_SERVER_URL
 environment variable to know where to forward.
 """
+
 from __future__ import annotations
 
 import asyncio

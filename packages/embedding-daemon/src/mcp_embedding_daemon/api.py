@@ -4,6 +4,7 @@ Exposes /embed (text to vector), /rerank (query + docs to scores), /health.
 Used by wet-mcp, mnemo-mcp, better-code-review-graph to share a single
 ONNX/GGUF model instance instead of loading per-server.
 """
+
 from __future__ import annotations
 
 from fastapi import FastAPI
@@ -44,13 +45,9 @@ async def health() -> dict:
 
 @app.post("/embed", response_model=EmbedResponse)
 async def embed(req: EmbedRequest) -> EmbedResponse:
-    raise NotImplementedError(
-        "Wire to backends.onnx / backends.gguf in a follow-up Phase I task"
-    )
+    raise NotImplementedError("Wire to backends.onnx / backends.gguf in a follow-up Phase I task")
 
 
 @app.post("/rerank", response_model=RerankResponse)
 async def rerank(req: RerankRequest) -> RerankResponse:
-    raise NotImplementedError(
-        "Wire to backends.onnx / backends.gguf in a follow-up Phase I task"
-    )
+    raise NotImplementedError("Wire to backends.onnx / backends.gguf in a follow-up Phase I task")

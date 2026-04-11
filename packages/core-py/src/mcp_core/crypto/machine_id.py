@@ -71,9 +71,7 @@ def _get_first_mac() -> str:
         # indicated by the multicast bit being set
         if (mac_int >> 40) & 1:
             return "unknown"
-        mac_str = ":".join(
-            f"{(mac_int >> (8 * i)) & 0xFF:02x}" for i in range(5, -1, -1)
-        )
+        mac_str = ":".join(f"{(mac_int >> (8 * i)) & 0xFF:02x}" for i in range(5, -1, -1))
         if mac_str == "00:00:00:00:00:00":
             return "unknown"
         return mac_str

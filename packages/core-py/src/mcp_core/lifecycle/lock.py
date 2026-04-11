@@ -4,6 +4,7 @@ Ensures only one daemon instance runs per (name, port) tuple. Used by
 auto-ensure stdio proxy spawning and by server startup to prevent races
 when two agents launch the same MCP server simultaneously.
 """
+
 from __future__ import annotations
 
 import os
@@ -32,9 +33,7 @@ class LifecycleLock:
             except OSError as e:
                 self._fh.close()
                 self._fh = None
-                raise RuntimeError(
-                    f"LifecycleLock: another process holds {self._lock_file}"
-                ) from e
+                raise RuntimeError(f"LifecycleLock: another process holds {self._lock_file}") from e
         else:
             import fcntl
 
@@ -43,9 +42,7 @@ class LifecycleLock:
             except BlockingIOError as e:
                 self._fh.close()
                 self._fh = None
-                raise RuntimeError(
-                    f"LifecycleLock: another process holds {self._lock_file}"
-                ) from e
+                raise RuntimeError(f"LifecycleLock: another process holds {self._lock_file}") from e
         self._fh.write(f"{os.getpid()}\n")
         self._fh.flush()
         return self

@@ -3,6 +3,7 @@
 Thin wrapper around FastMCP that adds OAuth 2.1 middleware, lifecycle lock,
 and session management. Credential servers subclass or instantiate directly.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -38,7 +39,7 @@ class StreamableHTTPServer:
 
         lock = self._lock or LifecycleLock(name=self._mcp.name, port=self._port)
         with lock:
-            app = self._mcp.streamable_http_app()
+            app = self._mcp.streamable_http_app()  # ty: ignore[unresolved-attribute]
             if self._auth is not None:
                 app.add_middleware(type(self._auth), **self._auth.kwargs)
             import uvicorn

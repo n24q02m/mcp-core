@@ -2,6 +2,7 @@
 
 Used when ONNX unavailable or quantized GGUF preferred for CPU inference.
 """
+
 from __future__ import annotations
 
 
@@ -10,6 +11,4 @@ class GGUFBackend:
         self._model_path = model_path
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        raise NotImplementedError(
-            "Wire to llama-cpp-python in a follow-up Phase I task"
-        )
+        raise NotImplementedError("Wire to llama-cpp-python in a follow-up Phase I task")

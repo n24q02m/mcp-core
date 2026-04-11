@@ -47,12 +47,7 @@ def resolve_config(
     env_config: dict[str, str] = {}
     all_env_present = len(required_fields) > 0
     for field in required_fields:
-        env_key = (
-            "MCP_"
-            + re.sub(r"-", "_", server_name).upper()
-            + "_"
-            + re.sub(r"-", "_", field).upper()
-        )
+        env_key = "MCP_" + re.sub(r"-", "_", server_name).upper() + "_" + re.sub(r"-", "_", field).upper()
         value = os.environ.get(env_key, "")
         if value:
             env_config[field] = value
@@ -65,9 +60,7 @@ def resolve_config(
     # 2. Check config file
     file_config = read_config(server_name)
     if file_config is not None:
-        has_all = all(
-            f in file_config and file_config[f] != "" for f in required_fields
-        )
+        has_all = all(f in file_config and file_config[f] != "" for f in required_fields)
         if has_all:
             return ResolvedConfig(config=file_config, source="file")
 
