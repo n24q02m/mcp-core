@@ -29,9 +29,13 @@ Homepage = "https://github.com/n24q02m/mcp-core"
 Repository = "https://github.com/n24q02m/mcp-core"
 Issues = "https://github.com/n24q02m/mcp-core/issues"
 
+[project.scripts]
+mcp-stdio-proxy = "mcp_stdio_proxy.main:cli"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-asyncio>=1.2.0",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.7",
     "ty>=0.0.1a22",

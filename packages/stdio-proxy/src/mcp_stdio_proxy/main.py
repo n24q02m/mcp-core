@@ -1,15 +1,16 @@
 """Thin stdio to HTTP forwarder.
 
-Forwards MCP JSON-RPC frames from stdin to the local HTTP daemon's /mcp
+Forwards MCP JSON-RPC frames from stdin to a local HTTP daemon's /mcp
 endpoint and writes responses to stdout. Enables agents that only support
 stdio transport (e.g., Antigravity) to use HTTP-only MCP servers.
 
 Spawned by the agent as a stdio MCP server. Reads MCP_CORE_SERVER_URL
-environment variable to know where to forward.
+environment variable (or --url CLI flag) to know where to forward.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
 import sys
@@ -17,13 +18,7 @@ import sys
 import httpx
 
 
-async def main() -> int:
-    url = os.environ.get("MCP_CORE_SERVER_URL")
-    token = os.environ.get("MCP_CORE_SERVER_TOKEN")
-    if not url:
-        sys.stderr.write("MCP_CORE_SERVER_URL not set\n")
-        return 1
-
+async def forward(url: str, token: str | None) -> int:
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -46,5 +41,33 @@ async def main() -> int:
                 return 2
 
 
+async def main(url: str | None = None, token: str | None = None) -> int:
+    resolved_url = url or os.environ.get("MCP_CORE_SERVER_URL")
+    resolved_token = token if token is not None else os.environ.get("MCP_CORE_SERVER_TOKEN")
+    if not resolved_url:
+        sys.stderr.write("MCP_CORE_SERVER_URL not set. Pass --url <url> or set the env var.\n")
+        return 1
+    return await forward(resolved_url, resolved_token)
+
+
+def cli() -> int:
+    parser = argparse.ArgumentParser(
+        prog="mcp-stdio-proxy",
+        description="Forward stdio MCP frames to an HTTP MCP server",
+    )
+    parser.add_argument(
+        "--url",
+        default=None,
+        help="Upstream HTTP MCP endpoint (default: $MCP_CORE_SERVER_URL)",
+    )
+    parser.add_argument(
+        "--token",
+        default=None,
+        help="Bearer token (default: $MCP_CORE_SERVER_TOKEN)",
+    )
+    args = parser.parse_args()
+    return asyncio.run(main(url=args.url, token=args.token))
+
+
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    sys.exit(cli())

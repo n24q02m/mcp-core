@@ -38,8 +38,12 @@ Homepage = "https://github.com/n24q02m/mcp-core"
 Repository = "https://github.com/n24q02m/mcp-core"
 Issues = "https://github.com/n24q02m/mcp-core/issues"
 
+[project.scripts]
+mcp-embedding-daemon = "mcp_embedding_daemon.__main__:main"
+
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=9.0.3",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.7",
