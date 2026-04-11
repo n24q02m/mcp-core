@@ -6,12 +6,11 @@ and session management. Credential servers subclass or instantiate directly.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
-    from mcp_core.auth.middleware import OAuthMiddleware
     from mcp_core.lifecycle.lock import LifecycleLock
 
 
@@ -24,7 +23,7 @@ class StreamableHTTPServer:
         *,
         host: str = "127.0.0.1",
         port: int,
-        auth: "OAuthMiddleware | None" = None,
+        auth: Any | None = None,
         lock: "LifecycleLock | None" = None,
     ) -> None:
         self._mcp = mcp
