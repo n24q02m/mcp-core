@@ -43,7 +43,7 @@ export class SqliteUserStore implements IUserCredentialStore {
 
   private encrypt(plaintext: string): Buffer {
     const iv = randomBytes(12)
-    const cipher = createCipheriv('aes-256-gcm', this.masterKey, iv)
+    const cipher = createCipheriv('aes-256-gcm', this.masterKey, iv, { authTagLength: 16 })
     const encrypted = Buffer.concat([cipher.update(plaintext, 'utf-8'), cipher.final()])
     const tag = cipher.getAuthTag()
     // Layout: [12 iv] [16 tag] [... ciphertext]
@@ -54,7 +54,7 @@ export class SqliteUserStore implements IUserCredentialStore {
     const iv = payload.subarray(0, 12)
     const tag = payload.subarray(12, 28)
     const ciphertext = payload.subarray(28)
-    const decipher = createDecipheriv('aes-256-gcm', this.masterKey, iv)
+    const decipher = createDecipheriv('aes-256-gcm', this.masterKey, iv, { authTagLength: 16 })
     decipher.setAuthTag(tag)
     return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8')
   }
