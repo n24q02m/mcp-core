@@ -60,6 +60,9 @@ jobs:
 
   publish-npm:
     runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@n24q02m/mcp-core
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -75,8 +78,11 @@ jobs:
       - name: Build
         working-directory: packages/core-ts
         run: pnpm build || echo "no build yet (v0.1.0 scaffold)"
-      - name: Publish to NPM (OIDC trusted publisher + provenance)
+      - name: Publish to NPM
         working-directory: packages/core-ts
-        run: npm publish --access public --tag beta --provenance
+        # First publish: NODE_AUTH_TOKEN (classic/granular token from secrets.NPM_TOKEN).
+        # After package exists on NPM, trusted publisher can be configured; remove token
+        # and add id-token permission + --provenance flag in a follow-up commit.
+        run: npm publish --access public --tag beta
         env:
-          NPM_CONFIG_PROVENANCE: "true"
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
