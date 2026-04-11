@@ -1,0 +1,15 @@
+[semantic_release]
+version_toml = [
+    "packages/core-py/pyproject.toml:project.version",
+    "packages/embedding-daemon/pyproject.toml:project.version",
+    "packages/stdio-proxy/pyproject.toml:project.version",
+]
+tag_format = "v{version}"
+commit_message = "chore(release): v{version}"
+major_on_zero = false
+
+[semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+
+[semantic_release.remote]
+type = "github"

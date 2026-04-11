@@ -1,0 +1,19 @@
+[tools]
+node = "24"
+bun = "latest"
+uv = "latest"
+python = "3.13"
+
+[env]
+UV_LINK_MODE = "copy"
+
+[tasks.setup]
+run = [
+  "mise install",
+  "bun install",
+  "cd packages/core-py && uv sync --group dev",
+  "uv pip install pre-commit",
+  "uv run pre-commit install",
+  "uv run pre-commit install --hook-type commit-msg",
+  "echo 'Setup complete!'"
+]
