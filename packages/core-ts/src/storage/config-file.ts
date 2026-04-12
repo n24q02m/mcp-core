@@ -47,9 +47,19 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw new Error('Unreachable')
 }
 
+// Cache the derived file key to avoid expensive PBKDF2 iterations on every config read/write.
+// This significantly speeds up successive configuration accesses within the same process.
+let cachedKey: CryptoKey | null = null
+
+export function clearKeyCacheForTesting(): void {
+  cachedKey = null
+}
+
 async function getKey(): Promise<CryptoKey> {
+  if (cachedKey) return cachedKey
   const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
-  return deriveFileKey(machineId, username)
+  cachedKey = await deriveFileKey(machineId, username)
+  return cachedKey
 }
 
 async function loadStore(): Promise<ConfigStore> {
@@ -62,7 +72,7 @@ async function loadStore(): Promise<ConfigStore> {
   const data = await readFile(configPath)
 
   try {
-    const key = await deriveFileKey(machineId, username, PBKDF2_ITERATIONS)
+    const key = await getKey()
     const json = await decryptData(key, data)
     return JSON.parse(json) as ConfigStore
   } catch (err) {
