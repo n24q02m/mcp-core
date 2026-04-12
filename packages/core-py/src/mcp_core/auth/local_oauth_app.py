@@ -52,7 +52,7 @@ def create_local_oauth_app(
     *,
     server_name: str,
     relay_schema: dict[str, Any],
-    on_credentials_saved: Callable[[dict[str, str]], None] | None = None,
+    on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
     jwt_issuer: JWTIssuer | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create OAuth 2.1 Authorization Server Starlette app.
@@ -153,10 +153,14 @@ def create_local_oauth_app(
                 status_code=400,
             )
 
-        # Save credentials via callback
+        # Save credentials via callback. Callback may return a dict with
+        # next_step info (e.g., GDrive OAuth device code to show in the form).
+        next_step: dict | None = None
         if on_credentials_saved is not None:
             try:
-                on_credentials_saved(credentials)
+                result = on_credentials_saved(credentials)
+                if isinstance(result, dict):
+                    next_step = result
             except Exception:
                 logger.exception("on_credentials_saved callback failed")
                 return JSONResponse(
@@ -176,11 +180,14 @@ def create_local_oauth_app(
 
         redirect_uri = session["redirect_uri"]
         state = session["state"]
-        # Build redirect URL with code and state
         separator = "&" if "?" in redirect_uri else "?"
         redirect_url = f"{redirect_uri}{separator}code={auth_code}&state={state}"
 
-        return JSONResponse({"ok": True, "redirect_url": redirect_url})
+        response_body: dict = {"ok": True, "redirect_url": redirect_url}
+        if next_step:
+            response_body["next_step"] = next_step
+
+        return JSONResponse(response_body)
 
     async def authorize(request: Request) -> HTMLResponse | JSONResponse:
         """Dispatch GET/POST on /authorize."""

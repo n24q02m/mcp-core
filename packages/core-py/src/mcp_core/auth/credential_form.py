@@ -440,20 +440,57 @@ def render_credential_form(
                     body: JSON.stringify(payload),
                 }})
                     .then(function (response) {{
-                        if (response.ok) {{
-                            showStatus("success", "Connected successfully. You can close this window.");
-                            form.querySelectorAll(".field-input").forEach(function (i) {{
-                                i.disabled = true;
-                            }});
-                            submitBtn.disabled = true;
-                            submitBtn.textContent = "Connected";
-                        }} else {{
-                            return response.text().then(function (text) {{
-                                showStatus("error", "Error: " + (text || response.statusText || "Request failed."));
+                        return response.json().then(function (data) {{
+                            if (data.ok) {{
+                                form.querySelectorAll(".field-input").forEach(function (i) {{
+                                    i.disabled = true;
+                                }});
+                                submitBtn.disabled = true;
+                                submitBtn.textContent = "Connected";
+                                if (data.next_step && data.next_step.type === "oauth_device_code") {{
+                                    var ns = data.next_step;
+                                    statusBox.textContent = "";
+                                    var title = document.createElement("strong");
+                                    title.textContent = "API keys saved!";
+                                    statusBox.appendChild(title);
+                                    statusBox.appendChild(document.createElement("br"));
+                                    statusBox.appendChild(document.createElement("br"));
+                                    var label = document.createTextNode("Authorize Google Drive sync:");
+                                    statusBox.appendChild(label);
+                                    statusBox.appendChild(document.createElement("br"));
+                                    var link = document.createElement("a");
+                                    link.href = ns.verification_url;
+                                    link.target = "_blank";
+                                    link.rel = "noopener";
+                                    link.style.cssText = "color:#60a5fa;font-weight:bold";
+                                    link.textContent = ns.verification_url;
+                                    statusBox.appendChild(link);
+                                    statusBox.appendChild(document.createElement("br"));
+                                    statusBox.appendChild(document.createElement("br"));
+                                    var codeLabel = document.createTextNode("Enter code: ");
+                                    statusBox.appendChild(codeLabel);
+                                    var codeEl = document.createElement("strong");
+                                    codeEl.style.cssText = "font-size:1.2em;letter-spacing:0.1em";
+                                    codeEl.textContent = ns.user_code;
+                                    statusBox.appendChild(codeEl);
+                                    statusBox.appendChild(document.createElement("br"));
+                                    statusBox.appendChild(document.createElement("br"));
+                                    var waiting = document.createElement("span");
+                                    waiting.style.color = "#888";
+                                    waiting.textContent = "Waiting for authorization...";
+                                    statusBox.appendChild(waiting);
+                                    statusBox.className = "status-box info";
+                                    statusBox.style.display = "block";
+                                }} else {{
+                                    var successMsg = data.message || "Connected successfully. You can close this window.";
+                                    showStatus("success", successMsg);
+                                }}
+                            }} else {{
+                                showStatus("error", data.error || data.error_description || "Request failed.");
                                 submitBtn.disabled = false;
                                 submitBtn.textContent = "Connect";
-                            }});
-                        }}
+                            }}
+                        }});
                     }})
                     .catch(function (err) {{
                         showStatus("error", "Network error: " + err.message);
