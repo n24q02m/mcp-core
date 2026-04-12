@@ -57,6 +57,7 @@ def _validate_url(url: str) -> bool:
         return False
     return True
 
+
 def try_open_browser(url: str) -> bool:
     """Try to open URL in default browser. Returns True if likely succeeded.
 

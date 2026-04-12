@@ -94,6 +94,7 @@ class TestTryOpenBrowser:
                     assert result is False
                 mock_wb.open.assert_not_called()
 
+
 class TestOpenInWsl:
     def test_tries_wslview_first(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
