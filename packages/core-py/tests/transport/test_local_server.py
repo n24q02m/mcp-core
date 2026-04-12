@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import socket
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastmcp import FastMCP
@@ -220,13 +220,21 @@ class TestBearerMCPApp:
 # ---------------------------------------------------------------------------
 
 
+def _mock_uvicorn_server():
+    """Create a mock uvicorn.Server that does nothing on serve()."""
+    mock_server = MagicMock()
+    mock_server.serve = AsyncMock()
+    return mock_server
+
+
 class TestRunLocalServer:
     def test_opens_browser_when_no_credentials(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         """Verify webbrowser.open is called when credentials don't exist."""
+        mock_server = _mock_uvicorn_server()
         with (
             patch("mcp_core.storage.config_file.read_config", return_value=None),
             patch("webbrowser.open") as mock_wb_open,
-            patch("uvicorn.run") as mock_uvicorn_run,
+            patch("uvicorn.Server", return_value=mock_server),
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
             mock_lock.return_value.__enter__ = lambda self: self
@@ -246,14 +254,15 @@ class TestRunLocalServer:
 
             mock_wb_open.assert_called_once()
             assert "127.0.0.1:12345/authorize" in mock_wb_open.call_args[0][0]
-            mock_uvicorn_run.assert_called_once()
+            mock_server.serve.assert_awaited_once()
 
     def test_skips_browser_when_credentials_exist(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         """Verify webbrowser.open is NOT called when credentials already exist."""
+        mock_server = _mock_uvicorn_server()
         with (
             patch("mcp_core.storage.config_file.read_config", return_value={"api_key": "existing"}),
             patch("webbrowser.open") as mock_wb_open,
-            patch("uvicorn.run"),
+            patch("uvicorn.Server", return_value=mock_server),
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
             mock_lock.return_value.__enter__ = lambda self: self
@@ -275,10 +284,11 @@ class TestRunLocalServer:
 
     def test_skips_browser_when_open_browser_false(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         """Verify webbrowser.open is NOT called when open_browser=False."""
+        mock_server = _mock_uvicorn_server()
         with (
             patch("mcp_core.storage.config_file.read_config", return_value=None),
             patch("webbrowser.open") as mock_wb_open,
-            patch("uvicorn.run"),
+            patch("uvicorn.Server", return_value=mock_server),
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
             mock_lock.return_value.__enter__ = lambda self: self

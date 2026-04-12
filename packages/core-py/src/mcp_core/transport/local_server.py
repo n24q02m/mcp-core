@@ -233,4 +233,6 @@ async def run_local_server(
             logger.info("Credentials already configured for {}", server_name)
 
         logger.info("Starting local MCP server on 127.0.0.1:{}", actual_port)
-        uvicorn.run(app, host="127.0.0.1", port=actual_port, log_level="info")
+        config = uvicorn.Config(app, host="127.0.0.1", port=actual_port, log_level="info")
+        server = uvicorn.Server(config)
+        await server.serve()
