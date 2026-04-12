@@ -498,6 +498,8 @@ def render_credential_form(
                                             }})
                                             .catch(function () {{}});
                                     }}, 3000);
+                                }} else if (data.next_step && data.next_step.type === "info") {{
+                                    showStatus("success", data.next_step.message || "Setup saved. Additional steps may be required.");
                                 }} else {{
                                     var successMsg = data.message || "Connected successfully. You can close this window.";
                                     showStatus("success", successMsg);
