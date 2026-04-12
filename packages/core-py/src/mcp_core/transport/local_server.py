@@ -103,7 +103,7 @@ def build_local_app(
     *,
     server_name: str,
     relay_schema: dict[str, Any],
-    on_credentials_saved: Callable[[dict[str, str]], None] | None = None,
+    on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
     jwt_keys_dir: Path | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Construct a combined Starlette app with OAuth AS + MCP transport.
@@ -178,7 +178,7 @@ async def run_local_server(
     relay_schema: dict[str, Any],
     port: int = 0,
     open_browser: bool = True,
-    on_credentials_saved: Callable[[dict[str, str]], None] | None = None,
+    on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
     jwt_keys_dir: Path | None = None,
 ) -> None:
     """Start MCP server with local OAuth AS on 127.0.0.1.
