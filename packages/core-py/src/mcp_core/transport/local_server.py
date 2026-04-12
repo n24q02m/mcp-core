@@ -184,6 +184,7 @@ async def run_local_server(
     port: int = 0,
     open_browser: bool = True,
     on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
+    setup_complete_hook: Callable[[Callable[[], None]], None] | None = None,
     jwt_keys_dir: Path | None = None,
 ) -> None:
     """Start MCP server with local OAuth AS on 127.0.0.1.
@@ -192,17 +193,18 @@ async def run_local_server(
     1. Creates the OAuth app (credential form + token endpoints)
     2. Mounts the MCP transport at /mcp with Bearer auth
     3. Acquires a lifecycle lock
-    4. Opens browser to /authorize if no credentials exist
-    5. Runs uvicorn (blocking)
+    4. Runs uvicorn (blocking)
 
     Args:
         mcp: FastMCP server instance.
         server_name: Identifier used for JWT iss/aud and credential storage.
         relay_schema: RelayConfigSchema dict describing the credential form.
         port: TCP port to bind. 0 means auto-find a free port.
-        open_browser: Whether to auto-open browser to /authorize when no
-            credentials exist.
+        open_browser: Deprecated, ignored.
         on_credentials_saved: Optional callback invoked when user submits creds.
+        setup_complete_hook: Called with ``mark_setup_complete`` after app is
+            built. Callers use this to wire their credential_state module so
+            background tasks (e.g., GDrive token poll) can update the form.
         jwt_keys_dir: Directory for JWT key storage. Defaults to JWTIssuer's default.
     """
     import os
@@ -228,6 +230,12 @@ async def run_local_server(
         on_credentials_saved=on_credentials_saved,
         jwt_keys_dir=jwt_keys_dir,
     )
+
+    # Wire setup completion: pass mark_setup_complete to caller so
+    # background tasks (GDrive poll) can update the form's status.
+    mark_fn = getattr(app.state, "mark_setup_complete", None)
+    if setup_complete_hook is not None and mark_fn is not None:
+        setup_complete_hook(mark_fn)
 
     # Acquire lifecycle lock
     lock = LifecycleLock(name=server_name, port=actual_port)
