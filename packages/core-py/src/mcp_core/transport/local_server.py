@@ -168,6 +168,11 @@ def build_local_app(
 
     combined_app = Starlette(routes=combined_routes, lifespan=lifespan)
 
+    # Forward mark_setup_complete from OAuth app to combined app
+    mark_fn = getattr(oauth_app.state, "mark_setup_complete", None)
+    if mark_fn:
+        combined_app.state.mark_setup_complete = mark_fn  # type: ignore[attr-defined]
+
     return combined_app, jwt_issuer
 
 
