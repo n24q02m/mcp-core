@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.0-beta.3 (2026-04-12)
+
+### Bug Fixes
+
+- Revert incorrect NPM_TOKEN env in CD workflow
+  ([`3d6dea9`](https://github.com/n24q02m/mcp-core/commit/3d6dea93f80c34fa35722252cdf26ddb78a0352d))
+
+
 ## v1.0.0-beta.2 (2026-04-12)
 
 ### Bug Fixes
