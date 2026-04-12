@@ -1,6 +1,7 @@
 """Cross-platform browser opening with WSL detection."""
 
 import logging
+import re
 import subprocess
 import webbrowser
 
@@ -31,10 +32,10 @@ def _open_in_wsl(url: str) -> bool:
     except (FileNotFoundError, subprocess.SubprocessError):
         pass
 
-    # Fallback to cmd.exe /c start
+    # Fallback to Explorer.exe
     try:
         subprocess.run(
-            ["cmd.exe", "/c", "start", url.replace("&", "^&")],
+            ["explorer.exe", url],
             check=True,
             capture_output=True,
             timeout=10,
@@ -45,6 +46,16 @@ def _open_in_wsl(url: str) -> bool:
 
     return False
 
+
+def _validate_url(url: str) -> bool:
+    """Validate that URL is safe to open."""
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        return False
+    # Filter out shell metacharacters that are not typically valid in URIs
+    # and could be used for command injection. Note: & is valid in URLs.
+    if re.search(r'[|<>"\'`\\]', url):
+        return False
+    return True
 
 def try_open_browser(url: str) -> bool:
     """Try to open URL in default browser. Returns True if likely succeeded.
@@ -61,6 +72,10 @@ def try_open_browser(url: str) -> bool:
     Returns:
         True if the browser was likely opened, False otherwise.
     """
+    if not _validate_url(url):
+        logger.warning("Refused to open invalid or unsafe URL: %s", url)
+        return False
+
     try:
         # 1. WSL detection
         if _is_wsl():

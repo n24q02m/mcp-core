@@ -70,6 +70,29 @@ class TestTryOpenBrowser:
             result = try_open_browser("https://example.com")
             assert result is False
 
+    def test_rejects_invalid_scheme(self):
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                result = try_open_browser("file:///etc/passwd")
+                assert result is False
+                mock_wb.open.assert_not_called()
+
+    def test_rejects_shell_metacharacters(self):
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                invalid_urls = [
+                    "https://example.com|calc.exe",
+                    "https://example.com<foo",
+                    "https://example.com>foo",
+                    'https://example.com"&&calc.exe',
+                    "https://example.com';calc.exe",
+                    "https://example.com`calc.exe`",
+                    "https://example.com\\foo",
+                ]
+                for url in invalid_urls:
+                    result = try_open_browser(url)
+                    assert result is False
+                mock_wb.open.assert_not_called()
 
 class TestOpenInWsl:
     def test_tries_wslview_first(self):
