@@ -258,7 +258,7 @@ async def run_local_server(
         # Override install_signal_handlers to prevent premature exit on Windows.
         # Windows ProactorEventLoop + uvicorn signal handling can cause the
         # server to exit when background tasks complete.
-        server.install_signal_handlers = lambda: None
+        setattr(server, "install_signal_handlers", lambda: None)
 
         await server.serve()
         logger.info("Server stopped (should_exit={})", server.should_exit)
