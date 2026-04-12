@@ -94,7 +94,7 @@ class TestBuildLocalApp:
             relay_schema=relay_schema,
             jwt_keys_dir=tmp_path / "jwt-keys",
         )
-        route_paths = {r.path for r in app.routes}
+        route_paths = {getattr(r, "path", None) for r in app.routes}
         assert "/authorize" in route_paths
         assert "/token" in route_paths
         assert "/.well-known/oauth-authorization-server" in route_paths
@@ -107,7 +107,7 @@ class TestBuildLocalApp:
             relay_schema=relay_schema,
             jwt_keys_dir=tmp_path / "jwt-keys",
         )
-        route_paths = {r.path for r in app.routes}
+        route_paths = {getattr(r, "path", None) for r in app.routes}
         assert "/mcp" in route_paths
 
     def test_mcp_route_rejects_unauthenticated(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
