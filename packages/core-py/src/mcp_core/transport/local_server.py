@@ -200,12 +200,18 @@ async def run_local_server(
         on_credentials_saved: Optional callback invoked when user submits creds.
         jwt_keys_dir: Directory for JWT key storage. Defaults to JWTIssuer's default.
     """
+    import os
     import webbrowser
 
     import uvicorn
 
     from mcp_core.lifecycle.lock import LifecycleLock
     from mcp_core.storage.config_file import read_config
+
+    # Prevent write_config's _schedule_restart from killing the HTTP server.
+    # In stdio mode, restart is needed to reload config. In HTTP mode, the
+    # on_credentials_saved callback applies config immediately — no restart.
+    os.environ["MCP_NO_RELOAD"] = "1"
 
     # Resolve port
     actual_port = port if port != 0 else find_free_port()
@@ -233,6 +239,13 @@ async def run_local_server(
             logger.info("Credentials already configured for {}", server_name)
 
         logger.info("Starting local MCP server on 127.0.0.1:{}", actual_port)
-        config = uvicorn.Config(app, host="127.0.0.1", port=actual_port, log_level="info")
-        server = uvicorn.Server(config)
+        uv_config = uvicorn.Config(app, host="127.0.0.1", port=actual_port, log_level="info")
+        server = uvicorn.Server(uv_config)
+
+        # Override install_signal_handlers to prevent premature exit on Windows.
+        # Windows ProactorEventLoop + uvicorn signal handling can cause the
+        # server to exit when background tasks complete.
+        server.install_signal_handlers = lambda: None
+
         await server.serve()
+        logger.info("Server stopped (should_exit={})", server.should_exit)
