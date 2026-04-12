@@ -264,6 +264,17 @@ def create_local_oauth_app(
             )
         )
 
+    # In-memory setup status (set by background tasks via mark_setup_complete)
+    _setup_status: dict[str, str] = {"gdrive": "idle"}
+
+    def mark_setup_complete(key: str = "gdrive") -> None:
+        """Mark a background setup step as complete (called externally)."""
+        _setup_status[key] = "complete"
+
+    async def setup_status(request: Request) -> JSONResponse:
+        """GET /setup-status -- polled by the form to detect GDrive auth completion."""
+        return JSONResponse(_setup_status)
+
     # ------------------------------------------------------------------
     # Build Starlette app
     # ------------------------------------------------------------------
@@ -271,10 +282,14 @@ def create_local_oauth_app(
     routes = [
         Route("/authorize", authorize, methods=["GET", "POST"]),
         Route("/token", token, methods=["POST"]),
+        Route("/setup-status", setup_status, methods=["GET"]),
         Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", well_known_pr, methods=["GET"]),
     ]
 
     app = Starlette(routes=routes)
+
+    # Expose mark_setup_complete on the app for external callers
+    app.state.mark_setup_complete = mark_setup_complete  # type: ignore[attr-defined]
 
     return app, jwt_issuer

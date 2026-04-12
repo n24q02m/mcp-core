@@ -476,11 +476,28 @@ def render_credential_form(
                                     statusBox.appendChild(document.createElement("br"));
                                     statusBox.appendChild(document.createElement("br"));
                                     var waiting = document.createElement("span");
+                                    waiting.id = "gdrive-waiting";
                                     waiting.style.color = "#888";
                                     waiting.textContent = "Waiting for authorization...";
                                     statusBox.appendChild(waiting);
                                     statusBox.className = "status-box info";
                                     statusBox.style.display = "block";
+                                    // Poll /setup-status until GDrive auth completes
+                                    var pollInterval = setInterval(function () {{
+                                        fetch(submitUrl.replace(/\\/authorize.*/, "/setup-status"))
+                                            .then(function (r) {{ return r.json(); }})
+                                            .then(function (s) {{
+                                                if (s.gdrive === "complete") {{
+                                                    clearInterval(pollInterval);
+                                                    var w = document.getElementById("gdrive-waiting");
+                                                    if (w) {{
+                                                        w.style.color = "#34c759";
+                                                        w.textContent = "Google Drive authorized! Setup complete. You can close this tab.";
+                                                    }}
+                                                }}
+                                            }})
+                                            .catch(function () {{}});
+                                    }}, 3000);
                                 }} else {{
                                     var successMsg = data.message || "Connected successfully. You can close this window.";
                                     showStatus("success", successMsg);
