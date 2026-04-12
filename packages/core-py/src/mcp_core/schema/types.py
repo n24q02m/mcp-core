@@ -54,12 +54,22 @@ class DynamicFlow(TypedDict):
     routes: list[OAuthRoute | CredentialsRoute]
 
 
+class CapabilityInfo(TypedDict, total=False):
+    """A single capability description shown on the credential form."""
+
+    label: str
+    priority: str  # 'high' | 'medium' | 'low'
+    description: str
+
+
 class RelayConfigSchema(TypedDict, total=False):
     """Top-level relay configuration schema."""
 
     server: str
     displayName: str
+    description: str
     modes: list[ConfigMode]
     fields: list[ConfigField]
     optional: list[ConfigField]
     dynamicFlow: DynamicFlow
+    capabilityInfo: list[CapabilityInfo]
