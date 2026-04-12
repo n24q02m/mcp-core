@@ -101,6 +101,8 @@ jobs:
           done
 
       - name: Build and publish core-ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/core-ts && bun run build
           VERSION=$(node -p "require('./package.json').version")
@@ -138,5 +140,6 @@ jobs:
       - name: Build and publish
         working-directory: packages/${{ matrix.package }}
         run: |
+          cp ../../README.md .
           uv build
           uv publish
