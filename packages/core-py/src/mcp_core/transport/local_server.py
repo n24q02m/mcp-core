@@ -201,7 +201,6 @@ async def run_local_server(
         jwt_keys_dir: Directory for JWT key storage. Defaults to JWTIssuer's default.
     """
     import os
-    import webbrowser
 
     import uvicorn
 
@@ -231,11 +230,12 @@ async def run_local_server(
     with lock:
         # Check if credentials already exist
         existing_config = read_config(server_name)
-        if existing_config is None and open_browser:
-            url = f"http://127.0.0.1:{actual_port}/authorize"
-            logger.info("No credentials found. Opening browser to {}", url)
-            webbrowser.open(url)
-        elif existing_config is not None:
+        if existing_config is None:
+            logger.info(
+                "No credentials found. Server at http://127.0.0.1:{}/authorize",
+                actual_port,
+            )
+        else:
             logger.info("Credentials already configured for {}", server_name)
 
         logger.info("Starting local MCP server on 127.0.0.1:{}", actual_port)

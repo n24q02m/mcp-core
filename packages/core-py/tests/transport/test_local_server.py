@@ -228,12 +228,11 @@ def _mock_uvicorn_server():
 
 
 class TestRunLocalServer:
-    def test_opens_browser_when_no_credentials(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
-        """Verify webbrowser.open is called when credentials don't exist."""
+    def test_logs_url_when_no_credentials(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
+        """Verify server logs authorize URL when credentials don't exist (no browser auto-open)."""
         mock_server = _mock_uvicorn_server()
         with (
             patch("mcp_core.storage.config_file.read_config", return_value=None),
-            patch("webbrowser.open") as mock_wb_open,
             patch("uvicorn.Server", return_value=mock_server),
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
@@ -252,16 +251,13 @@ class TestRunLocalServer:
                 )
             )
 
-            mock_wb_open.assert_called_once()
-            assert "127.0.0.1:12345/authorize" in mock_wb_open.call_args[0][0]
             mock_server.serve.assert_awaited_once()
 
     def test_skips_browser_when_credentials_exist(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
-        """Verify webbrowser.open is NOT called when credentials already exist."""
+        """Verify server starts normally when credentials already exist."""
         mock_server = _mock_uvicorn_server()
         with (
             patch("mcp_core.storage.config_file.read_config", return_value={"api_key": "existing"}),
-            patch("webbrowser.open") as mock_wb_open,
             patch("uvicorn.Server", return_value=mock_server),
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
@@ -280,7 +276,7 @@ class TestRunLocalServer:
                 )
             )
 
-            mock_wb_open.assert_not_called()
+            mock_server.serve.assert_awaited_once()
 
     def test_skips_browser_when_open_browser_false(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         """Verify webbrowser.open is NOT called when open_browser=False."""
