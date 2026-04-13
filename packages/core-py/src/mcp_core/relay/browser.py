@@ -19,7 +19,7 @@ def _is_wsl() -> bool:
 
 
 def _open_in_wsl(url: str) -> bool:
-    """Open URL from inside WSL using wslview or cmd.exe."""
+    """Open URL from inside WSL using wslview or explorer.exe."""
     # Try wslview first (from wslu package, commonly available)
     try:
         subprocess.run(
@@ -62,7 +62,7 @@ def try_open_browser(url: str) -> bool:
     """Try to open URL in default browser. Returns True if likely succeeded.
 
     Detection order:
-    1. WSL: check /proc/version for Microsoft/WSL, use 'wslview' or 'cmd.exe /c start'
+    1. WSL: check /proc/version for Microsoft/WSL, use 'wslview' or 'explorer.exe'
     2. Standard: webbrowser.open()
 
     Never raises. Returns False on failure.

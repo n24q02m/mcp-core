@@ -108,7 +108,7 @@ class TestOpenInWsl:
             args = mock_sp.run.call_args
             assert args[0][0][0] == "wslview"
 
-    def test_falls_back_to_cmd_exe(self):
+    def test_falls_back_to_explorer_exe(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.SubprocessError = Exception
             call_count = 0
