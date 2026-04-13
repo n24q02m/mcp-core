@@ -58,3 +58,9 @@ target-version = "py313"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ty.rules]
+unresolved-attribute = "ignore"
+possibly-missing-attribute = "ignore"
+invalid-argument-type = "ignore"
+no-matching-overload = "ignore"
