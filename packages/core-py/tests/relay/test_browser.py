@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from mcp_core.relay.browser import _is_wsl, try_open_browser
+from mcp_core.relay.browser import _is_wsl, _validate_url, try_open_browser
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +38,27 @@ class TestIsWsl:
             assert _is_wsl() is False
 
 
+class TestValidateUrl:
+    def test_accepts_valid_http_urls(self):
+        assert _validate_url("http://example.com") is True
+        assert _validate_url("https://example.com/login?param=1&other=2") is True
+
+    def test_rejects_invalid_schemes(self):
+        assert _validate_url("file:///etc/passwd") is False
+        assert _validate_url("ftp://example.com") is False
+        assert _validate_url("javascript:alert(1)") is False
+
+    def test_rejects_shell_metacharacters(self):
+        assert _validate_url('https://example.com/login?foo=bar"|calc.exe') is False
+        assert _validate_url("https://example.com/login?foo=bar<baz") is False
+        assert _validate_url("https://example.com/login?foo=bar>baz") is False
+
+
 class TestTryOpenBrowser:
+    def test_returns_false_on_invalid_url(self):
+        result = try_open_browser("file:///etc/passwd")
+        assert result is False
+
     def test_returns_true_on_success(self):
         with patch("mcp_core.relay.browser._is_wsl", return_value=False):
             with patch("mcp_core.relay.browser.webbrowser") as mock_wb:

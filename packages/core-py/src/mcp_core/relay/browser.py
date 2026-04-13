@@ -1,8 +1,10 @@
 """Cross-platform browser opening with WSL detection."""
 
 import logging
+import re
 import subprocess
 import time
+import urllib.parse
 import webbrowser
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,21 @@ def _is_wsl() -> bool:
             version = f.read().lower()
         return "microsoft" in version or "wsl" in version
     except OSError:
+        return False
+
+
+def _validate_url(url: str) -> bool:
+    """Strictly validate URL scheme and check for shell metacharacters."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme.lower() not in ("http", "https"):
+            return False
+        # Prevent command injection by rejecting shell metacharacters
+        # Allow '&' for query parameters
+        if re.search(r"[|<>\"]", url):
+            return False
+        return True
+    except Exception:
         return False
 
 
@@ -69,6 +86,10 @@ def try_open_browser(url: str) -> bool:
     Returns:
         True if the browser was likely opened, False otherwise.
     """
+    if not _validate_url(url):
+        logger.warning("Refusing to open invalid or potentially unsafe URL: %s", url)
+        return False
+
     now = time.monotonic()
     last_opened = _recent_browser_opens.get(url)
     if last_opened is not None and now - last_opened < _BROWSER_OPEN_DEDUPE_WINDOW_S:
