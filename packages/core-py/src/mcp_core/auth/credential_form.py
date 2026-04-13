@@ -408,6 +408,157 @@ def render_credential_form(
                 statusBox.style.display = "block";
             }}
 
+            // Derive /otp endpoint URL from submitUrl (replaces /authorize... with /otp).
+            function otpUrl() {{
+                return submitUrl.replace(/\\/authorize.*/, "/otp");
+            }}
+
+            // Render (or update in-place) a step-input UI for otp_required / password_required.
+            // ns: next_step object with {{ text, field, input_type, placeholder }}.
+            // All textual content from ns is inserted via textContent (never innerHTML).
+            function showStepInput(ns) {{
+                // Hide the original credential form after first transition.
+                if (form && form.style.display !== "none") {{
+                    form.style.display = "none";
+                }}
+
+                // If a step container already exists, update it in-place (chained next_step).
+                var container = document.getElementById("step-container");
+                var promptEl, inputEl, buttonEl, errorEl;
+                if (container) {{
+                    promptEl = document.getElementById("step-prompt");
+                    inputEl = document.getElementById("step-input");
+                    buttonEl = document.getElementById("step-submit");
+                    errorEl = document.getElementById("step-error");
+                    errorEl.style.display = "none";
+                    errorEl.textContent = "";
+                    inputEl.value = "";
+                    inputEl.disabled = false;
+                    buttonEl.disabled = false;
+                    buttonEl.textContent = "Verify";
+                }} else {{
+                    // Build a fresh step-input container inside the card.
+                    var card = form.parentNode;
+                    container = document.createElement("div");
+                    container.id = "step-container";
+
+                    promptEl = document.createElement("p");
+                    promptEl.id = "step-prompt";
+                    promptEl.className = "form-title";
+                    container.appendChild(promptEl);
+
+                    var fieldGroup = document.createElement("div");
+                    fieldGroup.className = "field-group";
+                    inputEl = document.createElement("input");
+                    inputEl.id = "step-input";
+                    inputEl.className = "field-input";
+                    inputEl.setAttribute("autocomplete", "off");
+                    inputEl.setAttribute("autocorrect", "off");
+                    inputEl.setAttribute("autocapitalize", "off");
+                    inputEl.setAttribute("spellcheck", "false");
+                    fieldGroup.appendChild(inputEl);
+                    container.appendChild(fieldGroup);
+
+                    buttonEl = document.createElement("button");
+                    buttonEl.type = "button";
+                    buttonEl.id = "step-submit";
+                    buttonEl.className = "submit-btn";
+                    buttonEl.textContent = "Verify";
+                    container.appendChild(buttonEl);
+
+                    errorEl = document.createElement("div");
+                    errorEl.id = "step-error";
+                    errorEl.className = "status-box error";
+                    errorEl.setAttribute("role", "alert");
+                    errorEl.style.display = "none";
+                    container.appendChild(errorEl);
+
+                    card.appendChild(container);
+
+                    // Submit handlers (attached once, read current field name from dataset).
+                    buttonEl.addEventListener("click", function () {{
+                        submitStep();
+                    }});
+                    inputEl.addEventListener("keydown", function (evt) {{
+                        if (evt.key === "Enter") {{
+                            evt.preventDefault();
+                            submitStep();
+                        }}
+                    }});
+                }}
+
+                // Populate prompt + input attributes via safe DOM APIs.
+                promptEl.textContent = ns.text || "";
+                inputEl.setAttribute("type", ns.input_type || "text");
+                inputEl.setAttribute("placeholder", ns.placeholder || "");
+                // Stash field name so submitStep can read it at click time.
+                inputEl.dataset.field = ns.field || "value";
+                inputEl.focus();
+            }}
+
+            function submitStep() {{
+                var inputEl = document.getElementById("step-input");
+                var buttonEl = document.getElementById("step-submit");
+                var errorEl = document.getElementById("step-error");
+                var fieldName = inputEl.dataset.field || "value";
+                var value = inputEl.value;
+                if (value.trim() === "") {{
+                    errorEl.textContent = "Please enter a value.";
+                    errorEl.style.display = "block";
+                    return;
+                }}
+                errorEl.style.display = "none";
+                errorEl.textContent = "";
+                buttonEl.disabled = true;
+                buttonEl.textContent = "Verifying...";
+                inputEl.disabled = true;
+
+                var body = {{}};
+                body[fieldName] = value;
+
+                fetch(otpUrl(), {{
+                    method: "POST",
+                    headers: {{ "Content-Type": "application/json" }},
+                    body: JSON.stringify(body),
+                }})
+                    .then(function (response) {{
+                        return response.json().then(function (data) {{
+                            if (data.ok) {{
+                                if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {{
+                                    // Chain: update in place with new prompt/field/type.
+                                    showStepInput(data.next_step);
+                                }} else {{
+                                    // Completed.
+                                    var container = document.getElementById("step-container");
+                                    while (container.firstChild) {{
+                                        container.removeChild(container.firstChild);
+                                    }}
+                                    var done = document.createElement("div");
+                                    done.className = "status-box success";
+                                    done.style.display = "block";
+                                    done.textContent = "Setup complete! You can close this tab.";
+                                    container.appendChild(done);
+                                }}
+                            }} else {{
+                                // Error: show message, re-enable input + button for retry, keep value.
+                                errorEl.textContent = data.error || data.error_description || "Verification failed.";
+                                errorEl.style.display = "block";
+                                inputEl.disabled = false;
+                                buttonEl.disabled = false;
+                                buttonEl.textContent = "Verify";
+                                inputEl.focus();
+                            }}
+                        }});
+                    }})
+                    .catch(function (err) {{
+                        errorEl.textContent = "Network error: " + err.message;
+                        errorEl.style.display = "block";
+                        inputEl.disabled = false;
+                        buttonEl.disabled = false;
+                        buttonEl.textContent = "Verify";
+                    }});
+            }}
+
             form.addEventListener("submit", function (event) {{
                 event.preventDefault();
 
@@ -498,6 +649,10 @@ def render_credential_form(
                                             }})
                                             .catch(function () {{}});
                                     }}, 3000);
+                                }} else if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {{
+                                    // Multi-step auth: hide form, show step input UI.
+                                    statusBox.style.display = "none";
+                                    showStepInput(data.next_step);
                                 }} else if (data.next_step && data.next_step.type === "info") {{
                                     showStatus("success", data.next_step.message || "Setup saved. Additional steps may be required.");
                                 }} else {{

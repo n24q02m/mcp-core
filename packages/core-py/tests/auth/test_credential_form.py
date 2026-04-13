@@ -119,3 +119,34 @@ class TestRenderCredentialForm:
         # Escaped versions must be present
         assert "&lt;script&gt;" in rendered
         assert "&lt;img" in rendered
+
+    def test_render_form_contains_otp_handler(self):
+        """Form JS should handle next_step type otp_required."""
+        schema = {"server": "test", "displayName": "Test", "fields": []}
+        html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
+        # JS handler for otp_required must exist
+        assert "otp_required" in html
+        assert "password_required" in html
+
+    def test_render_form_posts_to_otp_endpoint(self):
+        """Form JS should POST multi-step input to /otp endpoint."""
+        schema = {"server": "test", "displayName": "Test", "fields": []}
+        html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
+        # Must reference /otp URL derivation
+        assert "/otp" in html
+
+    def test_render_form_handles_error_retry(self):
+        """Form JS should allow retry on step error."""
+        schema = {"server": "test", "displayName": "Test", "fields": []}
+        html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
+        # Must have Verify button text (multi-step submit button)
+        assert "Verify" in html
+
+    def test_render_form_uses_safe_dom_methods(self):
+        """Form JS should use createElement + textContent, not innerHTML with variables."""
+        schema = {"server": "test", "displayName": "Test", "fields": []}
+        html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
+        # textContent must appear (safe text setting)
+        assert "textContent" in html
+        # createElement must be used for dynamic elements
+        assert "createElement" in html
