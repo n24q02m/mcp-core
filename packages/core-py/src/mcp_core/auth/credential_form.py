@@ -29,11 +29,13 @@ def _render_field(field: dict[str, Any]) -> str:
     )
 
     help_html = ""
+    aria_describedby = ""
     if help_text:
+        aria_describedby = f' aria-describedby="help-{key}"'
         if help_url:
-            help_html = f'<p class="help-text"><a href="{help_url}" target="_blank" rel="noopener noreferrer">{help_text}</a></p>'
+            help_html = f'<p class="help-text" id="help-{key}"><a href="{help_url}" target="_blank" rel="noopener noreferrer">{help_text}</a></p>'
         else:
-            help_html = f'<p class="help-text">{help_text}</p>'
+            help_html = f'<p class="help-text" id="help-{key}">{help_text}</p>'
 
     return f"""
         <div class="field-group">
@@ -50,7 +52,7 @@ def _render_field(field: dict[str, Any]) -> str:
                 autocomplete="off"
                 autocorrect="off"
                 autocapitalize="off"
-                spellcheck="false"{required_attr}
+                spellcheck="false"{required_attr}{aria_describedby}
             />
             {help_html}
         </div>"""
@@ -571,8 +573,10 @@ def render_credential_form(
                     if (input.hasAttribute("required") && input.value.trim() === "") {{
                         valid = false;
                         input.style.borderColor = "#f87171";
+                        input.setAttribute("aria-invalid", "true");
                     }} else {{
                         input.style.borderColor = "";
+                        input.removeAttribute("aria-invalid");
                         payload[input.name] = input.value;
                     }}
                 }});
@@ -584,6 +588,7 @@ def render_credential_form(
 
                 submitBtn.disabled = true;
                 submitBtn.textContent = "Connecting...";
+                submitBtn.setAttribute("aria-busy", "true");
                 statusBox.style.display = "none";
 
                 fetch(submitUrl, {{
@@ -599,6 +604,7 @@ def render_credential_form(
                                 }});
                                 submitBtn.disabled = true;
                                 submitBtn.textContent = "Connected";
+                                submitBtn.removeAttribute("aria-busy");
                                 if (data.next_step && data.next_step.type === "oauth_device_code") {{
                                     var ns = data.next_step;
                                     statusBox.textContent = "";
@@ -664,6 +670,7 @@ def render_credential_form(
                                 showStatus("error", data.error || data.error_description || "Request failed.");
                                 submitBtn.disabled = false;
                                 submitBtn.textContent = "Connect";
+                                submitBtn.removeAttribute("aria-busy");
                             }}
                         }});
                     }})
@@ -671,6 +678,7 @@ def render_credential_form(
                         showStatus("error", "Network error: " + err.message);
                         submitBtn.disabled = false;
                         submitBtn.textContent = "Connect";
+                        submitBtn.removeAttribute("aria-busy");
                     }});
             }});
         }})();
