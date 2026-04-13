@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v1.0.0 (2026-04-13)
+
+### Bug Fixes
+
+- Cache PBKDF2 derived key for config performance
+  ([`fe14185`](https://github.com/n24q02m/mcp-core/commit/fe14185a7acb1371621be41a3b627c197f5474d8))
+
+- Credential form accessibility (aria-describedby/invalid/busy)
+  ([`85bd3f5`](https://github.com/n24q02m/mcp-core/commit/85bd3f5d66b20abe0abd6dc278fd6c1704f241d2))
+
+- Resolve type checking errors in Python files
+  ([`fe14185`](https://github.com/n24q02m/mcp-core/commit/fe14185a7acb1371621be41a3b627c197f5474d8))
+
+- Thread-based stdin reader + Accept header in stdio-proxy
+  ([`044acec`](https://github.com/n24q02m/mcp-core/commit/044acec926404360cd20cf1641ec2eb4ddd7355a))
+
+### Features
+
+- Cache derived key to speed up config read/writes
+  ([`fe14185`](https://github.com/n24q02m/mcp-core/commit/fe14185a7acb1371621be41a3b627c197f5474d8))
+
+
 ## v1.0.0-beta.4 (2026-04-13)
 
 ### Bug Fixes
