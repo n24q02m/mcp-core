@@ -272,7 +272,9 @@ class TestTokenExchange:
 
         import re
 
-        nonce = re.search(r'nonce=([^"&]+)', resp.text).group(1)
+        nonce_match = re.search(r'nonce=([^"&]+)', resp.text)
+        assert nonce_match is not None
+        nonce = nonce_match.group(1)
 
         resp = client.post(
             f"/authorize?nonce={nonce}",
@@ -329,7 +331,9 @@ class TestTokenExchange:
 
         import re
 
-        nonce = re.search(r'nonce=([^"&]+)', resp.text).group(1)
+        nonce_match = re.search(r'nonce=([^"&]+)', resp.text)
+        assert nonce_match is not None
+        nonce = nonce_match.group(1)
 
         resp = client.post(
             f"/authorize?nonce={nonce}",
