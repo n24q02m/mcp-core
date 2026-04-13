@@ -90,9 +90,16 @@ async function saveStore(store: ConfigStore): Promise<void> {
   await withRetry(() => writeFile(configPath, encrypted))
 }
 
-function scheduleRestart() {
+/**
+ * Schedule a process exit so an MCP client can respawn the server and pick up
+ * fresh credentials from disk. Only relevant for stdio-mode servers whose
+ * client supervises restart. HTTP-mode servers update credentials in-process
+ * and MUST NOT call this — an exit mid-OAuth-device-code flow kills the user's
+ * verification window. Skipped under vitest (NODE_ENV=test) and when
+ * MCP_NO_RELOAD is set.
+ */
+export function scheduleReloadExit(): void {
   if (process.env.NODE_ENV !== 'test' && !process.env.MCP_NO_RELOAD) {
-    // Schedule process exit to reload config via MCP client
     setTimeout(() => process.exit(0), 1000).unref()
   }
 }
@@ -106,7 +113,6 @@ export async function writeConfig(serverName: string, config: Record<string, str
   const store = await loadStore()
   store.servers[serverName] = config
   await saveStore(store)
-  scheduleRestart()
 }
 
 export async function deleteConfig(serverName: string): Promise<void> {
@@ -121,7 +127,6 @@ export async function deleteConfig(serverName: string): Promise<void> {
   } else {
     await saveStore(store)
   }
-  scheduleRestart()
 }
 
 export async function listConfigs(): Promise<string[]> {
@@ -156,5 +161,4 @@ export async function importConfig(passphrase: string, data: Buffer): Promise<vo
     store.servers[name] = config
   }
   await saveStore(store)
-  scheduleRestart()
 }

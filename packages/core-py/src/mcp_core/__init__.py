@@ -38,6 +38,7 @@ from mcp_core.storage.config_file import (
     import_config,
     list_configs,
     read_config,
+    schedule_reload_exit,
     write_config,
 )
 from mcp_core.storage.mode import clear_mode, get_mode, set_local_mode
@@ -69,6 +70,7 @@ __all__ = [
     "import_config",
     "list_configs",
     "read_config",
+    "schedule_reload_exit",
     "write_config",
     "resolve_config",
     "SessionInfo",

@@ -99,8 +99,15 @@ def _save_store(store: dict[str, Any]) -> None:
     _with_retry(_write)
 
 
-def _schedule_restart() -> None:
-    """Schedule a process exit to reload config via MCP client."""
+def schedule_reload_exit() -> None:
+    """Schedule a process exit so an MCP client can respawn the server and pick
+    up fresh credentials from disk.
+
+    Only relevant for stdio-mode servers whose client supervises restart. HTTP-
+    mode servers update credentials in-process and MUST NOT call this — an exit
+    mid-OAuth-device-code flow kills the user's verification window. Skipped
+    under pytest (PYTEST_CURRENT_TEST) and when MCP_NO_RELOAD is set.
+    """
     if "PYTEST_CURRENT_TEST" not in os.environ and "MCP_NO_RELOAD" not in os.environ:
 
         def _exit() -> None:
@@ -133,7 +140,6 @@ def write_config(server_name: str, config: dict[str, str]) -> None:
     store = _load_store()
     store["servers"][server_name] = config
     _save_store(store)
-    _schedule_restart()
 
 
 def delete_config(server_name: str) -> None:
@@ -153,7 +159,6 @@ def delete_config(server_name: str) -> None:
             config_path.unlink()
     else:
         _save_store(store)
-    _schedule_restart()
 
 
 def list_configs() -> list[str]:
@@ -205,4 +210,3 @@ def import_config(passphrase: str, data: bytes) -> None:
     for name, config in imported["servers"].items():
         store["servers"][name] = config
     _save_store(store)
-    _schedule_restart()

@@ -234,17 +234,10 @@ async def run_local_server(
             /authorize. Lets consumers inject custom UX while reusing core
             OAuth plumbing.
     """
-    import os
-
     import uvicorn
 
     from mcp_core.lifecycle.lock import LifecycleLock
     from mcp_core.storage.config_file import read_config
-
-    # Prevent write_config's _schedule_restart from killing the HTTP server.
-    # In stdio mode, restart is needed to reload config. In HTTP mode, the
-    # on_credentials_saved callback applies config immediately — no restart.
-    os.environ["MCP_NO_RELOAD"] = "1"
 
     # Resolve port
     actual_port = port if port != 0 else find_free_port()

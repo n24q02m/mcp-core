@@ -41,6 +41,7 @@ export {
   importConfig,
   listConfigs,
   readConfig,
+  scheduleReloadExit,
   writeConfig
 } from './storage/config-file.js'
 export { clearMode, getMode, type ServerMode, setLocalMode } from './storage/mode.js'
