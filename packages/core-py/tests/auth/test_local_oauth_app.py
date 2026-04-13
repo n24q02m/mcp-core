@@ -474,8 +474,6 @@ def client_with_otp_error():
 def test_otp_endpoint_completes_setup(client_with_otp):
     """POST /otp with valid step data should complete setup."""
     client, _saved = client_with_otp
-    params = _authorize_params()
-    client.get("/authorize", params=params)
     nonce = _extract_nonce(client)
     resp = client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
     data = resp.json()
@@ -490,8 +488,6 @@ def test_otp_endpoint_completes_setup(client_with_otp):
 def test_otp_endpoint_chains_to_password(client_with_2fa):
     """POST /otp should chain to password_required when callback says so."""
     client, _ = client_with_2fa
-    params = _authorize_params()
-    client.get("/authorize", params=params)
     nonce = _extract_nonce(client)
     client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
     resp = client.post("/otp", json={"otp_code": "12345"})
@@ -507,8 +503,6 @@ def test_otp_endpoint_chains_to_password(client_with_2fa):
 def test_otp_endpoint_returns_error_on_callback_error(client_with_otp_error):
     """POST /otp should return error when callback returns error, allow retry."""
     client, _ = client_with_otp_error
-    params = _authorize_params()
-    client.get("/authorize", params=params)
     nonce = _extract_nonce(client)
     client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
     resp = client.post("/otp", json={"otp_code": "wrong"})
@@ -522,6 +516,61 @@ def test_otp_endpoint_without_prior_authorize_returns_400(client_with_otp):
     client, _ = client_with_otp
     resp = client.post("/otp", json={"otp_code": "12345"})
     assert resp.status_code == 400
+    data = resp.json()
+    assert data["error"] == "invalid_request"
+    assert "no active" in data["error_description"].lower()
+
+
+def test_otp_endpoint_timeout_clears_session(client_with_otp, monkeypatch):
+    """After 300s, /otp session should expire and be cleared."""
+    import time
+
+    from mcp_core.auth import local_oauth_app
+
+    client, _ = client_with_otp
+    nonce = _extract_nonce(client)
+    client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
+
+    # Monkey-patch monotonic clock to simulate 301s elapsed
+    original = time.monotonic
+    base = original()
+    monkeypatch.setattr(local_oauth_app.time, "monotonic", lambda: base + 301)
+
+    resp = client.post("/otp", json={"otp_code": "12345"})
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["error"] == "invalid_request"
+    assert "expired" in data["error_description"].lower()
+
+    # Subsequent calls should see "No active step session"
+    monkeypatch.setattr(local_oauth_app.time, "monotonic", lambda: base + 302)
+    resp = client.post("/otp", json={"otp_code": "12345"})
+    assert resp.status_code == 400
+    assert "no active" in resp.json()["error_description"].lower()
+
+
+def test_otp_endpoint_max_attempts_clears_session(client_with_otp_error):
+    """After 5 attempts with error, 6th should return 'Too many attempts' and clear."""
+    client, _ = client_with_otp_error
+    nonce = _extract_nonce(client)
+    client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
+
+    # 5 allowed attempts, all returning error
+    for _ in range(5):
+        resp = client.post("/otp", json={"otp_code": "wrong"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is False
+
+    # 6th attempt: over limit, should be rejected with 400
+    resp = client.post("/otp", json={"otp_code": "wrong"})
+    assert resp.status_code == 400
+    assert "too many" in resp.json()["error_description"].lower()
+
+    # Subsequent calls see "No active session"
+    resp = client.post("/otp", json={"otp_code": "wrong"})
+    assert resp.status_code == 400
+    assert "no active" in resp.json()["error_description"].lower()
 
 
 class TestJWTIssuerReuse:

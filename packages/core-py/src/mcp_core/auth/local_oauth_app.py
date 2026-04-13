@@ -7,7 +7,9 @@ browser-rendered form.
 Routes:
 - GET  /authorize                               -- Render credential form
 - POST /authorize                               -- Save credentials, return auth code
+- POST /otp                                     -- Submit multi-step credential (OTP / 2FA password)
 - POST /token                                   -- Exchange auth code + PKCE verifier for JWT
+- GET  /setup-status                            -- Poll background setup completion
 - GET  /.well-known/oauth-authorization-server   -- RFC 8414 metadata
 - GET  /.well-known/oauth-protected-resource     -- RFC 9728 metadata
 
@@ -77,7 +79,9 @@ def create_local_oauth_app(
             the user submits data to ``/otp``. Return ``None`` to complete
             the flow, ``{"type": "otp_required"|"password_required", ...}``
             to chain to another step, or ``{"type": "error", "text": "..."}``
-            to reject the current input and allow retry.
+            to reject the current input and allow retry. Callbacks that
+            compare secrets MUST use ``secrets.compare_digest`` or similar
+            timing-safe comparison to prevent timing attacks.
         jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
             automatically using ``server_name``.
 
@@ -288,11 +292,14 @@ def create_local_oauth_app(
     async def otp_handler(request: Request) -> JSONResponse:
         """POST /otp -- receive multi-step auth input (OTP code or 2FA password).
 
-        Protocol:
-        - No active step session -> 400 ``invalid_request``.
-        - Pending session expired (>``_OTP_TIMEOUT_S``s) -> clear, 400.
-        - Attempts exceeded (>``_OTP_MAX_ATTEMPTS``) -> clear, 400.
-        - Call ``on_step_submitted(step_data)``:
+        Protocol (order of checks):
+        1. No active step session -> 400 ``invalid_request`` (no state change).
+        2. Pending session expired (>``_OTP_TIMEOUT_S``s) -> clear, 400.
+        3. Parse JSON body -> 400 on invalid (do NOT increment attempts or
+           clear session; malformed input should not burn user's retry quota).
+        4. Increment attempts counter.
+        5. Attempts exceeded (>``_OTP_MAX_ATTEMPTS``) -> clear, 400.
+        6. Call ``on_step_submitted(step_data)``:
             - ``None`` -> clear pending, return ``{"ok": true}`` (complete).
             - ``{"type": "error", "text": ...}`` -> return ``{"ok": false,
               "error": ...}`` (keep pending, allow retry; attempts already
@@ -300,6 +307,7 @@ def create_local_oauth_app(
             - ``{"type": "otp_required"|"password_required", ...}`` -> reset
               counters (new step), return ``{"ok": true, "next_step": {...}}``.
         """
+        # 1. Active session check.
         if not _pending_step.get("active"):
             return JSONResponse(
                 {
@@ -309,7 +317,7 @@ def create_local_oauth_app(
                 status_code=400,
             )
 
-        # Check timeout
+        # 2. Timeout check.
         created_at = _pending_step.get("created_at", 0.0)
         if time.monotonic() - created_at > _OTP_TIMEOUT_S:
             _clear_pending_step()
@@ -321,8 +329,20 @@ def create_local_oauth_app(
                 status_code=400,
             )
 
-        # Increment attempts BEFORE invoking callback (count every submit).
+        # 3. Parse JSON body BEFORE incrementing attempts. Malformed input
+        # should not consume the user's retry quota nor clear the session.
+        try:
+            step_data: dict[str, str] = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Invalid JSON body"},
+                status_code=400,
+            )
+
+        # 4. Increment attempts counter (count every valid-JSON submit).
         _pending_step["attempts"] = _pending_step.get("attempts", 0) + 1
+
+        # 5. Attempt limit check.
         if _pending_step["attempts"] > _OTP_MAX_ATTEMPTS:
             _clear_pending_step()
             return JSONResponse(
@@ -330,14 +350,6 @@ def create_local_oauth_app(
                     "error": "invalid_request",
                     "error_description": "Too many attempts",
                 },
-                status_code=400,
-            )
-
-        try:
-            step_data: dict[str, str] = await request.json()
-        except Exception:
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Invalid JSON body"},
                 status_code=400,
             )
 
