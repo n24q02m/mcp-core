@@ -1,3 +1,19 @@
+// Local OAuth 2.1 Authorization Server (single-user, 127.0.0.1)
+export {
+  authorizationServerMetadata,
+  type CapabilityInfo,
+  type ConfigField,
+  type CredentialsCallback,
+  createLocalOAuthApp,
+  type LocalOAuthAppOptions,
+  type LocalOAuthAppResult,
+  type NextStep,
+  protectedResourceMetadata,
+  type RelayConfigSchema,
+  type RenderOptions,
+  renderCredentialForm,
+  type StepCallback
+} from './auth/index.js'
 export * from './crypto/index.js'
 // OAuth 2.1 multi-user infrastructure (HTTP mode)
 export { JWTIssuer } from './oauth/jwt-issuer.js'
@@ -35,3 +51,9 @@ export {
   type SessionInfo,
   writeSessionLock
 } from './storage/session-lock.js'
+// Local MCP server entry point (OAuth AS + /mcp transport on 127.0.0.1)
+export {
+  type LocalServerHandle,
+  type RunLocalServerOptions,
+  runLocalServer
+} from './transport/local-server.js'
