@@ -8,6 +8,12 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 
+// Dedupe repeated tryOpenBrowser calls for the same URL. OAuth verification
+// URLs are stable so a retry loop would otherwise spawn a new tab per attempt.
+// Keep a 5-minute window per URL.
+const BROWSER_OPEN_DEDUPE_WINDOW_MS = 5 * 60 * 1000
+const recentBrowserOpens = new Map<string, number>()
+
 async function isWsl(): Promise<boolean> {
   try {
     const version = await readFile('/proc/version', 'utf-8')
@@ -54,6 +60,12 @@ export async function tryOpenBrowser(url: string): Promise<boolean> {
     if (!/^https?:\/\//i.test(url)) {
       return false
     }
+
+    const lastOpened = recentBrowserOpens.get(url)
+    if (lastOpened !== undefined && Date.now() - lastOpened < BROWSER_OPEN_DEDUPE_WINDOW_MS) {
+      return true
+    }
+    recentBrowserOpens.set(url, Date.now())
 
     const platform = process.platform
 

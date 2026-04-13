@@ -2,9 +2,17 @@
 
 import logging
 import subprocess
+import time
 import webbrowser
 
 logger = logging.getLogger(__name__)
+
+# Dedupe repeated try_open_browser calls for the same URL. OAuth verification
+# URLs are stable (e.g. https://microsoft.com/devicelogin,
+# https://www.google.com/device) so a retry loop would otherwise spawn a new
+# tab per attempt. Keep a 5-minute window per URL.
+_BROWSER_OPEN_DEDUPE_WINDOW_S = 5 * 60
+_recent_browser_opens: dict[str, float] = {}
 
 
 def _is_wsl() -> bool:
@@ -61,6 +69,13 @@ def try_open_browser(url: str) -> bool:
     Returns:
         True if the browser was likely opened, False otherwise.
     """
+    now = time.monotonic()
+    last_opened = _recent_browser_opens.get(url)
+    if last_opened is not None and now - last_opened < _BROWSER_OPEN_DEDUPE_WINDOW_S:
+        logger.debug("Skipping duplicate browser open for %s", url)
+        return True
+    _recent_browser_opens[url] = now
+
     try:
         # 1. WSL detection
         if _is_wsl():

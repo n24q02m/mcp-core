@@ -2,7 +2,19 @@
 
 from unittest.mock import MagicMock, mock_open, patch
 
+import pytest
+
 from mcp_core.relay.browser import _is_wsl, try_open_browser
+
+
+@pytest.fixture(autouse=True)
+def _clear_browser_dedupe():
+    """Reset the in-memory dedupe cache so each test sees a fresh module state."""
+    from mcp_core.relay import browser
+
+    browser._recent_browser_opens.clear()
+    yield
+    browser._recent_browser_opens.clear()
 
 
 class TestIsWsl:
