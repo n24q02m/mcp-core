@@ -1,6 +1,34 @@
 """Tests for credential form HTML renderer."""
 
+import re
+
 from mcp_core.auth.credential_form import render_credential_form
+
+
+def test_render_form_posts_step_to_otp_url():
+    """Step submit JS must fetch() with POST method targeting /otp URL."""
+    schema = {"server": "test", "displayName": "Test", "fields": []}
+    html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
+    # Verify fetch call structure: fetch(otpUrl(), { method: "POST", ... })
+    assert re.search(r'fetch\s*\(\s*otpUrl\s*\(\s*\)\s*,\s*\{\s*method\s*:\s*"POST"', html)
+
+
+def test_render_form_error_retry_reenables_controls():
+    """Error branch must re-enable input AND button for retry."""
+    schema = {"server": "test", "displayName": "Test", "fields": []}
+    html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
+    # Verify in error branch: inputEl.disabled = false AND buttonEl.disabled = false
+    # Both must be present in the error handling path
+    assert re.search(r"inputEl\.disabled\s*=\s*false", html)
+    assert re.search(r"buttonEl\.disabled\s*=\s*false", html)
+
+
+def test_render_form_step_input_has_aria_label():
+    """Step input must be associated with prompt via aria-labelledby."""
+    schema = {"server": "test", "displayName": "Test", "fields": []}
+    html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
+    assert re.search(r'setAttribute\(\s*"aria-labelledby"\s*,\s*"step-prompt"', html)
+    assert re.search(r'promptEl\.id\s*=\s*"step-prompt"', html)
 
 
 class TestRenderCredentialForm:

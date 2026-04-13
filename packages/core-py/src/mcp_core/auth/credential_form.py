@@ -456,6 +456,7 @@ def render_credential_form(
                     inputEl.setAttribute("autocorrect", "off");
                     inputEl.setAttribute("autocapitalize", "off");
                     inputEl.setAttribute("spellcheck", "false");
+                    inputEl.setAttribute("aria-labelledby", "step-prompt");
                     fieldGroup.appendChild(inputEl);
                     container.appendChild(fieldGroup);
 
