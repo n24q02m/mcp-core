@@ -12,6 +12,15 @@ export {
   renderCredentialForm
 } from './credential-form.js'
 export {
+  createDelegatedOAuthApp,
+  type DelegatedOAuthAppOptions,
+  type DelegatedOAuthAppResult,
+  type FlowType,
+  type OAuthTokens,
+  type TokenCallback,
+  type UpstreamOAuthConfig
+} from './delegated-oauth-app.js'
+export {
   type CredentialsCallback,
   createLocalOAuthApp,
   type LocalOAuthAppOptions,
