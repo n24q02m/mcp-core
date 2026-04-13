@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import inspect
 import secrets
 import time
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, Union
 
 from loguru import logger
 from starlette.applications import Starlette
@@ -49,6 +50,13 @@ _SESSION_TTL_S = 600
 _OTP_TIMEOUT_S = 300
 _OTP_MAX_ATTEMPTS = 5
 
+# Callback types -- may be sync or async. When async, the handler awaits the
+# returned coroutine. This lets telegram-style servers perform async backend
+# operations (Telethon connect, send_code, sign_in) without resorting to
+# loop.run_until_complete() on a running event loop.
+CredentialsCallback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
+StepCallback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
+
 
 def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
     """Verify PKCE S256: base64url(sha256(code_verifier)) == code_challenge."""
@@ -61,8 +69,8 @@ def create_local_oauth_app(
     *,
     server_name: str,
     relay_schema: dict[str, Any],
-    on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
-    on_step_submitted: Callable[[dict[str, str]], dict | None] | None = None,
+    on_credentials_saved: CredentialsCallback | None = None,
+    on_step_submitted: StepCallback | None = None,
     jwt_issuer: JWTIssuer | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create OAuth 2.1 Authorization Server Starlette app.
@@ -195,6 +203,8 @@ def create_local_oauth_app(
         if on_credentials_saved is not None:
             try:
                 result = on_credentials_saved(credentials)
+                if inspect.iscoroutine(result):
+                    result = await result
                 if isinstance(result, dict):
                     next_step = result
             except Exception:
@@ -357,6 +367,8 @@ def create_local_oauth_app(
         if on_step_submitted is not None:
             try:
                 result = on_step_submitted(step_data)
+                if inspect.iscoroutine(result):
+                    result = await result
                 if isinstance(result, dict):
                     next_step = result
             except Exception:

@@ -11,9 +11,9 @@ Entry point for credential servers running in local mode (single-user,
 from __future__ import annotations
 
 import socket
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 from loguru import logger
 
@@ -23,6 +23,11 @@ if TYPE_CHECKING:
     from starlette.types import ASGIApp, Receive, Scope, Send
 
     from mcp_core.oauth.jwt_issuer import JWTIssuer
+
+
+# Callback may be sync or async. Async lets callbacks perform I/O without
+# running-loop hacks. See mcp_core.auth.local_oauth_app for details.
+_Callback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
 
 
 def find_free_port() -> int:
@@ -103,8 +108,8 @@ def build_local_app(
     *,
     server_name: str,
     relay_schema: dict[str, Any],
-    on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
-    on_step_submitted: Callable[[dict[str, str]], dict | None] | None = None,
+    on_credentials_saved: _Callback | None = None,
+    on_step_submitted: _Callback | None = None,
     jwt_keys_dir: Path | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Construct a combined Starlette app with OAuth AS + MCP transport.
@@ -190,8 +195,8 @@ async def run_local_server(
     relay_schema: dict[str, Any],
     port: int = 0,
     open_browser: bool = True,
-    on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
-    on_step_submitted: Callable[[dict[str, str]], dict | None] | None = None,
+    on_credentials_saved: _Callback | None = None,
+    on_step_submitted: _Callback | None = None,
     setup_complete_hook: Callable[[Callable[[], None]], None] | None = None,
     jwt_keys_dir: Path | None = None,
 ) -> None:

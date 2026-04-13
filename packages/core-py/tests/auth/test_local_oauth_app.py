@@ -573,6 +573,61 @@ def test_otp_endpoint_max_attempts_clears_session(client_with_otp_error):
     assert "no active" in resp.json()["error_description"].lower()
 
 
+# ---------------------------------------------------------------------------
+# Async callback tests (regression: running-loop bug in telegram)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def client_with_async_otp():
+    """Test fixture where callbacks are async. The handler must await them."""
+
+    async def on_save(creds: dict[str, str]) -> dict:
+        return {
+            "type": "otp_required",
+            "text": "Enter OTP",
+            "field": "otp_code",
+            "input_type": "text",
+        }
+
+    async def on_step(_data: dict[str, str]) -> None:
+        return None  # complete
+
+    app, _issuer = create_local_oauth_app(
+        server_name="test",
+        relay_schema={
+            "server": "test",
+            "displayName": "Test",
+            "fields": [
+                {
+                    "key": "TELEGRAM_PHONE",
+                    "label": "Phone",
+                    "type": "tel",
+                    "required": True,
+                }
+            ],
+        },
+        on_credentials_saved=on_save,
+        on_step_submitted=on_step,
+    )
+    return TestClient(app, base_url="http://localhost"), {}
+
+
+def test_otp_endpoint_with_async_callbacks(client_with_async_otp):
+    """Async callbacks should be awaited properly -- no running-loop error."""
+    client, _ = client_with_async_otp
+    nonce = _extract_nonce(client)
+    resp = client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["next_step"]["type"] == "otp_required"
+
+    resp = client.post("/otp", json={"otp_code": "12345"})
+    data = resp.json()
+    assert data["ok"] is True
+    assert "next_step" not in data
+
+
 class TestJWTIssuerReuse:
     def test_returns_provided_jwt_issuer(self):
         """When a JWTIssuer is provided, the same instance is returned."""
