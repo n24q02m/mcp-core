@@ -40,6 +40,13 @@ from mcp_core.oauth.jwt_issuer import JWTIssuer
 _AUTH_CODE_TTL_S = 600
 _SESSION_TTL_S = 600
 
+# Multi-step auth (OTP / 2FA password) constraints.
+# _OTP_TIMEOUT_S: khoảng thời gian tối đa giữa lúc submit credentials và
+# lúc user nhập OTP/password. _OTP_MAX_ATTEMPTS: số lần submit sai tối đa
+# trước khi reset pending step session.
+_OTP_TIMEOUT_S = 300
+_OTP_MAX_ATTEMPTS = 5
+
 
 def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
     """Verify PKCE S256: base64url(sha256(code_verifier)) == code_challenge."""
@@ -53,6 +60,7 @@ def create_local_oauth_app(
     server_name: str,
     relay_schema: dict[str, Any],
     on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
+    on_step_submitted: Callable[[dict[str, str]], dict | None] | None = None,
     jwt_issuer: JWTIssuer | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create OAuth 2.1 Authorization Server Starlette app.
@@ -62,6 +70,14 @@ def create_local_oauth_app(
         relay_schema: RelayConfigSchema dict describing the credential form.
         on_credentials_saved: Callback invoked with credentials dict after
             the user submits the form. Typically wraps ``write_config``.
+            May return a ``next_step`` dict (e.g. ``{"type": "otp_required"}``)
+            to trigger multi-step auth flows.
+        on_step_submitted: Callback invoked with step input dict (e.g.
+            ``{"otp_code": "12345"}`` or ``{"password": "secret"}``) when
+            the user submits data to ``/otp``. Return ``None`` to complete
+            the flow, ``{"type": "otp_required"|"password_required", ...}``
+            to chain to another step, or ``{"type": "error", "text": "..."}``
+            to reject the current input and allow retry.
         jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
             automatically using ``server_name``.
 
@@ -78,6 +94,22 @@ def create_local_oauth_app(
     pending_sessions: dict[str, dict[str, Any]] = {}
     # Structure: {auth_code: {code_challenge, code_challenge_method, created_at}}
     auth_codes: dict[str, dict[str, Any]] = {}
+
+    # Single-user local mode: one pending multi-step session at a time.
+    # Keys: "active" (bool), "created_at" (monotonic), "attempts" (int).
+    # Được set khi ``on_credentials_saved`` (hoặc ``on_step_submitted``)
+    # trả về ``next_step`` type ``otp_required`` hoặc ``password_required``.
+    _pending_step: dict[str, Any] = {}
+
+    def _mark_pending_step() -> None:
+        """Đánh dấu pending step session đang active (reset counters)."""
+        _pending_step["active"] = True
+        _pending_step["created_at"] = time.monotonic()
+        _pending_step["attempts"] = 0
+
+    def _clear_pending_step() -> None:
+        """Xóa pending step session (sau khi complete hoặc expired)."""
+        _pending_step.clear()
 
     def _prune_expired(store: dict[str, dict[str, Any]], ttl: float) -> None:
         """Remove entries older than *ttl* seconds."""
@@ -186,6 +218,10 @@ def create_local_oauth_app(
         response_body: dict = {"ok": True, "redirect_url": redirect_url}
         if next_step:
             response_body["next_step"] = next_step
+            # Nếu next_step yêu cầu input thêm (OTP hoặc 2FA password),
+            # activate pending step session để /otp endpoint chấp nhận input.
+            if next_step.get("type") in ("otp_required", "password_required"):
+                _mark_pending_step()
 
         return JSONResponse(response_body)
 
@@ -249,6 +285,94 @@ def create_local_oauth_app(
             }
         )
 
+    async def otp_handler(request: Request) -> JSONResponse:
+        """POST /otp -- receive multi-step auth input (OTP code or 2FA password).
+
+        Protocol:
+        - No active step session -> 400 ``invalid_request``.
+        - Pending session expired (>``_OTP_TIMEOUT_S``s) -> clear, 400.
+        - Attempts exceeded (>``_OTP_MAX_ATTEMPTS``) -> clear, 400.
+        - Call ``on_step_submitted(step_data)``:
+            - ``None`` -> clear pending, return ``{"ok": true}`` (complete).
+            - ``{"type": "error", "text": ...}`` -> return ``{"ok": false,
+              "error": ...}`` (keep pending, allow retry; attempts already
+              incremented before the callback).
+            - ``{"type": "otp_required"|"password_required", ...}`` -> reset
+              counters (new step), return ``{"ok": true, "next_step": {...}}``.
+        """
+        if not _pending_step.get("active"):
+            return JSONResponse(
+                {
+                    "error": "invalid_request",
+                    "error_description": "No active step session",
+                },
+                status_code=400,
+            )
+
+        # Check timeout
+        created_at = _pending_step.get("created_at", 0.0)
+        if time.monotonic() - created_at > _OTP_TIMEOUT_S:
+            _clear_pending_step()
+            return JSONResponse(
+                {
+                    "error": "invalid_request",
+                    "error_description": "Step session expired",
+                },
+                status_code=400,
+            )
+
+        # Increment attempts BEFORE invoking callback (count every submit).
+        _pending_step["attempts"] = _pending_step.get("attempts", 0) + 1
+        if _pending_step["attempts"] > _OTP_MAX_ATTEMPTS:
+            _clear_pending_step()
+            return JSONResponse(
+                {
+                    "error": "invalid_request",
+                    "error_description": "Too many attempts",
+                },
+                status_code=400,
+            )
+
+        try:
+            step_data: dict[str, str] = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Invalid JSON body"},
+                status_code=400,
+            )
+
+        next_step: dict | None = None
+        if on_step_submitted is not None:
+            try:
+                result = on_step_submitted(step_data)
+                if isinstance(result, dict):
+                    next_step = result
+            except Exception:
+                logger.exception("on_step_submitted callback failed")
+                return JSONResponse(
+                    {
+                        "error": "server_error",
+                        "error_description": "Failed to process step input",
+                    },
+                    status_code=500,
+                )
+
+        # Error from callback: keep pending, allow retry (don't clear).
+        if next_step is not None and next_step.get("type") == "error":
+            return JSONResponse({"ok": False, "error": next_step.get("text", "Invalid input")})
+
+        # Chain to next step: reset counters so the new step gets its own quota.
+        if next_step is not None and next_step.get("type") in (
+            "otp_required",
+            "password_required",
+        ):
+            _mark_pending_step()
+            return JSONResponse({"ok": True, "next_step": next_step})
+
+        # Completion (callback returned None or unknown dict type).
+        _clear_pending_step()
+        return JSONResponse({"ok": True})
+
     async def well_known_as(request: Request) -> JSONResponse:
         """GET /.well-known/oauth-authorization-server -- RFC 8414."""
         base = _base_url(request)
@@ -281,6 +405,7 @@ def create_local_oauth_app(
 
     routes = [
         Route("/authorize", authorize, methods=["GET", "POST"]),
+        Route("/otp", otp_handler, methods=["POST"]),
         Route("/token", token, methods=["POST"]),
         Route("/setup-status", setup_status, methods=["GET"]),
         Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),

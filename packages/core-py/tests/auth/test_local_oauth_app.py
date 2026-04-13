@@ -364,6 +364,166 @@ class TestTokenExchange:
         assert resp2.json()["error"] == "invalid_grant"
 
 
+# ---------------------------------------------------------------------------
+# Multi-step auth fixtures and helpers (OTP / 2FA password)
+# ---------------------------------------------------------------------------
+
+
+def _authorize_params() -> dict[str, str]:
+    """Standard PKCE authorize query params for multi-step auth tests."""
+    _verifier, challenge = _pkce_pair()
+    return {
+        "client_id": "test-client",
+        "redirect_uri": "http://localhost/callback",
+        "state": "otp-state",
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    }
+
+
+def _extract_nonce(client: TestClient) -> str:
+    """Extract nonce from the form action URL in the last GET /authorize response.
+
+    Issues a fresh GET /authorize with standard params to capture the nonce.
+    """
+    import re
+
+    resp = client.get("/authorize", params=_authorize_params())
+    match = re.search(r'nonce=([^"&]+)', resp.text)
+    assert match is not None, "Form should contain a nonce"
+    return match.group(1)
+
+
+@pytest.fixture()
+def client_with_otp():
+    """TestClient where credential submit returns otp_required, and step completes (None)."""
+    saved: dict[str, str] = {}
+
+    def on_saved(creds: dict[str, str]) -> dict:
+        saved.update(creds)
+        return {"type": "otp_required", "prompt": "Enter the code sent to your phone"}
+
+    def on_step(step: dict[str, str]) -> None:
+        # Completion: accept any code, return None
+        saved.update(step)
+        return None
+
+    app, _issuer = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=on_saved,
+        on_step_submitted=on_step,
+    )
+    return TestClient(app, base_url="http://localhost"), saved
+
+
+@pytest.fixture()
+def client_with_2fa():
+    """TestClient where flow is creds -> otp_required -> password_required -> complete."""
+    saved: dict[str, str] = {}
+    state = {"step": 0}
+
+    def on_saved(creds: dict[str, str]) -> dict:
+        saved.update(creds)
+        return {"type": "otp_required", "prompt": "Enter OTP"}
+
+    def on_step(step: dict[str, str]) -> dict | None:
+        saved.update(step)
+        state["step"] += 1
+        if state["step"] == 1:
+            # After OTP, require 2FA password
+            return {"type": "password_required", "prompt": "Enter 2FA password"}
+        # Second step: complete
+        return None
+
+    app, _issuer = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=on_saved,
+        on_step_submitted=on_step,
+    )
+    return TestClient(app, base_url="http://localhost"), saved
+
+
+@pytest.fixture()
+def client_with_otp_error():
+    """TestClient where on_step returns error dict, allowing retry."""
+    saved: dict[str, str] = {}
+
+    def on_saved(creds: dict[str, str]) -> dict:
+        saved.update(creds)
+        return {"type": "otp_required", "prompt": "Enter OTP"}
+
+    def on_step(_step: dict[str, str]) -> dict:
+        return {"type": "error", "text": "Invalid OTP code"}
+
+    app, _issuer = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=on_saved,
+        on_step_submitted=on_step,
+    )
+    return TestClient(app, base_url="http://localhost"), saved
+
+
+# ---------------------------------------------------------------------------
+# /otp endpoint tests (Phase L Track 1: multi-step auth)
+# ---------------------------------------------------------------------------
+
+
+def test_otp_endpoint_completes_setup(client_with_otp):
+    """POST /otp with valid step data should complete setup."""
+    client, _saved = client_with_otp
+    params = _authorize_params()
+    client.get("/authorize", params=params)
+    nonce = _extract_nonce(client)
+    resp = client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["next_step"]["type"] == "otp_required"
+    resp = client.post("/otp", json={"otp_code": "12345"})
+    data = resp.json()
+    assert data["ok"] is True
+    assert "next_step" not in data
+
+
+def test_otp_endpoint_chains_to_password(client_with_2fa):
+    """POST /otp should chain to password_required when callback says so."""
+    client, _ = client_with_2fa
+    params = _authorize_params()
+    client.get("/authorize", params=params)
+    nonce = _extract_nonce(client)
+    client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
+    resp = client.post("/otp", json={"otp_code": "12345"})
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["next_step"]["type"] == "password_required"
+    resp = client.post("/otp", json={"password": "secret"})
+    data = resp.json()
+    assert data["ok"] is True
+    assert "next_step" not in data
+
+
+def test_otp_endpoint_returns_error_on_callback_error(client_with_otp_error):
+    """POST /otp should return error when callback returns error, allow retry."""
+    client, _ = client_with_otp_error
+    params = _authorize_params()
+    client.get("/authorize", params=params)
+    nonce = _extract_nonce(client)
+    client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
+    resp = client.post("/otp", json={"otp_code": "wrong"})
+    data = resp.json()
+    assert data["ok"] is False
+    assert "Invalid" in data["error"]
+
+
+def test_otp_endpoint_without_prior_authorize_returns_400(client_with_otp):
+    """POST /otp without prior credential submission should fail with 400."""
+    client, _ = client_with_otp
+    resp = client.post("/otp", json={"otp_code": "12345"})
+    assert resp.status_code == 400
+
+
 class TestJWTIssuerReuse:
     def test_returns_provided_jwt_issuer(self):
         """When a JWTIssuer is provided, the same instance is returned."""
