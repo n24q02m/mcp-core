@@ -104,6 +104,7 @@ def build_local_app(
     server_name: str,
     relay_schema: dict[str, Any],
     on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
+    on_step_submitted: Callable[[dict[str, str]], dict | None] | None = None,
     jwt_keys_dir: Path | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Construct a combined Starlette app with OAuth AS + MCP transport.
@@ -116,6 +117,11 @@ def build_local_app(
         server_name: Identifier used for JWT iss/aud and credential storage.
         relay_schema: RelayConfigSchema dict describing the credential form.
         on_credentials_saved: Optional callback invoked when user submits creds.
+        on_step_submitted: Optional callback invoked when user submits a
+            multi-step credential (OTP / 2FA password) via ``POST /otp``.
+            Receives the step input dict (e.g. ``{"otp_code": "12345"}``)
+            and returns the same result shape as ``on_credentials_saved``:
+            ``None`` (complete), an error dict, or another step-required dict.
         jwt_keys_dir: Directory for JWT key storage. Defaults to JWTIssuer's default.
 
     Returns:
@@ -143,6 +149,7 @@ def build_local_app(
         server_name=server_name,
         relay_schema=relay_schema,
         on_credentials_saved=on_credentials_saved,
+        on_step_submitted=on_step_submitted,
         jwt_issuer=jwt_issuer,
     )
 
@@ -184,6 +191,7 @@ async def run_local_server(
     port: int = 0,
     open_browser: bool = True,
     on_credentials_saved: Callable[[dict[str, str]], dict | None] | None = None,
+    on_step_submitted: Callable[[dict[str, str]], dict | None] | None = None,
     setup_complete_hook: Callable[[Callable[[], None]], None] | None = None,
     jwt_keys_dir: Path | None = None,
 ) -> None:
@@ -202,6 +210,10 @@ async def run_local_server(
         port: TCP port to bind. 0 means auto-find a free port.
         open_browser: Deprecated, ignored.
         on_credentials_saved: Optional callback invoked when user submits creds.
+        on_step_submitted: Optional callback invoked when user submits a
+            multi-step credential (OTP / 2FA password) via ``POST /otp``.
+            Receives the step input dict and returns ``None`` (complete),
+            an error dict, or another step-required dict.
         setup_complete_hook: Called with ``mark_setup_complete`` after app is
             built. Callers use this to wire their credential_state module so
             background tasks (e.g., GDrive token poll) can update the form.
@@ -228,6 +240,7 @@ async def run_local_server(
         server_name=server_name,
         relay_schema=relay_schema,
         on_credentials_saved=on_credentials_saved,
+        on_step_submitted=on_step_submitted,
         jwt_keys_dir=jwt_keys_dir,
     )
 

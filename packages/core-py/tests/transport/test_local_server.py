@@ -306,6 +306,76 @@ class TestRunLocalServer:
             mock_wb_open.assert_not_called()
 
 
+class TestBuildLocalAppForwardsOnStepSubmitted:
+    def test_forwards_on_step_submitted(self, tmp_path: Path) -> None:
+        """build_local_app must pass on_step_submitted to create_local_oauth_app.
+
+        End-to-end: POST /authorize with credentials returns otp_required,
+        then POST /otp triggers on_step_submitted callback.
+        """
+        import re
+
+        mcp = FastMCP("test-step")
+        step_calls: list[dict] = []
+
+        def on_step(data: dict) -> None:
+            step_calls.append(data)
+            return None  # complete
+
+        def on_save(creds: dict) -> dict:
+            return {
+                "type": "otp_required",
+                "text": "Enter OTP",
+                "field": "otp_code",
+                "input_type": "text",
+            }
+
+        app, _ = build_local_app(
+            mcp=mcp,
+            server_name="test-step",
+            relay_schema={
+                "server": "test-step",
+                "displayName": "Test",
+                "fields": [{"key": "PHONE", "label": "Phone", "type": "tel", "required": True}],
+            },
+            on_credentials_saved=on_save,
+            on_step_submitted=on_step,
+            jwt_keys_dir=tmp_path / "jwt-keys",
+        )
+
+        client = TestClient(app, base_url="http://localhost")
+
+        # PKCE params
+        import base64
+        import hashlib
+        import secrets
+
+        verifier = secrets.token_urlsafe(32)
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        params = {
+            "client_id": "c",
+            "redirect_uri": "http://x/cb",
+            "state": "s",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        }
+
+        resp = client.get("/authorize", params=params)
+        match = re.search(r'nonce=([^"&]+)', resp.text)
+        assert match is not None, "Form should contain a nonce"
+        nonce = match.group(1)
+
+        creds_resp = client.post(f"/authorize?nonce={nonce}", json={"PHONE": "+1234567890"})
+        assert creds_resp.status_code == 200
+        assert creds_resp.json()["next_step"]["type"] == "otp_required"
+
+        # Submit OTP -- this should hit on_step_submitted
+        resp = client.post("/otp", json={"otp_code": "12345"})
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        assert step_calls == [{"otp_code": "12345"}]
+
+
 async def _run_server_for_test(
     mcp: FastMCP,
     *,
