@@ -48,6 +48,11 @@ export interface RunLocalServerOptions {
    * the form's status.
    */
   setupCompleteHook?: (markComplete: (key?: string) => void) => void
+  /**
+   * Optional renderer used in place of the default credential form on GET
+   * /authorize. Passed through to ``createLocalOAuthApp``.
+   */
+  customCredentialFormHtml?: (schema: RelayConfigSchema, options: { submitUrl: string }) => string
 }
 
 export interface LocalServerHandle {
@@ -86,7 +91,8 @@ export async function runLocalServer(
       serverName: options.serverName,
       relaySchema: options.relaySchema,
       onCredentialsSaved: options.onCredentialsSaved,
-      onStepSubmitted: options.onStepSubmitted
+      onStepSubmitted: options.onStepSubmitted,
+      customCredentialFormHtml: options.customCredentialFormHtml
     })
     jwtIssuer = oauthApp.jwtIssuer
   }

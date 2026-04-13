@@ -278,6 +278,49 @@ class TestRunLocalServer:
 
             mock_server.serve.assert_awaited_once()
 
+    def test_forwards_custom_credential_form_html_to_build_local_app(
+        self, mcp: FastMCP, relay_schema: dict, tmp_path: Path
+    ) -> None:
+        """run_local_server must pass custom_credential_form_html through to build_local_app."""
+        mock_server = _mock_uvicorn_server()
+        captured: dict = {}
+
+        def custom_renderer(_schema: dict, _url: str) -> str:
+            return "<html></html>"
+
+        original_build = build_local_app
+
+        def spy_build(*args, **kwargs):
+            captured["custom_credential_form_html"] = kwargs.get("custom_credential_form_html")
+            return original_build(*args, **kwargs)
+
+        with (
+            patch("mcp_core.storage.config_file.read_config", return_value=None),
+            patch("uvicorn.Server", return_value=mock_server),
+            patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
+            patch("mcp_core.transport.local_server.build_local_app", side_effect=spy_build) as mock_build,
+        ):
+            mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__exit__ = lambda self, *a: None
+
+            import asyncio
+
+            from mcp_core.transport.local_server import run_local_server
+
+            asyncio.run(
+                run_local_server(
+                    mcp,
+                    server_name="test",
+                    relay_schema=relay_schema,
+                    port=12345,
+                    jwt_keys_dir=tmp_path / "jwt-keys",
+                    custom_credential_form_html=custom_renderer,
+                )
+            )
+
+            mock_build.assert_called_once()
+            assert captured["custom_credential_form_html"] is custom_renderer
+
     def test_skips_browser_when_open_browser_false(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         """Verify webbrowser.open is NOT called when open_browser=False."""
         mock_server = _mock_uvicorn_server()
@@ -374,6 +417,45 @@ class TestBuildLocalAppForwardsOnStepSubmitted:
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
         assert step_calls == [{"otp_code": "12345"}]
+
+
+class TestBuildLocalAppForwardsCustomFormRenderer:
+    def test_forwards_custom_credential_form_html(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
+        """build_local_app must pass custom_credential_form_html to create_local_oauth_app.
+
+        Calling GET /authorize should produce HTML from the custom renderer,
+        not the default form template.
+        """
+        import base64
+        import hashlib
+        import secrets
+
+        def custom_renderer(_schema: dict, submit_url: str) -> str:
+            return f"<!DOCTYPE html><html><body><h1>Custom Forwarded</h1><a href='{submit_url}'>x</a></body></html>"
+
+        app, _ = build_local_app(
+            mcp=mcp,
+            server_name="test-local-server",
+            relay_schema=relay_schema,
+            jwt_keys_dir=tmp_path / "jwt-keys",
+            custom_credential_form_html=custom_renderer,
+        )
+        client = TestClient(app, base_url="http://localhost")
+
+        verifier = secrets.token_urlsafe(32)
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        params = {
+            "client_id": "c",
+            "redirect_uri": "http://x/cb",
+            "state": "s",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        }
+        resp = client.get("/authorize", params=params)
+        assert resp.status_code == 200
+        assert "<h1>Custom Forwarded</h1>" in resp.text
+        assert "Enter your credentials" not in resp.text
+        assert "nonce=" in resp.text
 
 
 async def _run_server_for_test(

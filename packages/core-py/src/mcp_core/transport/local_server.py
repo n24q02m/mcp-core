@@ -111,6 +111,7 @@ def build_local_app(
     on_credentials_saved: _Callback | None = None,
     on_step_submitted: _Callback | None = None,
     jwt_keys_dir: Path | None = None,
+    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Construct a combined Starlette app with OAuth AS + MCP transport.
 
@@ -128,6 +129,9 @@ def build_local_app(
             and returns the same result shape as ``on_credentials_saved``:
             ``None`` (complete), an error dict, or another step-required dict.
         jwt_keys_dir: Directory for JWT key storage. Defaults to JWTIssuer's default.
+        custom_credential_form_html: Optional ``(schema, submit_url) -> html``
+            renderer used in place of the default credential form on GET
+            /authorize. Passed through to ``create_local_oauth_app``.
 
     Returns:
         ``(app, jwt_issuer)`` tuple.
@@ -156,6 +160,7 @@ def build_local_app(
         on_credentials_saved=on_credentials_saved,
         on_step_submitted=on_step_submitted,
         jwt_issuer=jwt_issuer,
+        custom_credential_form_html=custom_credential_form_html,
     )
 
     # Create MCP ASGI handler via StreamableHTTPSessionManager
@@ -199,6 +204,7 @@ async def run_local_server(
     on_step_submitted: _Callback | None = None,
     setup_complete_hook: Callable[[Callable[[], None]], None] | None = None,
     jwt_keys_dir: Path | None = None,
+    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
 ) -> None:
     """Start MCP server with local OAuth AS on 127.0.0.1.
 
@@ -223,6 +229,10 @@ async def run_local_server(
             built. Callers use this to wire their credential_state module so
             background tasks (e.g., GDrive token poll) can update the form.
         jwt_keys_dir: Directory for JWT key storage. Defaults to JWTIssuer's default.
+        custom_credential_form_html: Optional ``(schema, submit_url) -> html``
+            renderer used in place of the default credential form on GET
+            /authorize. Lets consumers inject custom UX while reusing core
+            OAuth plumbing.
     """
     import os
 
@@ -247,6 +257,7 @@ async def run_local_server(
         on_credentials_saved=on_credentials_saved,
         on_step_submitted=on_step_submitted,
         jwt_keys_dir=jwt_keys_dir,
+        custom_credential_form_html=custom_credential_form_html,
     )
 
     # Wire setup completion: pass mark_setup_complete to caller so

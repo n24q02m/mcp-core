@@ -655,3 +655,70 @@ class TestJWTIssuerReuse:
         from mcp_core.oauth.jwt_issuer import JWTIssuer
 
         assert isinstance(issuer, JWTIssuer)
+
+
+# ---------------------------------------------------------------------------
+# Custom credential form HTML hook
+# ---------------------------------------------------------------------------
+
+
+def test_authorize_uses_custom_html_when_provided():
+    """GET /authorize should render custom HTML when custom_credential_form_html is set."""
+
+    def custom_renderer(schema, submit_url):
+        return f"<!DOCTYPE html><html><body><h1>Custom</h1><form action='{submit_url}'></form></body></html>"
+
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema={"server": "test", "displayName": "Test", "fields": []},
+        custom_credential_form_html=custom_renderer,
+    )
+    client = TestClient(app)
+    resp = client.get("/authorize", params=_authorize_params())
+    assert resp.status_code == 200
+    assert "<h1>Custom</h1>" in resp.text
+    # Custom HTML should NOT contain the default form's title.
+    assert "Enter your credentials" not in resp.text
+    # But nonce must still be in submit_url.
+    assert "nonce=" in resp.text
+
+
+def test_authorize_uses_default_html_when_custom_not_provided():
+    """GET /authorize should use default renderer when custom_credential_form_html not set."""
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema={"server": "test", "displayName": "Test", "fields": []},
+    )
+    client = TestClient(app)
+    resp = client.get("/authorize", params=_authorize_params())
+    assert resp.status_code == 200
+    # Default renderer emits this text.
+    assert "Enter your credentials" in resp.text
+
+
+def test_custom_renderer_receives_schema_and_submit_url():
+    """custom_credential_form_html should be called with (relay_schema, submit_url)."""
+    captured: dict = {}
+    schema = {
+        "server": "test",
+        "displayName": "Test",
+        "fields": [{"key": "X", "label": "X", "type": "text", "required": True}],
+    }
+
+    def custom_renderer(s, submit_url):
+        captured["schema"] = s
+        captured["submit_url"] = submit_url
+        return "<html></html>"
+
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema=schema,
+        custom_credential_form_html=custom_renderer,
+    )
+    client = TestClient(app)
+    resp = client.get("/authorize", params=_authorize_params())
+    assert resp.status_code == 200
+    # Schema passed through identically.
+    assert captured["schema"] == schema
+    # Submit URL must contain the nonce query string.
+    assert "/authorize?nonce=" in captured["submit_url"]

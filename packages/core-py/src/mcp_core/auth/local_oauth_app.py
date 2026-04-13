@@ -72,6 +72,7 @@ def create_local_oauth_app(
     on_credentials_saved: CredentialsCallback | None = None,
     on_step_submitted: StepCallback | None = None,
     jwt_issuer: JWTIssuer | None = None,
+    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create OAuth 2.1 Authorization Server Starlette app.
 
@@ -92,6 +93,13 @@ def create_local_oauth_app(
             timing-safe comparison to prevent timing attacks.
         jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
             automatically using ``server_name``.
+        custom_credential_form_html: Optional callable ``(schema, submit_url)
+            -> html_string`` used to render GET /authorize. When provided,
+            replaces the default ``render_credential_form`` output. Consumers
+            (email, telegram) use this to inject rich UX (multi-account cards,
+            tabs, domain detection) while reusing core OAuth plumbing. The
+            returned HTML MUST include a form/fetch that POSTs JSON to
+            ``submit_url`` (which embeds the PKCE nonce).
 
     Returns:
         ``(app, jwt_issuer)`` tuple. The ``jwt_issuer`` is needed by the
@@ -168,7 +176,10 @@ def create_local_oauth_app(
 
         base = _base_url(request)
         submit_url = f"{base}/authorize?nonce={nonce}"
-        html_content = render_credential_form(relay_schema, submit_url=submit_url)
+        if custom_credential_form_html is not None:
+            html_content = custom_credential_form_html(relay_schema, submit_url)
+        else:
+            html_content = render_credential_form(relay_schema, submit_url=submit_url)
         return HTMLResponse(html_content)
 
     async def authorize_post(request: Request) -> JSONResponse:

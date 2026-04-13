@@ -67,6 +67,14 @@ export interface LocalOAuthAppOptions {
   onStepSubmitted?: StepCallback
   /** Optional pre-created JWT issuer. If omitted, one is created automatically. */
   jwtIssuer?: JWTIssuer
+  /**
+   * Optional renderer used in place of the default credential form on GET
+   * /authorize. Receives the relay schema and an options object with
+   * ``submitUrl`` (which embeds the PKCE nonce) and returns the full HTML
+   * page. Consumers (email, telegram) use this to inject rich UX while
+   * reusing core OAuth plumbing.
+   */
+  customCredentialFormHtml?: (schema: RelayConfigSchema, options: { submitUrl: string }) => string
 }
 
 export interface LocalOAuthAppResult {
@@ -206,7 +214,10 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
 
     const base = getBaseUrl(req)
     const submitUrl = `${base}/authorize?nonce=${nonce}`
-    const html = renderCredentialForm(options.relaySchema, { submitUrl })
+    const html =
+      options.customCredentialFormHtml !== undefined
+        ? options.customCredentialFormHtml(options.relaySchema, { submitUrl })
+        : renderCredentialForm(options.relaySchema, { submitUrl })
     htmlResponse(res, 200, html)
   }
 

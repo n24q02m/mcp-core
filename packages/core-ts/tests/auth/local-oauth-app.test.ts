@@ -486,6 +486,90 @@ describe('POST /otp', () => {
   })
 })
 
+describe('customCredentialFormHtml hook', () => {
+  async function startAppWithCustom(
+    customCredentialFormHtml: Parameters<typeof createLocalOAuthApp>[0]['customCredentialFormHtml']
+  ): Promise<TestServer> {
+    const jwtIssuer = new JWTIssuer('test-server', tempKeysDir)
+    const app = await createLocalOAuthApp({
+      serverName: 'test-server',
+      relaySchema: SCHEMA,
+      jwtIssuer,
+      customCredentialFormHtml
+    })
+    const server: Server = createServer(app.handler)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const addr = server.address() as AddressInfo
+    return {
+      url: `http://127.0.0.1:${addr.port}`,
+      app,
+      close: () => new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())))
+    }
+  }
+
+  function _defaultAuthorizeParams(): URLSearchParams {
+    const { challenge } = pkce()
+    return new URLSearchParams({
+      client_id: 'c',
+      redirect_uri: 'http://x/cb',
+      state: 's',
+      code_challenge: challenge,
+      code_challenge_method: 'S256'
+    })
+  }
+
+  it('uses custom HTML when customCredentialFormHtml provided', async () => {
+    const customRenderer = (_schema: RelayConfigSchema, opts: { submitUrl: string }): string =>
+      `<!DOCTYPE html><html><body><h1>Custom</h1><form action="${opts.submitUrl}"></form></body></html>`
+
+    const srv = await startAppWithCustom(customRenderer)
+    try {
+      const params = _defaultAuthorizeParams()
+      const resp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+      expect(resp.status).toBe(200)
+      const html = await resp.text()
+      expect(html).toContain('<h1>Custom</h1>')
+      expect(html).not.toContain('Enter your credentials')
+      expect(html).toContain('nonce=')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('uses default HTML when custom not provided', async () => {
+    const srv = await startAppWithCustom(undefined)
+    try {
+      const params = _defaultAuthorizeParams()
+      const resp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+      expect(resp.status).toBe(200)
+      const html = await resp.text()
+      expect(html).toContain('Enter your credentials')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('passes schema and submitUrl to the custom renderer', async () => {
+    const captured: { schema?: RelayConfigSchema; submitUrl?: string } = {}
+    const customRenderer = (schema: RelayConfigSchema, opts: { submitUrl: string }): string => {
+      captured.schema = schema
+      captured.submitUrl = opts.submitUrl
+      return '<html></html>'
+    }
+
+    const srv = await startAppWithCustom(customRenderer)
+    try {
+      const params = _defaultAuthorizeParams()
+      const resp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+      expect(resp.status).toBe(200)
+      expect(captured.schema).toEqual(SCHEMA)
+      expect(captured.submitUrl).toContain('/authorize?nonce=')
+    } finally {
+      await srv.close()
+    }
+  })
+})
+
 describe('GET /setup-status', () => {
   it('reports gdrive=idle by default and complete after markSetupComplete', async () => {
     const srv = await startApp()

@@ -203,6 +203,35 @@ describe('runLocalServer lifecycle', () => {
     }
   })
 
+  it('forwards customCredentialFormHtml to the OAuth app', async () => {
+    const customRenderer = (_schema: RelayConfigSchema, opts: { submitUrl: string }): string =>
+      `<!DOCTYPE html><html><body><h1>Custom Forwarded</h1><a href="${opts.submitUrl}">x</a></body></html>`
+
+    const handle: LocalServerHandle = await runLocalServer(makeMcpServer, {
+      serverName: `test-custom-form-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0,
+      customCredentialFormHtml: customRenderer
+    })
+    try {
+      const params = new URLSearchParams({
+        client_id: 'c',
+        redirect_uri: 'http://x/cb',
+        state: 's',
+        code_challenge: 'challenge-placeholder-that-is-long-enough-for-s256',
+        code_challenge_method: 'S256'
+      })
+      const resp = await fetch(`http://${handle.host}:${handle.port}/authorize?${params.toString()}`)
+      expect(resp.status).toBe(200)
+      const html = await resp.text()
+      expect(html).toContain('<h1>Custom Forwarded</h1>')
+      expect(html).not.toContain('Enter your credentials')
+      expect(html).toContain('nonce=')
+    } finally {
+      await handle.close()
+    }
+  })
+
   it('close() cleanly shuts down the HTTP server', async () => {
     const handle = await runLocalServer(makeMcpServer, {
       serverName: `test-close-${Date.now()}`,
