@@ -96,7 +96,7 @@ class TestOpenInWsl:
             args = mock_sp.run.call_args
             assert args[0][0][0] == "wslview"
 
-    def test_falls_back_to_cmd_exe(self):
+    def test_falls_back_to_explorer_exe_then_powershell(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.SubprocessError = Exception
             call_count = 0
@@ -106,6 +106,8 @@ class TestOpenInWsl:
                 call_count += 1
                 if call_count == 1:
                     raise FileNotFoundError
+                elif call_count == 2:
+                    raise FileNotFoundError
                 return MagicMock()
 
             mock_sp.run = MagicMock(side_effect=side_effect)
@@ -113,7 +115,7 @@ class TestOpenInWsl:
 
             result = _open_in_wsl("https://example.com")
             assert result is True
-            assert mock_sp.run.call_count == 2
+            assert mock_sp.run.call_count == 3
 
     def test_returns_false_when_all_methods_fail(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
@@ -123,3 +125,18 @@ class TestOpenInWsl:
 
             result = _open_in_wsl("https://example.com")
             assert result is False
+
+    def test_rejects_command_injection(self):
+        from mcp_core.relay.browser import try_open_browser
+
+        assert try_open_browser("http://example.com/foo;rm -rf /") is False
+        assert try_open_browser("http://example.com/foo`rm -rf /`") is False
+        assert try_open_browser("http://example.com/foo|rm -rf /") is False
+        assert try_open_browser("http://example.com/foo$rm") is False
+
+    def test_rejects_invalid_scheme(self):
+        from mcp_core.relay.browser import try_open_browser
+
+        assert try_open_browser("file:///etc/passwd") is False
+        assert try_open_browser("ftp://example.com") is False
+        assert try_open_browser("javascript:alert(1)") is False

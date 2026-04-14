@@ -1,0 +1,4 @@
+## 2024-05-20 - Command Injection in WSL Browser Relay
+**Vulnerability:** Command injection vulnerability in `try_open_browser` and `openInWsl` when executing `cmd.exe /c start` with unsanitized URLs.
+**Learning:** Shell-based command execution (like `cmd.exe /c start`) is dangerous when handling external URLs because shell metacharacters can be abused. Although Windows handles some metacharacters, others can lead to arbitrary command execution if the URL string is not properly sanitized.
+**Prevention:** Always use safe process execution. Prioritize using direct process execution with parameters rather than relying on shell evaluation. For Windows/WSL commands, use `explorer.exe` or `powershell.exe -EncodedCommand` (with Base64 encoding) to prevent command injection, and always perform strict URL validation to strip potentially dangerous characters like `;|$\`><"'`.

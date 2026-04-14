@@ -33,9 +33,21 @@ async function openInWsl(url: string): Promise<boolean> {
     /* fall through */
   }
 
-  // Fallback to rundll32.exe url.dll,FileProtocolHandler
+  // Fallback to explorer.exe
   try {
-    await execFileAsync('rundll32.exe', ['url.dll,FileProtocolHandler', url])
+    await execFileAsync('explorer.exe', [url])
+    return true
+  } catch {
+    /* fall through */
+  }
+
+  // Fallback to powershell.exe with Base64 encoding
+  try {
+    // PowerShell expects UTF-16LE for Base64 encoded commands
+    const commandToEncode = `Start-Process '${url}'`
+    const encodedCommand = Buffer.from(commandToEncode, 'utf16le').toString('base64')
+
+    await execFileAsync('powershell.exe', ['-EncodedCommand', encodedCommand])
     return true
   } catch {
     /* fall through */
@@ -58,6 +70,9 @@ export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Validate URL
     if (!/^https?:\/\//i.test(url)) {
+      return false
+    }
+    if (/[;|$`><"']/.test(url)) {
       return false
     }
 

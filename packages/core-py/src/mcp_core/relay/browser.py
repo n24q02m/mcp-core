@@ -1,6 +1,8 @@
 """Cross-platform browser opening with WSL detection."""
 
 import logging
+import base64
+import re
 import subprocess
 import time
 import webbrowser
@@ -26,7 +28,7 @@ def _is_wsl() -> bool:
 
 
 def _open_in_wsl(url: str) -> bool:
-    """Open URL from inside WSL using wslview or cmd.exe."""
+    """Open URL from inside WSL using wslview, explorer.exe, or powershell.exe."""
     # Try wslview first (from wslu package, commonly available)
     try:
         subprocess.run(
@@ -39,10 +41,26 @@ def _open_in_wsl(url: str) -> bool:
     except (FileNotFoundError, subprocess.SubprocessError):
         pass
 
-    # Fallback to cmd.exe /c start
+    # Fallback to explorer.exe
     try:
         subprocess.run(
-            ["cmd.exe", "/c", "start", url.replace("&", "^&")],
+            ["explorer.exe", url],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+        return True
+    except (FileNotFoundError, subprocess.SubprocessError):
+        pass
+
+    # Fallback to powershell.exe with Base64 encoding
+    try:
+        subprocess.run(
+            [
+                "powershell.exe",
+                "-EncodedCommand",
+                base64.b64encode(f"Start-Process '{url}'".encode("utf-16le")).decode("utf-8"),
+            ],
             check=True,
             capture_output=True,
             timeout=10,
@@ -58,7 +76,7 @@ def try_open_browser(url: str) -> bool:
     """Try to open URL in default browser. Returns True if likely succeeded.
 
     Detection order:
-    1. WSL: check /proc/version for Microsoft/WSL, use 'wslview' or 'cmd.exe /c start'
+    1. WSL: check /proc/version for Microsoft/WSL, use 'wslview', 'explorer.exe' or 'powershell.exe'
     2. Standard: webbrowser.open()
 
     Never raises. Returns False on failure.
@@ -69,6 +87,11 @@ def try_open_browser(url: str) -> bool:
     Returns:
         True if the browser was likely opened, False otherwise.
     """
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        return False
+    if re.search(r'[;|$\`><"\']', url):
+        return False
+
     now = time.monotonic()
     last_opened = _recent_browser_opens.get(url)
     if last_opened is not None and now - last_opened < _BROWSER_OPEN_DEDUPE_WINDOW_S:

@@ -48,6 +48,13 @@ describe('tryOpenBrowser', () => {
       const result2 = await tryOpenBrowser('HTTPS://example.com')
       expect(typeof result2).toBe('boolean')
     })
+
+    it('rejects command injection attempts', async () => {
+      expect(await tryOpenBrowser('http://example.com/foo;rm -rf /')).toBe(false)
+      expect(await tryOpenBrowser('http://example.com/foo`rm -rf /`')).toBe(false)
+      expect(await tryOpenBrowser('http://example.com/foo|rm -rf /')).toBe(false)
+      expect(await tryOpenBrowser('http://example.com/foo$rm')).toBe(false)
+    })
   })
 
   describe('behavior', () => {
