@@ -29,6 +29,15 @@ _BASE_DELAY_S = 0.1
 # Allow overriding config path for testing
 _config_path_override: str | None = None
 
+# Cache the derived file key to avoid expensive PBKDF2 iterations on every config read/write.
+_cached_key: bytes | None = None
+
+
+def clear_key_cache_for_testing() -> None:
+    """Clear the cached encryption key for testing."""
+    global _cached_key
+    _cached_key = None
+
 
 def set_config_path(path: str | None) -> None:
     """Override config file path (for testing). Pass None to reset."""
@@ -43,9 +52,14 @@ def _get_config_path() -> Path:
 
 
 def _get_key() -> bytes:
+    global _cached_key
+    if _cached_key is not None:
+        return _cached_key
+
     machine_id = get_machine_id()
     username = get_username()
-    return derive_file_key(machine_id, username)
+    _cached_key = derive_file_key(machine_id, username)
+    return _cached_key
 
 
 def _with_retry(fn: Any) -> Any:

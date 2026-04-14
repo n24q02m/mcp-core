@@ -1,3 +1,3 @@
-## 2025-04-12 - Cached PBKDF2 Key Derivation
-**Learning:** The config file encryption used PBKDF2 with 600,000 iterations inside `deriveFileKey()`, which was being called on *every* config file read and write. This caused severe performance bottlenecks, taking over 3 seconds to execute a simple loop of 10 reads. Caching the derived key in memory significantly reduces this CPU overhead (down to ~5ms for the same loop).
-**Action:** When working with cryptography in this codebase, specifically PBKDF2 key derivations in `packages/core-ts`, ensure the result is cached for subsequent operations within the same process lifecycle to avoid unnecessary CPU blocking. Remember to provide a way to clear the cache for isolated unit testing (e.g., `clearKeyCacheForTesting`).
+## 2024-04-14 - Python Config Key Caching
+**Learning:** Python package (`core-py`) was missing the PBKDF2 derived file key caching that was present in the TypeScript equivalent. This meant expensive operations (600,000 PBKDF2 iterations taking ~350ms) were occurring on every config read/write call in the same process.
+**Action:** Always verify feature parity between TypeScript and Python equivalents, especially for expensive operations like encryption where a single `bytes | None` cache makes an enormous difference. Remember to clear caches in pytest test setups to avoid state leakage.
