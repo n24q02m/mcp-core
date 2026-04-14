@@ -541,6 +541,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                 errorEl.style.display = "none";
                 errorEl.textContent = "";
                 buttonEl.disabled = true;
+                buttonEl.setAttribute("aria-busy", "true");
                 buttonEl.textContent = "Verifying...";
                 inputEl.disabled = true;
 
@@ -576,6 +577,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 errorEl.style.display = "block";
                                 inputEl.disabled = false;
                                 buttonEl.disabled = false;
+                                buttonEl.removeAttribute("aria-busy");
                                 buttonEl.textContent = "Verify";
                                 inputEl.focus();
                             }
@@ -586,6 +588,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                         errorEl.style.display = "block";
                         inputEl.disabled = false;
                         buttonEl.disabled = false;
+                        buttonEl.removeAttribute("aria-busy");
                         buttonEl.textContent = "Verify";
                     });
             }
@@ -601,8 +604,10 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     if (input.hasAttribute("required") && input.value.trim() === "") {
                         valid = false;
                         input.style.borderColor = "#f87171";
+                        input.setAttribute("aria-invalid", "true");
                     } else {
                         input.style.borderColor = "";
+                        input.removeAttribute("aria-invalid");
                         payload[input.name] = input.value;
                     }
                 });
@@ -614,6 +619,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
                 submitBtn.disabled = true;
                 submitBtn.textContent = "Connecting...";
+                submitBtn.setAttribute("aria-busy", "true");
                 statusBox.style.display = "none";
 
                 fetch(submitUrl, {
@@ -629,6 +635,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 });
                                 submitBtn.disabled = true;
                                 submitBtn.textContent = "Connected";
+                                submitBtn.removeAttribute("aria-busy");
                                 if (data.next_step && data.next_step.type === "oauth_device_code") {
                                     var ns = data.next_step;
                                     statusBox.textContent = "";
@@ -694,6 +701,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 showStatus("error", data.error || data.error_description || "Request failed.");
                                 submitBtn.disabled = false;
                                 submitBtn.textContent = "Connect";
+                                submitBtn.removeAttribute("aria-busy");
                             }
                         });
                     })
@@ -701,6 +709,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                         showStatus("error", "Network error: " + err.message);
                         submitBtn.disabled = false;
                         submitBtn.textContent = "Connect";
+                        submitBtn.removeAttribute("aria-busy");
                     });
             });
         })();
