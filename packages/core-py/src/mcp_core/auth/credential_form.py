@@ -167,7 +167,7 @@ def render_credential_form(
 
         .server-id {{
             font-size: 0.8125rem;
-            color: #666;
+            color: #9ca3af;
             font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
             margin-bottom: 0.5rem;
         }}
@@ -214,7 +214,7 @@ def render_credential_form(
         .optional-badge {{
             font-size: 0.6875rem;
             font-weight: 400;
-            color: #666;
+            color: #9ca3af;
             background-color: rgba(255, 255, 255, 0.04);
             border: 1px solid #333;
             border-radius: 4px;
@@ -369,7 +369,7 @@ def render_credential_form(
 
         .capability-desc {{
             font-size: 0.8125rem;
-            color: #666;
+            color: #9ca3af;
         }}
     </style>
 </head>
