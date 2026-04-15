@@ -64,9 +64,10 @@ def forward(url: str, token: str | None) -> int:
                 return 2
 
 
-def main(url: str | None = None, token: str | None = None) -> int:
+def main(url: str | None = None) -> int:
     resolved_url = url or os.environ.get("MCP_CORE_SERVER_URL")
-    resolved_token = token if token is not None else os.environ.get("MCP_CORE_SERVER_TOKEN")
+    # Security policy: Token must be sourced from environment variable to prevent leakage
+    resolved_token = os.environ.get("MCP_CORE_SERVER_TOKEN")
     if not resolved_url:
         sys.stderr.write("MCP_CORE_SERVER_URL not set. Pass --url <url> or set the env var.\n")
         return 1
@@ -83,13 +84,8 @@ def cli() -> int:
         default=None,
         help="Upstream HTTP MCP endpoint (default: $MCP_CORE_SERVER_URL)",
     )
-    parser.add_argument(
-        "--token",
-        default=None,
-        help="Bearer token (default: $MCP_CORE_SERVER_TOKEN)",
-    )
     args = parser.parse_args()
-    return main(url=args.url, token=args.token)
+    return main(url=args.url)
 
 
 if __name__ == "__main__":

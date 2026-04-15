@@ -70,9 +70,9 @@ Thin stdio-to-HTTP forwarder for agents that only support stdio MCP transport
 (e.g., Antigravity). Reads JSON-RPC frames from stdin, POSTs them to a remote
 MCP server, writes responses to stdout.
 
-CLI entry point: `mcp-stdio-proxy --url https://my-mcp.example.com/mcp --token <bearer>`.
-Falls back to `MCP_CORE_SERVER_URL` and `MCP_CORE_SERVER_TOKEN` env vars when
-flags are not supplied.
+CLI entry point: `mcp-stdio-proxy --url https://my-mcp.example.com/mcp`.
+Falls back to `MCP_CORE_SERVER_URL` env var when flag is not supplied.
+For authentication, you must provide the token via the `MCP_CORE_SERVER_TOKEN` environment variable.
 
 ## Quick start (Python)
 
