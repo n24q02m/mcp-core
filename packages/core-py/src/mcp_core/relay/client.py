@@ -63,6 +63,51 @@ class RelaySession:
     relay_url: str
 
 
+def _prepare_session_body(
+    session_id: str,
+    server_name: str,
+    schema: RelayConfigSchema,
+    oauth_state: dict[str, str] | None = None,
+) -> dict[str, object]:
+    """Prepare the POST body for session creation."""
+    body: dict[str, object] = {
+        "sessionId": session_id,
+        "serverName": server_name,
+        "schema": dict(schema),
+    }
+    if oauth_state is not None:
+        body["oauthState"] = oauth_state
+    return body
+
+
+def _build_relay_url(
+    relay_base_url: str,
+    session_id: str,
+    public_key: EllipticCurvePublicKey,
+    passphrase: str,
+) -> str:
+    """Build the browser setup URL."""
+    pub_key_b64 = export_public_key(public_key)
+    return f"{relay_base_url}/setup?s={session_id}#k={pub_key_b64}&p={quote(passphrase)}"
+
+
+def _decrypt_relay_credentials(
+    session: RelaySession,
+    result: dict[str, str],
+) -> dict[str, str]:
+    """Derive keys and decrypt credentials from a relay result."""
+    browser_pub = import_public_key(result["browserPub"])
+    shared_secret = derive_shared_secret(session.private_key, browser_pub)
+    aes_key = derive_aes_key(shared_secret, session.passphrase)
+
+    ciphertext = base64.b64decode(result["ciphertext"])
+    iv = base64.b64decode(result["iv"])
+    tag = base64.b64decode(result["tag"])
+
+    plaintext = decrypt(aes_key, ciphertext, iv, tag)
+    return json.loads(plaintext)
+
+
 async def create_session(
     relay_base_url: str,
     server_name: str,
@@ -93,13 +138,7 @@ async def create_session(
     private_key, public_key = generate_key_pair()
     passphrase = generate_passphrase()
 
-    body: dict[str, object] = {
-        "sessionId": session_id,
-        "serverName": server_name,
-        "schema": dict(schema),
-    }
-    if oauth_state is not None:
-        body["oauthState"] = oauth_state
+    body = _prepare_session_body(session_id, server_name, schema, oauth_state)
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -110,8 +149,7 @@ async def create_session(
             msg = f"Relay session creation failed: {response.status_code}"
             raise RuntimeError(msg)
 
-    pub_key_b64 = export_public_key(public_key)
-    relay_url = f"{relay_base_url}/setup?s={session_id}#k={pub_key_b64}&p={quote(passphrase)}"
+    relay_url = _build_relay_url(relay_base_url, session_id, public_key, passphrase)
 
     return RelaySession(
         session_id=session_id,
@@ -163,20 +201,7 @@ async def poll_for_result(
                     raise RuntimeError(msg)
 
                 result = body.get("result", body)
-                browser_pub = import_public_key(result["browserPub"])
-                shared_secret = derive_shared_secret(session.private_key, browser_pub)
-                aes_key = derive_aes_key(shared_secret, session.passphrase)
-
-                ciphertext = base64.b64decode(result["ciphertext"])
-                iv = base64.b64decode(result["iv"])
-                tag = base64.b64decode(result["tag"])
-
-                plaintext = decrypt(aes_key, ciphertext, iv, tag)
-
-                # Don't delete session — keep alive for bidirectional messaging.
-                # Session auto-expires via TTL (10 min).
-
-                return json.loads(plaintext)
+                return _decrypt_relay_credentials(session, result)
 
             if response.status_code == 404:
                 msg = "Session expired or not found"
