@@ -1,3 +1,4 @@
+import os
 import stat
 
 import jwt
@@ -32,9 +33,10 @@ class TestKeyGeneration:
         assert private_path.exists()
         assert public_path.exists()
 
-        # Check permissions
-        assert stat.S_IMODE(private_path.stat().st_mode) == 0o600
-        assert stat.S_IMODE(public_path.stat().st_mode) == 0o644
+        # Check permissions (POSIX only)
+        if os.name == "posix":
+            assert stat.S_IMODE(private_path.stat().st_mode) == 0o600
+            assert stat.S_IMODE(public_path.stat().st_mode) == 0o644
 
     def test_generated_keys_are_valid_rsa(self, issuer):
         assert isinstance(issuer.private_key, rsa.RSAPrivateKey)
