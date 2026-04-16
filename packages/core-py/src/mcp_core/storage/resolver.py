@@ -46,8 +46,9 @@ def resolve_config(
     # 1. Check env vars
     env_config: dict[str, str] = {}
     all_env_present = len(required_fields) > 0
+    server_prefix = "MCP_" + re.sub(r"-", "_", server_name).upper() + "_"
     for field in required_fields:
-        env_key = "MCP_" + re.sub(r"-", "_", server_name).upper() + "_" + re.sub(r"-", "_", field).upper()
+        env_key = server_prefix + re.sub(r"-", "_", field).upper()
         value = os.environ.get(env_key, "")
         if value:
             env_config[field] = value
