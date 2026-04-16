@@ -7,10 +7,12 @@ max 10 sessions/IP/10min).
 Lock file location: <config_dir>/mcp/relay-session-<server>.lock
 """
 
+import asyncio
 import json
 import logging
 import time
 from dataclasses import dataclass
+from typing import Any
 from pathlib import Path
 
 from platformdirs import user_config_dir
@@ -19,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 _CONFIG_DIR = Path(user_config_dir("mcp", appauthor=False))
 _DEFAULT_MAX_AGE_S = 600.0
+_MAX_RETRIES = 3
+_BASE_DELAY_S = 0.1
 
 # Allow overriding lock directory for testing
 _lock_dir_override: str | None = None
@@ -49,6 +53,30 @@ class SessionInfo:
     created_at: float
 
 
+async def _with_retry(fn: Any) -> Any:
+    """Retry an async function on file busy errors."""
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return await fn()
+        except OSError as err:
+            is_busy = getattr(err, "errno", None) in (11, 16, 35)  # EAGAIN, EBUSY, etc
+            if not is_busy or attempt == _MAX_RETRIES - 1:
+                raise
+            await asyncio.sleep(_BASE_DELAY_S * (2**attempt))
+    msg = "Unreachable"
+    raise RuntimeError(msg)
+
+
+def _load_session_info(path: Path) -> SessionInfo:
+    """Read and parse session info from a lock file."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return SessionInfo(
+        session_id=data["session_id"],
+        relay_url=data["relay_url"],
+        created_at=data["created_at"],
+    )
+
+
 async def acquire_session_lock(
     server_name: str,
     max_age_s: float = _DEFAULT_MAX_AGE_S,
@@ -71,12 +99,7 @@ async def acquire_session_lock(
         if not path.exists():
             return None
 
-        data = json.loads(path.read_text(encoding="utf-8"))
-        info = SessionInfo(
-            session_id=data["session_id"],
-            relay_url=data["relay_url"],
-            created_at=data["created_at"],
-        )
+        info = _load_session_info(path)
 
         age = time.time() - info.created_at
         if age > max_age_s:
@@ -107,6 +130,30 @@ async def acquire_session_lock(
         return None
 
 
+def _generate_lock_data(info: SessionInfo) -> str:
+    """Generate JSON data for the lock file."""
+    return json.dumps(
+        {
+            "session_id": info.session_id,
+            "relay_url": info.relay_url,
+            "created_at": info.created_at,
+        }
+    )
+
+
+async def _write_lock_file(path: Path, data: str) -> None:
+    """Write lock data to file atomically with retry logic."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    async def _write() -> None:
+        # Write atomically via temp file + rename
+        tmp_path = path.with_suffix(".tmp")
+        tmp_path.write_text(data, encoding="utf-8")
+        tmp_path.replace(path)
+
+    await _with_retry(_write)
+
+
 async def write_session_lock(server_name: str, info: SessionInfo) -> None:
     """Write session info to lock file after creating a new relay session.
 
@@ -115,19 +162,8 @@ async def write_session_lock(server_name: str, info: SessionInfo) -> None:
         info: Session information to persist.
     """
     path = _lock_path(server_name)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    data = {
-        "session_id": info.session_id,
-        "relay_url": info.relay_url,
-        "created_at": info.created_at,
-    }
-
-    # Write atomically via temp file + rename
-    tmp_path = path.with_suffix(".tmp")
-    tmp_path.write_text(json.dumps(data), encoding="utf-8")
-    tmp_path.replace(path)
-
+    data = _generate_lock_data(info)
+    await _write_lock_file(path, data)
     logger.debug("Wrote session lock for %s", server_name)
 
 
@@ -138,8 +174,12 @@ async def release_session_lock(server_name: str) -> None:
         server_name: Server identifier.
     """
     path = _lock_path(server_name)
-    try:
+
+    async def _unlink() -> None:
         path.unlink(missing_ok=True)
+
+    try:
+        await _with_retry(_unlink)
         logger.debug("Released session lock for %s", server_name)
     except OSError as err:
         logger.debug("Failed to release session lock for %s: %s", server_name, err)
