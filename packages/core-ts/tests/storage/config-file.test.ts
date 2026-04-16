@@ -148,3 +148,51 @@ describe('exportConfig + importConfig', () => {
     expect(await readConfig('remote-server')).toEqual({ key: 'remote-val' })
   }, 60000)
 })
+
+describe('config validation', () => {
+  it('throws on invalid version', async () => {
+    const invalidStore = { version: 2, servers: {} }
+    // Manually write an invalid file to test loadStore validation
+    const { encryptData } = await import('../../src/storage/encryption.js')
+    const { getMachineId, getUsername } = await import('../../src/storage/machine-id.js')
+    const { deriveFileKey } = await import('../../src/storage/encryption.js')
+    const { writeFile } = await import('node:fs/promises')
+
+    const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
+    const key = await deriveFileKey(machineId, username)
+    const encrypted = await encryptData(key, JSON.stringify(invalidStore))
+    await writeFile(join(tempDir, 'config.enc'), encrypted)
+
+    await expect(readConfig('any')).rejects.toThrow('Invalid config schema')
+  })
+
+  it('throws on invalid servers object', async () => {
+    const invalidStore = { version: 1, servers: 'not-an-object' }
+    const { encryptData } = await import('../../src/storage/encryption.js')
+    const { getMachineId, getUsername } = await import('../../src/storage/machine-id.js')
+    const { deriveFileKey } = await import('../../src/storage/encryption.js')
+    const { writeFile } = await import('node:fs/promises')
+
+    const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
+    const key = await deriveFileKey(machineId, username)
+    const encrypted = await encryptData(key, JSON.stringify(invalidStore))
+    await writeFile(join(tempDir, 'config.enc'), encrypted)
+
+    await expect(readConfig('any')).rejects.toThrow('Invalid config schema')
+  })
+
+  it('throws on invalid server config (non-string value)', async () => {
+    const invalidStore = { version: 1, servers: { bad: { key: 123 } } }
+    const { encryptData } = await import('../../src/storage/encryption.js')
+    const { getMachineId, getUsername } = await import('../../src/storage/machine-id.js')
+    const { deriveFileKey } = await import('../../src/storage/encryption.js')
+    const { writeFile } = await import('node:fs/promises')
+
+    const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
+    const key = await deriveFileKey(machineId, username)
+    const encrypted = await encryptData(key, JSON.stringify(invalidStore))
+    await writeFile(join(tempDir, 'config.enc'), encrypted)
+
+    await expect(readConfig('any')).rejects.toThrow('Invalid config schema')
+  })
+})
