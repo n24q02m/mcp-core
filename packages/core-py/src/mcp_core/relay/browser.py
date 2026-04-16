@@ -89,9 +89,9 @@ def try_open_browser(url: str) -> bool:
         result = webbrowser.open(url)
         if result:
             logger.debug("Opened browser via webbrowser.open()")
-        else:
-            logger.debug("webbrowser.open() returned False")
-        return result
+            return True
+
+        logger.debug("webbrowser.open() returned False")
 
     except Exception as err:
         logger.debug("Failed to open browser: %s", err)

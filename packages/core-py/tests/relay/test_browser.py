@@ -1,5 +1,6 @@
 """Tests for cross-platform browser opening."""
 
+import subprocess
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -47,19 +48,23 @@ class TestTryOpenBrowser:
                 assert result is True
                 mock_wb.open.assert_called_once_with("https://example.com")
 
-    def test_returns_false_on_failure(self):
+    def test_returns_false_on_failure(self, capsys):
         with patch("mcp_core.relay.browser._is_wsl", return_value=False):
             with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
                 mock_wb.open.return_value = False
                 result = try_open_browser("https://example.com")
                 assert result is False
+                captured = capsys.readouterr()
+                assert "ACTION REQUIRED" in captured.err
 
-    def test_returns_false_on_exception(self):
+    def test_returns_false_on_exception(self, capsys):
         with patch("mcp_core.relay.browser._is_wsl", return_value=False):
             with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
                 mock_wb.open.side_effect = RuntimeError("no display")
                 result = try_open_browser("https://example.com")
                 assert result is False
+                captured = capsys.readouterr()
+                assert "ACTION REQUIRED" in captured.err
 
     def test_tries_wsl_first_when_in_wsl(self):
         with patch("mcp_core.relay.browser._is_wsl", return_value=True):
@@ -82,12 +87,44 @@ class TestTryOpenBrowser:
             result = try_open_browser("https://example.com")
             assert result is False
 
+    def test_deduplicates_calls(self):
+        url = "https://example.com"
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                with patch("time.monotonic") as mock_time:
+                    mock_wb.open.return_value = True
+                    mock_time.return_value = 1000.0
+
+                    # First call
+                    assert try_open_browser(url) is True
+                    assert mock_wb.open.call_count == 1
+
+                    # Second call within window
+                    mock_time.return_value = 1000.0 + 60.0
+                    assert try_open_browser(url) is True
+                    assert mock_wb.open.call_count == 1
+
+                    # Third call after window
+                    mock_time.return_value = 1000.0 + 600.0
+                    assert try_open_browser(url) is True
+                    assert mock_wb.open.call_count == 2
+
+    def test_prints_banner_on_total_failure(self, capsys):
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser.open", return_value=False):
+                result = try_open_browser("https://example.com/login")
+                assert result is False
+
+                captured = capsys.readouterr()
+                assert "ACTION REQUIRED" in captured.err
+                assert "https://example.com/login" in captured.err
+
 
 class TestOpenInWsl:
     def test_tries_wslview_first(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.run = MagicMock()
-            mock_sp.SubprocessError = Exception
+            mock_sp.SubprocessError = subprocess.SubprocessError
             from mcp_core.relay.browser import _open_in_wsl
 
             result = _open_in_wsl("https://example.com")
@@ -98,7 +135,7 @@ class TestOpenInWsl:
 
     def test_falls_back_to_cmd_exe(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
-            mock_sp.SubprocessError = Exception
+            mock_sp.SubprocessError = subprocess.SubprocessError
             call_count = 0
 
             def side_effect(*args, **kwargs):
@@ -117,9 +154,29 @@ class TestOpenInWsl:
 
     def test_returns_false_when_all_methods_fail(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
-            mock_sp.SubprocessError = Exception
+            mock_sp.SubprocessError = subprocess.SubprocessError
             mock_sp.run = MagicMock(side_effect=FileNotFoundError)
             from mcp_core.relay.browser import _open_in_wsl
 
             result = _open_in_wsl("https://example.com")
             assert result is False
+
+    def test_handles_subprocess_error_in_wslview(self):
+        with patch("mcp_core.relay.browser.subprocess.run") as mock_run:
+            # First call fails with SubprocessError, second call (cmd.exe) succeeds
+            mock_run.side_effect = [subprocess.SubprocessError("wslview failed"), MagicMock()]
+            from mcp_core.relay.browser import _open_in_wsl
+
+            assert _open_in_wsl("https://example.com") is True
+            assert mock_run.call_count == 2
+            assert mock_run.call_args_list[0][0][0] == ["wslview", "https://example.com"]
+            assert mock_run.call_args_list[1][0][0][0] == "cmd.exe"
+
+    def test_handles_subprocess_error_in_cmd_exe(self):
+        with patch("mcp_core.relay.browser.subprocess.run") as mock_run:
+            # Both calls fail
+            mock_run.side_effect = [FileNotFoundError, subprocess.SubprocessError("cmd failed")]
+            from mcp_core.relay.browser import _open_in_wsl
+
+            assert _open_in_wsl("https://example.com") is False
+            assert mock_run.call_count == 2
