@@ -178,3 +178,21 @@ class TestRenderCredentialForm:
         assert "textContent" in html
         # createElement must be used for dynamic elements
         assert "createElement" in html
+
+def test_render_form_omits_dynamic_flow_js_when_disabled():
+    """When dynamic_flow=False, OTP/multi-step JS must be absent."""
+    schema = {"server": "test", "displayName": "Test", "fields": []}
+    html = render_credential_form(schema, submit_url="/auth", dynamic_flow=False)
+    assert "otpUrl" not in html
+    assert "showStepInput" not in html
+    assert "submitStep" not in html
+    assert "otp_required" not in html
+
+
+def test_render_form_omits_device_code_js_when_disabled():
+    """When device_code_poll=False, OAuth device code polling JS must be absent."""
+    schema = {"server": "test", "displayName": "Test", "fields": []}
+    html = render_credential_form(schema, submit_url="/auth", device_code_poll=False)
+    assert "oauth_device_code" not in html
+    assert "gdrive-waiting" not in html
+    assert "/setup-status" not in html
