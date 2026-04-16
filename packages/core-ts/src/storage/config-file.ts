@@ -62,6 +62,19 @@ async function getKey(): Promise<CryptoKey> {
   return cachedKey
 }
 
+async function decryptStore(key: CryptoKey, data: Buffer): Promise<ConfigStore> {
+  const json = await decryptData(key, data)
+  return JSON.parse(json) as ConfigStore
+}
+
+async function migrateLegacyStore(data: Buffer, machineId: string, username: string): Promise<ConfigStore> {
+  const legacyKey = await deriveFileKey(machineId, username, LEGACY_PBKDF2_ITERATIONS)
+  const store = await decryptStore(legacyKey, data)
+  // Auto-migrate to current iterations
+  await saveStore(store)
+  return store
+}
+
 async function loadStore(): Promise<ConfigStore> {
   const configPath = getConfigPath()
   if (!existsSync(configPath)) {
@@ -73,30 +86,33 @@ async function loadStore(): Promise<ConfigStore> {
 
   try {
     const key = await getKey()
-    const json = await decryptData(key, data)
-    return JSON.parse(json) as ConfigStore
+    return await decryptStore(key, data)
   } catch (err) {
     try {
-      const legacyKey = await deriveFileKey(machineId, username, LEGACY_PBKDF2_ITERATIONS)
-      const json = await decryptData(legacyKey, data)
-      const store = JSON.parse(json) as ConfigStore
-      // Auto-migrate to current iterations
-      await saveStore(store)
-      return store
+      return await migrateLegacyStore(data, machineId, username)
     } catch {
       throw err
     }
   }
 }
 
-async function saveStore(store: ConfigStore): Promise<void> {
+async function ensureConfigDir(): Promise<void> {
   const configPath = getConfigPath()
   const dir = dirname(configPath)
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true })
   }
+}
+
+async function encryptStore(store: ConfigStore): Promise<Buffer> {
   const key = await getKey()
-  const encrypted = await encryptData(key, JSON.stringify(store))
+  return encryptData(key, JSON.stringify(store))
+}
+
+async function saveStore(store: ConfigStore): Promise<void> {
+  await ensureConfigDir()
+  const encrypted = await encryptStore(store)
+  const configPath = getConfigPath()
   await withRetry(() => writeFile(configPath, encrypted))
 }
 
