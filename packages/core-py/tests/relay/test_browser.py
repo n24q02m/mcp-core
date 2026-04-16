@@ -39,6 +39,25 @@ class TestIsWsl:
 
 
 class TestTryOpenBrowser:
+    def test_rejects_malicious_urls(self):
+        malicious_urls = [
+            "https://example.com;rm -rf /",
+            "https://example.com$(whoami)",
+            "https://example.com`whoami`",
+            "https://example.com|nc localhost 4444",
+            "https://example.com' -and $true -and '1'='1",
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+        ]
+        for url in malicious_urls:
+            assert try_open_browser(url) is False
+
+    def test_accepts_valid_urls_with_ampersands(self):
+        with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+            mock_wb.open.return_value = True
+            url = "https://example.com/auth?code=123&state=abc"
+            assert try_open_browser(url) is True
+
     def test_returns_true_on_success(self):
         with patch("mcp_core.relay.browser._is_wsl", return_value=False):
             with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
@@ -96,7 +115,7 @@ class TestOpenInWsl:
             args = mock_sp.run.call_args
             assert args[0][0][0] == "wslview"
 
-    def test_falls_back_to_cmd_exe(self):
+    def test_falls_back_to_powershell_exe(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.SubprocessError = Exception
             call_count = 0
