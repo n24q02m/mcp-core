@@ -48,6 +48,32 @@ describe('tryOpenBrowser', () => {
       const result2 = await tryOpenBrowser('HTTPS://example.com')
       expect(typeof result2).toBe('boolean')
     })
+
+    describe('Security validation', () => {
+      it('rejects URLs with spaces', async () => {
+        expect(await tryOpenBrowser('https://example.com/ path with spaces')).toBe(false)
+      })
+
+      it('rejects URLs with shell metacharacters (except ampersand)', async () => {
+        expect(await tryOpenBrowser('https://example.com/;ls')).toBe(false)
+        expect(await tryOpenBrowser('https://example.com/|ls')).toBe(false)
+        expect(await tryOpenBrowser('https://example.com/>out')).toBe(false)
+        expect(await tryOpenBrowser('https://example.com/`ls`')).toBe(false)
+        expect(await tryOpenBrowser('https://example.com/$(ls)')).toBe(false)
+      })
+
+      it('allows URLs with ampersands (legitimate query params)', async () => {
+        // We just check that it passes validation.
+        // In this test environment, it will return false because execFile is mocked to fail.
+        // But it shouldn't be rejected by the validation step.
+        vi.mocked(execFile).mockImplementationOnce((_cmd, _args, cb) => {
+          ;(cb as (err: Error | null) => void)(null)
+          return {} as ReturnType<typeof execFile>
+        })
+        const result = await tryOpenBrowser('https://example.com/page?a=1&b=2')
+        expect(result).toBe(true)
+      })
+    })
   })
 
   describe('behavior', () => {

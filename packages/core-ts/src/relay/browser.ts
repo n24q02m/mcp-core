@@ -57,7 +57,19 @@ async function openInWsl(url: string): Promise<boolean> {
 export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Validate URL
-    if (!/^https?:\/\//i.test(url)) {
+    try {
+      const parsedUrl = new URL(url)
+      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+        return false
+      }
+    } catch {
+      return false
+    }
+
+    // Reject shell metacharacters and spaces to prevent command injection.
+    // Ampersands are allowed for legitimate query parameters.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Control characters are explicitly disallowed for security.
+    if (/[\s;|><\\`$()\x00-\x1F\x7F]/.test(url)) {
       return false
     }
 
