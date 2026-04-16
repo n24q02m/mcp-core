@@ -16,10 +16,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
 
 from loguru import logger
+from starlette.applications import Starlette
+from starlette.routing import Route
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
-    from starlette.applications import Starlette
     from starlette.types import ASGIApp, Receive, Scope, Send
 
     from mcp_core.oauth.jwt_issuer import JWTIssuer
@@ -137,24 +138,10 @@ def build_local_app(
         ``(app, jwt_issuer)`` tuple.
     """
     from contextlib import asynccontextmanager
-    from typing import cast
 
-    from mcp.server.fastmcp.server import StreamableHTTPASGIApp
-    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-    from starlette.applications import Starlette
-    from starlette.routing import Route
+    jwt_issuer = _init_jwt_issuer(server_name, jwt_keys_dir)
 
-    from mcp_core.auth.local_oauth_app import create_local_oauth_app
-    from mcp_core.oauth.jwt_issuer import JWTIssuer
-
-    # Build JWT issuer with optional custom keys directory
-    jwt_issuer_kwargs: dict[str, Any] = {"server_name": server_name}
-    if jwt_keys_dir is not None:
-        jwt_issuer_kwargs["keys_dir"] = jwt_keys_dir
-    jwt_issuer = JWTIssuer(**jwt_issuer_kwargs)
-
-    # Create OAuth app to extract its routes
-    oauth_app, _ = create_local_oauth_app(
+    oauth_app = _init_oauth_app(
         server_name=server_name,
         relay_schema=relay_schema,
         on_credentials_saved=on_credentials_saved,
@@ -163,14 +150,7 @@ def build_local_app(
         custom_credential_form_html=custom_credential_form_html,
     )
 
-    # Create MCP ASGI handler via StreamableHTTPSessionManager
-    session_manager = StreamableHTTPSessionManager(
-        app=cast(Any, mcp)._mcp_server,
-    )
-    mcp_asgi_handler = StreamableHTTPASGIApp(session_manager)
-
-    # Wrap with Bearer auth
-    bearer_mcp_app = BearerMCPApp(inner=mcp_asgi_handler, jwt_issuer=jwt_issuer)
+    bearer_mcp_app, session_manager = _init_mcp_handler(mcp, jwt_issuer)
 
     # Combine OAuth routes + /mcp route into a single Starlette app
     # Reuse the OAuth app's routes and add our /mcp endpoint
@@ -191,6 +171,56 @@ def build_local_app(
         combined_app.state.mark_setup_complete = mark_fn  # type: ignore[attr-defined]
 
     return combined_app, jwt_issuer
+
+
+def _init_jwt_issuer(server_name: str, jwt_keys_dir: Path | None) -> JWTIssuer:
+    """Initialize JWTIssuer with optional custom keys directory."""
+    from mcp_core.oauth.jwt_issuer import JWTIssuer
+
+    kwargs: dict[str, Any] = {"server_name": server_name}
+    if jwt_keys_dir is not None:
+        kwargs["keys_dir"] = jwt_keys_dir
+    return JWTIssuer(**kwargs)
+
+
+def _init_oauth_app(
+    server_name: str,
+    relay_schema: dict[str, Any],
+    jwt_issuer: JWTIssuer,
+    on_credentials_saved: _Callback | None,
+    on_step_submitted: _Callback | None,
+    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None,
+) -> Starlette:
+    """Create the underlying OAuth Starlette application."""
+    from mcp_core.auth.local_oauth_app import create_local_oauth_app
+
+    oauth_app, _ = create_local_oauth_app(
+        server_name=server_name,
+        relay_schema=relay_schema,
+        on_credentials_saved=on_credentials_saved,
+        on_step_submitted=on_step_submitted,
+        jwt_issuer=jwt_issuer,
+        custom_credential_form_html=custom_credential_form_html,
+    )
+    return oauth_app
+
+
+def _init_mcp_handler(
+    mcp: FastMCP,
+    jwt_issuer: JWTIssuer,
+) -> tuple[BearerMCPApp, Any]:
+    """Create the MCP ASGI handler and its session manager."""
+    from typing import cast
+
+    from mcp.server.fastmcp.server import StreamableHTTPASGIApp
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+
+    session_manager = StreamableHTTPSessionManager(
+        app=cast(Any, mcp)._mcp_server,
+    )
+    mcp_asgi_handler = StreamableHTTPASGIApp(session_manager)
+    bearer_mcp_app = BearerMCPApp(inner=mcp_asgi_handler, jwt_issuer=jwt_issuer)
+    return bearer_mcp_app, session_manager
 
 
 async def run_local_server(
@@ -234,10 +264,7 @@ async def run_local_server(
             /authorize. Lets consumers inject custom UX while reusing core
             OAuth plumbing.
     """
-    import uvicorn
-
     from mcp_core.lifecycle.lock import LifecycleLock
-    from mcp_core.storage.config_file import read_config
 
     # Resolve port
     actual_port = port if port != 0 else find_free_port()
@@ -253,34 +280,44 @@ async def run_local_server(
         custom_credential_form_html=custom_credential_form_html,
     )
 
-    # Wire setup completion: pass mark_setup_complete to caller so
-    # background tasks (GDrive poll) can update the form's status.
+    # Wire setup completion
     mark_fn = getattr(app.state, "mark_setup_complete", None)
     if setup_complete_hook is not None and mark_fn is not None:
         setup_complete_hook(mark_fn)
 
-    # Acquire lifecycle lock
+    # Acquire lifecycle lock and run
     lock = LifecycleLock(name=server_name, port=actual_port)
-
     with lock:
-        # Check if credentials already exist
-        existing_config = read_config(server_name)
-        if existing_config is None:
-            logger.info(
-                "No credentials found. Server at http://127.0.0.1:{}/authorize",
-                actual_port,
-            )
-        else:
-            logger.info("Credentials already configured for {}", server_name)
+        _log_credential_status(server_name, actual_port)
+        await _run_uvicorn(app, actual_port)
 
-        logger.info("Starting local MCP server on 127.0.0.1:{}", actual_port)
-        uv_config = uvicorn.Config(app, host="127.0.0.1", port=actual_port, log_level="info")
-        server = uvicorn.Server(uv_config)
 
-        # Override install_signal_handlers to prevent premature exit on Windows.
-        # Windows ProactorEventLoop + uvicorn signal handling can cause the
-        # server to exit when background tasks complete.
-        setattr(server, "install_signal_handlers", lambda: None)
+def _log_credential_status(server_name: str, port: int) -> None:
+    """Check if credentials exist and log server status."""
+    from mcp_core.storage.config_file import read_config
 
-        await server.serve()
-        logger.info("Server stopped (should_exit={})", server.should_exit)
+    existing_config = read_config(server_name)
+    if existing_config is None:
+        logger.info(
+            "No credentials found. Server at http://127.0.0.1:{}/authorize",
+            port,
+        )
+    else:
+        logger.info("Credentials already configured for {}", server_name)
+    logger.info("Starting local MCP server on 127.0.0.1:{}", port)
+
+
+async def _run_uvicorn(app: Starlette, port: int) -> None:
+    """Configure and run the uvicorn server."""
+    import uvicorn
+
+    uv_config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info")
+    server = uvicorn.Server(uv_config)
+
+    # Override install_signal_handlers to prevent premature exit on Windows.
+    # Windows ProactorEventLoop + uvicorn signal handling can cause the
+    # server to exit when background tasks complete.
+    setattr(server, "install_signal_handlers", lambda: None)
+
+    await server.serve()
+    logger.info("Server stopped (should_exit={})", server.should_exit)
