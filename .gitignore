@@ -33,3 +33,11 @@ coverage/
 
 # Code review graph
 .code-review-graph/
+
+# AI Assistant / Rules
+.jules/
+.jules
+.superpower/
+superpower/
+superpowers/
+docs/superpowers/
