@@ -12,8 +12,6 @@ held - without that, ``msvcrt.locking`` at offset 0 makes the whole file
 unreadable from other processes.
 """
 
-from __future__ import annotations
-
 import os
 import sys
 from pathlib import Path
@@ -43,7 +41,10 @@ class LifecycleLock:
     def __enter__(self) -> "LifecycleLock":
         # Open in read+write without truncation so concurrent openers never
         # race on truncate. We explicitly truncate *after* acquiring the lock.
-        self._fh = open(self._lock_file, "a+", encoding="utf-8")
+        try:
+            self._fh = open(self._lock_file, "a+", encoding="utf-8")
+        except OSError as e:
+            raise RuntimeError(f"Failed to open lock file: {e}") from e
         if sys.platform == "win32":
             import msvcrt
 
