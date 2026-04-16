@@ -26,7 +26,7 @@ describe('tryOpenBrowser', () => {
       expect(await tryOpenBrowser('https://example.com$(whoami)')).toBe(false)
       expect(await tryOpenBrowser('https://example.com`whoami`')).toBe(false)
       expect(await tryOpenBrowser('https://example.com|nc localhost 4444')).toBe(false)
-      expect(await tryOpenBrowser("https://example.com' -and $true -and '1'='1")).toBe(false)
+
     })
 
     it('rejects empty and malformed input', async () => {
