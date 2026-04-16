@@ -1,6 +1,8 @@
 """Cross-platform browser opening with WSL detection."""
 
+import base64
 import logging
+import re
 import subprocess
 import time
 import webbrowser
@@ -26,8 +28,8 @@ def _is_wsl() -> bool:
 
 
 def _open_in_wsl(url: str) -> bool:
-    """Open URL from inside WSL using wslview or cmd.exe."""
-    # Try wslview first (from wslu package, commonly available)
+    """Open URL from inside WSL using wslview, explorer.exe, or powershell.exe."""
+    # 1. Try wslview (from wslu package, commonly available)
     try:
         subprocess.run(
             ["wslview", url],
@@ -39,10 +41,26 @@ def _open_in_wsl(url: str) -> bool:
     except (FileNotFoundError, subprocess.SubprocessError):
         pass
 
-    # Fallback to cmd.exe /c start
+    # 2. Try explorer.exe
     try:
         subprocess.run(
-            ["cmd.exe", "/c", "start", url.replace("&", "^&")],
+            ["explorer.exe", url],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+        return True
+    except (FileNotFoundError, subprocess.SubprocessError):
+        pass
+
+    # 3. Fallback to powershell.exe -EncodedCommand
+    try:
+        # Secure execution via powershell Start-Process with Base64 encoding
+        # UTF-16LE is required for -EncodedCommand
+        ps_command = f"Start-Process '{url}'"
+        encoded_command = base64.b64encode(ps_command.encode("utf-16-le")).decode("ascii")
+        subprocess.run(
+            ["powershell.exe", "-EncodedCommand", encoded_command],
             check=True,
             capture_output=True,
             timeout=10,
@@ -58,7 +76,7 @@ def try_open_browser(url: str) -> bool:
     """Try to open URL in default browser. Returns True if likely succeeded.
 
     Detection order:
-    1. WSL: check /proc/version for Microsoft/WSL, use 'wslview' or 'cmd.exe /c start'
+    1. WSL: check /proc/version for Microsoft/WSL, use 'wslview', 'explorer.exe' or 'powershell.exe'
     2. Standard: webbrowser.open()
 
     Never raises. Returns False on failure.
@@ -69,6 +87,17 @@ def try_open_browser(url: str) -> bool:
     Returns:
         True if the browser was likely opened, False otherwise.
     """
+    # Validate URL scheme to prevent non-http(s) protocols
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        logger.debug("Rejecting URL with invalid scheme: %s", url)
+        return False
+
+    # Reject dangerous shell metacharacters to prevent command injection
+    # We allow '&' as it is required for query parameters.
+    if any(c in url for c in ";|<>\"'"):
+        logger.debug("Rejecting URL with dangerous characters: %s", url)
+        return False
+
     now = time.monotonic()
     last_opened = _recent_browser_opens.get(url)
     if last_opened is not None and now - last_opened < _BROWSER_OPEN_DEDUPE_WINDOW_S:
