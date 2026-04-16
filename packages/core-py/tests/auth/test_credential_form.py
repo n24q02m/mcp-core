@@ -179,6 +179,7 @@ class TestRenderCredentialForm:
         # createElement must be used for dynamic elements
         assert "createElement" in html
 
+
 def test_render_form_omits_dynamic_flow_js_when_disabled():
     """When dynamic_flow=False, OTP/multi-step JS must be absent."""
     schema = {"server": "test", "displayName": "Test", "fields": []}
