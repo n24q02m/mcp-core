@@ -199,6 +199,7 @@ async def run_local_server(
     server_name: str,
     relay_schema: dict[str, Any],
     port: int = 0,
+    host: str | None = None,
     open_browser: bool = True,
     on_credentials_saved: _Callback | None = None,
     on_step_submitted: _Callback | None = None,
@@ -239,8 +240,9 @@ async def run_local_server(
     from mcp_core.lifecycle.lock import LifecycleLock
     from mcp_core.storage.config_file import read_config
 
-    # Resolve port
+    # Resolve port + host
     actual_port = port if port != 0 else find_free_port()
+    actual_host = host or "127.0.0.1"
 
     # Build the combined app
     app, _jwt_issuer = build_local_app(
@@ -267,14 +269,15 @@ async def run_local_server(
         existing_config = read_config(server_name)
         if existing_config is None:
             logger.info(
-                "No credentials found. Server at http://127.0.0.1:{}/authorize",
+                "No credentials found. Server at http://{}:{}/authorize",
+                actual_host,
                 actual_port,
             )
         else:
             logger.info("Credentials already configured for {}", server_name)
 
-        logger.info("Starting local MCP server on 127.0.0.1:{}", actual_port)
-        uv_config = uvicorn.Config(app, host="127.0.0.1", port=actual_port, log_level="info")
+        logger.info("Starting local MCP server on {}:{}", actual_host, actual_port)
+        uv_config = uvicorn.Config(app, host=actual_host, port=actual_port, log_level="info")
         server = uvicorn.Server(uv_config)
 
         # Override install_signal_handlers to prevent premature exit on Windows.
