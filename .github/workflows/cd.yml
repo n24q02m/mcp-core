@@ -174,8 +174,8 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
-          TS_DOWNSTREAM="better-notion-mcp better-email-mcp"
-          PY_DOWNSTREAM="better-telegram-mcp wet-mcp mnemo-mcp better-code-review-graph better-godot-mcp"
+          TS_DOWNSTREAM="better-notion-mcp better-email-mcp better-godot-mcp"
+          PY_DOWNSTREAM="better-telegram-mcp wet-mcp mnemo-mcp better-code-review-graph"
           CHANGELOG_URL="https://github.com/n24q02m/mcp-core/releases/tag/${TAG}"
 
           create_issue() {
