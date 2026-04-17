@@ -45,7 +45,7 @@ def _open_in_wsl(url: str) -> bool:
     try:
         escaped_url = url.replace("'", "''")
         ps_command = f"Start-Process '{escaped_url}'"
-        encoded = base64.b64encode(ps_command.encode('utf-16le')).decode('ascii')
+        encoded = base64.b64encode(ps_command.encode("utf-16le")).decode("ascii")
 
         subprocess.run(
             ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded],
