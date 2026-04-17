@@ -47,6 +47,19 @@ class TestTryOpenBrowser:
                 assert result is True
                 mock_wb.open.assert_called_once_with("https://example.com")
 
+    def test_accepts_url_encoded_parameters(self):
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                mock_wb.open.return_value = True
+                url = "https://example.com/login?redirect_uri=http%3A%2F%2Flocalhost%3A3000"
+                result = try_open_browser(url)
+                assert result is True
+                mock_wb.open.assert_called_once_with(url)
+
+    def test_rejects_invalid_url(self):
+        result = try_open_browser("file:///etc/passwd")
+        assert result is False
+
     def test_returns_false_on_failure(self):
         with patch("mcp_core.relay.browser._is_wsl", return_value=False):
             with patch("mcp_core.relay.browser.webbrowser") as mock_wb:

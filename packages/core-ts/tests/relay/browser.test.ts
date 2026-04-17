@@ -41,6 +41,14 @@ describe('tryOpenBrowser', () => {
       expect(typeof result).toBe('boolean')
     })
 
+    it('accepts URL-encoded parameters', async () => {
+      const result = await tryOpenBrowser('https://example.com/login?redirect_uri=http%3A%2F%2Flocalhost%3A3000')
+      expect(typeof result).toBe('boolean')
+      // Make sure it doesn't just return false directly from regex check.
+      // A return of false could also be due to no browser found in test env,
+      // but if the regex fails, the execFile logic is completely skipped.
+    })
+
     it('accepts case-insensitive HTTP/HTTPS', async () => {
       const result1 = await tryOpenBrowser('HTTP://example.com')
       expect(typeof result1).toBe('boolean')

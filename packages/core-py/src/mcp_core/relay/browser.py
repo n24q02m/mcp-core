@@ -1,6 +1,8 @@
 """Cross-platform browser opening with WSL detection."""
 
+import base64
 import logging
+import re
 import subprocess
 import time
 import webbrowser
@@ -26,7 +28,7 @@ def _is_wsl() -> bool:
 
 
 def _open_in_wsl(url: str) -> bool:
-    """Open URL from inside WSL using wslview or cmd.exe."""
+    """Open URL from inside WSL using wslview or powershell.exe."""
     # Try wslview first (from wslu package, commonly available)
     try:
         subprocess.run(
@@ -39,10 +41,13 @@ def _open_in_wsl(url: str) -> bool:
     except (FileNotFoundError, subprocess.SubprocessError):
         pass
 
-    # Fallback to cmd.exe /c start
+    # Fallback to powershell.exe -EncodedCommand
+    safe_url = url.replace("'", "''")
+    command = f"Start-Process '{safe_url}'"
+    encoded_command = base64.b64encode(command.encode("utf-16le")).decode("ascii")
     try:
         subprocess.run(
-            ["cmd.exe", "/c", "start", url.replace("&", "^&")],
+            ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_command],
             check=True,
             capture_output=True,
             timeout=10,
@@ -58,7 +63,7 @@ def try_open_browser(url: str) -> bool:
     """Try to open URL in default browser. Returns True if likely succeeded.
 
     Detection order:
-    1. WSL: check /proc/version for Microsoft/WSL, use 'wslview' or 'cmd.exe /c start'
+    1. WSL: check /proc/version for Microsoft/WSL, use 'wslview' or 'powershell.exe'
     2. Standard: webbrowser.open()
 
     Never raises. Returns False on failure.
@@ -69,6 +74,9 @@ def try_open_browser(url: str) -> bool:
     Returns:
         True if the browser was likely opened, False otherwise.
     """
+    if not re.match(r"^https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$", url, re.IGNORECASE):
+        return False
+
     now = time.monotonic()
     last_opened = _recent_browser_opens.get(url)
     if last_opened is not None and now - last_opened < _BROWSER_OPEN_DEDUPE_WINDOW_S:
