@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-04-17)
+
+### Bug Fixes
+
+- Pin authlib>=1.6.11 to address CVE (CSRF via cache)
+  ([`04be55f`](https://github.com/n24q02m/mcp-core/commit/04be55f9addaa18e774515d39c7d5c4de5dd1590))
+
+### Features
+
+- Auto-create downstream bump issues on stable release
+  ([`1a423e8`](https://github.com/n24q02m/mcp-core/commit/1a423e8686102261b475532bedd71e9aa44ebfb9))
+
+
 ## v1.1.1 (2026-04-17)
 
 ### Bug Fixes
