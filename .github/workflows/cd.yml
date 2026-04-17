@@ -141,3 +141,78 @@ jobs:
           cp ../../README.md .
           uv build
           uv publish
+
+  # ============================================================================
+  # Auto-create tracking issues in downstream repos (stable releases only)
+  # ============================================================================
+  create-downstream-issues:
+    name: Create downstream bump issues
+    needs: [release, publish-npm, publish-pypi]
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2
+        with:
+          egress-policy: audit
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_KEY }}
+          owner: n24q02m
+          repositories: >-
+            better-notion-mcp,better-email-mcp,better-telegram-mcp,
+            wet-mcp,mnemo-mcp,better-code-review-graph,better-godot-mcp
+
+      - name: Create issues in downstream repos
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          TS_DOWNSTREAM="better-notion-mcp better-email-mcp"
+          PY_DOWNSTREAM="better-telegram-mcp wet-mcp mnemo-mcp better-code-review-graph better-godot-mcp"
+          CHANGELOG_URL="https://github.com/n24q02m/mcp-core/releases/tag/${TAG}"
+
+          create_issue() {
+            local repo="$1"
+            local pkg_name="$2"
+            local title="chore: bump ${pkg_name} to ${VERSION}"
+            local body
+            body=$(cat <<EOF
+          mcp-core released stable **${TAG}**.
+
+          **Changelog:** ${CHANGELOG_URL}
+
+          ## Action required
+
+          Bump the \`${pkg_name}\` pin in this repo and regenerate lockfile:
+
+          - TypeScript: update \`@n24q02m/mcp-core\` in \`package.json\` → \`bun install\`
+          - Python: update \`n24q02m-mcp-core\` in \`pyproject.toml\` → \`uv lock\`
+
+          Then open a PR with title \`fix: bump mcp-core to ${VERSION}\`.
+
+          _Auto-created by mcp-core CD. See \`feedback_core_release_auto_issue.md\`._
+          EOF
+          )
+
+            existing=$(gh issue list -R "n24q02m/${repo}" --search "in:title \"bump ${pkg_name} to ${VERSION}\"" --state all --json number --jq '.[0].number // ""')
+            if [ -n "$existing" ]; then
+              echo "::notice::Issue already exists in ${repo}: #${existing}"
+              return 0
+            fi
+            gh issue create -R "n24q02m/${repo}" --title "$title" --body "$body" --label "dependencies" || \
+              gh issue create -R "n24q02m/${repo}" --title "$title" --body "$body"
+          }
+
+          for repo in $TS_DOWNSTREAM; do
+            create_issue "$repo" "@n24q02m/mcp-core" || echo "::warning::Failed to create issue in $repo"
+          done
+          for repo in $PY_DOWNSTREAM; do
+            create_issue "$repo" "n24q02m-mcp-core" || echo "::warning::Failed to create issue in $repo"
+          done
