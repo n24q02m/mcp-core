@@ -98,7 +98,17 @@ function pruneExpired<T extends { createdAt: number }>(store: Map<string, T>, tt
   }
 }
 
+/**
+ * Derive the public base URL of this request. See ``local-oauth-app.ts`` for
+ * the resolution order; this function is the delegated-flow twin and must
+ * stay in lock-step so both well-known documents agree on the issuer.
+ */
 function getBaseUrl(req: IncomingMessage): string {
+  const publicUrl = process.env.PUBLIC_URL
+  if (publicUrl !== undefined && publicUrl.length > 0) {
+    return publicUrl.replace(/\/+$/, '')
+  }
+
   const host = req.headers.host ?? 'localhost'
   const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true
   const forwardedProto = req.headers['x-forwarded-proto']

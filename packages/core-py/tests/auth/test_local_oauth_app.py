@@ -94,6 +94,43 @@ class TestWellKnownMetadata:
         assert "http://localhost" in data["authorization_servers"]
         assert "header" in data["bearer_methods_supported"]
 
+    def test_public_url_env_overrides_issuer(self, client, monkeypatch):
+        """PUBLIC_URL env var MUST be used as issuer (remote deploy convention).
+
+        When the container sits behind CF Tunnel -> Caddy (HTTP internal) ->
+        public HTTPS, ``request.base_url`` reports ``http://`` and a strict
+        OAuth 2.1 client rejects the issuer. Setting ``PUBLIC_URL`` forces
+        the canonical public HTTPS URL into the well-known document.
+        """
+        monkeypatch.setenv("PUBLIC_URL", "https://example.n24q02m.com")
+        resp = client.get("/.well-known/oauth-authorization-server")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["issuer"] == "https://example.n24q02m.com"
+        assert data["authorization_endpoint"] == "https://example.n24q02m.com/authorize"
+        assert data["token_endpoint"] == "https://example.n24q02m.com/token"
+
+    def test_public_url_env_overrides_protected_resource(self, client, monkeypatch):
+        """PUBLIC_URL also applies to /.well-known/oauth-protected-resource."""
+        monkeypatch.setenv("PUBLIC_URL", "https://example.n24q02m.com")
+        resp = client.get("/.well-known/oauth-protected-resource")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["resource"] == "https://example.n24q02m.com"
+        assert data["authorization_servers"] == ["https://example.n24q02m.com"]
+
+    def test_public_url_strips_trailing_slash(self, client, monkeypatch):
+        """Trailing slashes on PUBLIC_URL must be normalized out."""
+        monkeypatch.setenv("PUBLIC_URL", "https://example.n24q02m.com///")
+        resp = client.get("/.well-known/oauth-authorization-server")
+        assert resp.json()["issuer"] == "https://example.n24q02m.com"
+
+    def test_empty_public_url_falls_back(self, client, monkeypatch):
+        """Empty PUBLIC_URL must fall back to request-derived base URL."""
+        monkeypatch.setenv("PUBLIC_URL", "")
+        resp = client.get("/.well-known/oauth-authorization-server")
+        assert resp.json()["issuer"] == "http://localhost"
+
 
 class TestAuthorizeEndpoint:
     def test_authorize_renders_form(self, client):

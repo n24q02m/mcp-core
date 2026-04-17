@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import inspect
+import os
 import secrets
 import time
 from collections.abc import Awaitable, Callable
@@ -139,7 +140,23 @@ def create_local_oauth_app(
             del store[k]
 
     def _base_url(request: Request) -> str:
-        """Derive the public base URL from the request."""
+        """Derive the public base URL from the request.
+
+        Resolution order:
+        1. ``PUBLIC_URL`` env var -- trusted, explicit. This is the
+           remote-deploy convention (oci-vm-prod) where the container sits
+           behind CF Tunnel -> Caddy (HTTP internal) but is served to clients
+           over HTTPS. Starlette's ``request.base_url`` reflects the scheme
+           the ASGI server saw (HTTP from the proxy), so without this override
+           OAuth 2.1 metadata would leak ``http://`` as the issuer and strict
+           clients reject the discovery document.
+        2. Starlette ``request.base_url`` -- uses ``X-Forwarded-Proto`` /
+           ``X-Forwarded-Host`` when ``ProxyHeadersMiddleware`` is mounted,
+           otherwise the raw socket scheme.
+        """
+        public_url = os.environ.get("PUBLIC_URL")
+        if public_url:
+            return public_url.rstrip("/")
         return str(request.base_url).rstrip("/")
 
     # ------------------------------------------------------------------

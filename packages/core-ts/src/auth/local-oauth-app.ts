@@ -137,8 +137,26 @@ function pruneExpired<T extends { createdAt: number }>(store: Map<string, T>, tt
   }
 }
 
-/** Derive the public base URL of this request (protocol + host, no trailing slash). */
+/**
+ * Derive the public base URL of this request (protocol + host, no trailing slash).
+ *
+ * Resolution order:
+ * 1. ``PUBLIC_URL`` env var -- trusted, explicit. This is the remote-deploy
+ *    convention (oci-vm-prod) where the container sits behind CF Tunnel ->
+ *    Caddy (HTTP internal) but is served to clients over HTTPS. Without this,
+ *    OAuth 2.1 metadata would leak ``http://`` as the issuer and strict
+ *    clients reject the discovery document.
+ * 2. ``X-Forwarded-Proto`` header (first value) + Host header -- for reverse
+ *    proxies that forward the original scheme.
+ * 3. Socket ``encrypted`` flag -- TLS-terminated at this process.
+ * 4. ``http://<host>`` fallback -- plain local dev.
+ */
 function getBaseUrl(req: IncomingMessage): string {
+  const publicUrl = process.env.PUBLIC_URL
+  if (publicUrl !== undefined && publicUrl.length > 0) {
+    return publicUrl.replace(/\/+$/, '')
+  }
+
   const host = req.headers.host ?? 'localhost'
   const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true
   const forwardedProto = req.headers['x-forwarded-proto']

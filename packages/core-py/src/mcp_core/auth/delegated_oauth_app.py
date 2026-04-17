@@ -36,6 +36,7 @@ import asyncio
 import base64
 import hashlib
 import inspect
+import os
 import secrets
 import time
 from collections.abc import Awaitable, Callable
@@ -204,6 +205,14 @@ def create_delegated_oauth_app(
             del store[k]
 
     def _base_url(request: Request) -> str:
+        """Derive the public base URL. See ``local_oauth_app._base_url`` for
+        the resolution order; this function is the delegated-flow twin and
+        must stay in lock-step so both well-known documents agree on the
+        issuer.
+        """
+        public_url = os.environ.get("PUBLIC_URL")
+        if public_url:
+            return public_url.rstrip("/")
         return str(request.base_url).rstrip("/")
 
     def mark_setup_complete(key: str | None = None) -> None:

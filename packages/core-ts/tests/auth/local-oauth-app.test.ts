@@ -570,6 +570,71 @@ describe('customCredentialFormHtml hook', () => {
   })
 })
 
+describe('PUBLIC_URL env override', () => {
+  const originalPublicUrl = process.env.PUBLIC_URL
+
+  afterEach(() => {
+    if (originalPublicUrl === undefined) {
+      delete process.env.PUBLIC_URL
+    } else {
+      process.env.PUBLIC_URL = originalPublicUrl
+    }
+  })
+
+  it('uses PUBLIC_URL as issuer in RFC 8414 metadata instead of request scheme', async () => {
+    process.env.PUBLIC_URL = 'https://example.n24q02m.com'
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/.well-known/oauth-authorization-server`)
+      expect(resp.status).toBe(200)
+      const body = (await resp.json()) as Record<string, unknown>
+      expect(body.issuer).toBe('https://example.n24q02m.com')
+      expect(body.authorization_endpoint).toBe('https://example.n24q02m.com/authorize')
+      expect(body.token_endpoint).toBe('https://example.n24q02m.com/token')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('uses PUBLIC_URL in RFC 9728 protected resource metadata', async () => {
+    process.env.PUBLIC_URL = 'https://example.n24q02m.com'
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/.well-known/oauth-protected-resource`)
+      expect(resp.status).toBe(200)
+      const body = (await resp.json()) as Record<string, unknown>
+      expect(body.resource).toBe('https://example.n24q02m.com')
+      expect(body.authorization_servers).toEqual(['https://example.n24q02m.com'])
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('strips trailing slashes from PUBLIC_URL', async () => {
+    process.env.PUBLIC_URL = 'https://example.n24q02m.com///'
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/.well-known/oauth-authorization-server`)
+      const body = (await resp.json()) as Record<string, unknown>
+      expect(body.issuer).toBe('https://example.n24q02m.com')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('falls back to request-derived URL when PUBLIC_URL is empty', async () => {
+    process.env.PUBLIC_URL = ''
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/.well-known/oauth-authorization-server`)
+      const body = (await resp.json()) as Record<string, unknown>
+      expect(body.issuer).toBe(srv.url)
+    } finally {
+      await srv.close()
+    }
+  })
+})
+
 describe('GET /setup-status', () => {
   it('reports gdrive=idle by default and complete after markSetupComplete', async () => {
     const srv = await startApp()
