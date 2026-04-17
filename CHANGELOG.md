@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.1 (2026-04-17)
+
+### Bug Fixes
+
+- Honor PUBLIC_URL env for OAuth metadata issuer
+  ([`2d3f8d8`](https://github.com/n24q02m/mcp-core/commit/2d3f8d8ff814fc70a32cc79c7aaf4b1523c9ec9d))
+
+
 ## v1.1.1-beta.1 (2026-04-17)
 
 ### Bug Fixes
