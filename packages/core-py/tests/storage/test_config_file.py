@@ -7,6 +7,7 @@ from cryptography.exceptions import InvalidTag
 
 from mcp_core.storage.config_file import (
     _with_retry,
+    clear_key_cache_for_testing,
     delete_config,
     export_config,
     import_config,
@@ -21,8 +22,10 @@ from mcp_core.storage.config_file import (
 def _temp_config(tmp_path):
     config_path = str(tmp_path / "config.enc")
     set_config_path(config_path)
+    clear_key_cache_for_testing()
     yield tmp_path
     set_config_path(None)
+    clear_key_cache_for_testing()
 
 
 class TestWithRetry:
