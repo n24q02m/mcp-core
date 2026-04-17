@@ -1,6 +1,8 @@
 """Cross-platform browser opening with WSL detection."""
 
+import base64
 import logging
+import re
 import subprocess
 import time
 import webbrowser
@@ -39,10 +41,14 @@ def _open_in_wsl(url: str) -> bool:
     except (FileNotFoundError, subprocess.SubprocessError):
         pass
 
-    # Fallback to cmd.exe /c start
+    # Fallback to powershell EncodedCommand
     try:
+        escaped_url = url.replace("'", "''")
+        ps_command = f"Start-Process '{escaped_url}'"
+        encoded = base64.b64encode(ps_command.encode('utf-16le')).decode('ascii')
+
         subprocess.run(
-            ["cmd.exe", "/c", "start", url.replace("&", "^&")],
+            ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded],
             check=True,
             capture_output=True,
             timeout=10,
@@ -69,6 +75,9 @@ def try_open_browser(url: str) -> bool:
     Returns:
         True if the browser was likely opened, False otherwise.
     """
+    if not re.match(r"^https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$", url):
+        return False
+
     now = time.monotonic()
     last_opened = _recent_browser_opens.get(url)
     if last_opened is not None and now - last_opened < _BROWSER_OPEN_DEDUPE_WINDOW_S:

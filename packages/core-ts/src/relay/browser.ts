@@ -33,9 +33,12 @@ async function openInWsl(url: string): Promise<boolean> {
     /* fall through */
   }
 
-  // Fallback to rundll32.exe url.dll,FileProtocolHandler
+  // Fallback to powershell EncodedCommand
   try {
-    await execFileAsync('rundll32.exe', ['url.dll,FileProtocolHandler', url])
+    const escapedUrl = url.replace(/'/g, "''")
+    const psCommand = `Start-Process '${escapedUrl}'`
+    const encoded = Buffer.from(psCommand, 'utf16le').toString('base64')
+    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encoded])
     return true
   } catch {
     /* fall through */
@@ -57,7 +60,7 @@ async function openInWsl(url: string): Promise<boolean> {
 export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Validate URL
-    if (!/^https?:\/\//i.test(url)) {
+    if (!/^https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/.test(url)) {
       return false
     }
 
@@ -70,7 +73,10 @@ export async function tryOpenBrowser(url: string): Promise<boolean> {
     const platform = process.platform
 
     if (platform === 'win32') {
-      await execFileAsync('rundll32.exe', ['url.dll,FileProtocolHandler', url])
+      const escapedUrl = url.replace(/'/g, "''")
+      const psCommand = `Start-Process '${escapedUrl}'`
+      const encoded = Buffer.from(psCommand, 'utf16le').toString('base64')
+      await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encoded])
       return true
     }
 
