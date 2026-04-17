@@ -1,3 +1,0 @@
-## 2025-04-14 - ARIA Attributes in Raw DOM Manipulation
-**Learning:** When building forms using vanilla JavaScript/DOM manipulation (like in `credential-form.ts` and `credential_form.py`), accessibility states (`aria-invalid` for validation and `aria-busy` for loading states) must be manually synchronized with the visual state changes. Frameworks normally handle this, but in vanilla JS, omitting these leaves screen reader users without context about validation errors or ongoing network requests.
-**Action:** When making raw DOM updates for loading states or validation, always add/remove the corresponding `aria-*` attributes (`aria-invalid` for inputs, `aria-busy` for buttons/forms) alongside the CSS/text changes.
