@@ -55,7 +55,7 @@ Identical public API in both languages:
 ### `mcp-embedding-daemon`
 
 FastAPI HTTP server scaffold for the upcoming shared ONNX/GGUF embedding
-backend. v0.1.0 alpha exposes:
+backend. Currently exposes:
 
 - `GET /health` — returns `{status, version}`
 - `POST /embed` — returns 501 with a roadmap link (backend wiring lands in
@@ -133,11 +133,6 @@ bun run test
 bun run check
 bun run build
 ```
-
-## Spec
-
-Architecture design lives in
-[claude-plugins/docs/superpowers/specs/2026-04-10-mcp-core-unified-transport-design.md](https://github.com/n24q02m/claude-plugins/blob/feat/phase3-mcp-core-unified/docs/superpowers/specs/2026-04-10-mcp-core-unified-transport-design.md).
 
 ## License
 
