@@ -177,7 +177,7 @@ describe('renderCredentialForm', () => {
       },
       { submitUrl: '/submit' }
     )
-    expect(html).toContain('<p class="help-text">Just help</p>')
+    expect(html).toContain('<p class="help-text" id="help-X">Just help</p>')
   })
 
   it('applies priority-medium class when capability priority is empty', () => {

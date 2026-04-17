@@ -514,7 +514,9 @@ def render_credential_form(
                 errorEl.textContent = "";
                 buttonEl.disabled = true;
                 buttonEl.textContent = "Verifying...";
+                buttonEl.setAttribute("aria-busy", "true");
                 inputEl.disabled = true;
+                inputEl.removeAttribute("aria-invalid");
 
                 var body = {{}};
                 body[fieldName] = value;
@@ -547,8 +549,10 @@ def render_credential_form(
                                 errorEl.textContent = data.error || data.error_description || "Verification failed.";
                                 errorEl.style.display = "block";
                                 inputEl.disabled = false;
+                                inputEl.setAttribute("aria-invalid", "true");
                                 buttonEl.disabled = false;
                                 buttonEl.textContent = "Verify";
+                                buttonEl.removeAttribute("aria-busy");
                                 inputEl.focus();
                             }}
                         }});
@@ -557,8 +561,10 @@ def render_credential_form(
                         errorEl.textContent = "Network error: " + err.message;
                         errorEl.style.display = "block";
                         inputEl.disabled = false;
+                        inputEl.setAttribute("aria-invalid", "true");
                         buttonEl.disabled = false;
                         buttonEl.textContent = "Verify";
+                        buttonEl.removeAttribute("aria-busy");
                     }});
             }}
 
