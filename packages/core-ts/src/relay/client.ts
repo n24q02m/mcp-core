@@ -7,10 +7,12 @@ import { WORDLIST } from './wordlist.js'
 export function generatePassphrase(wordCount = 4): string {
   const words: string[] = []
   const max = Math.floor(0x10000 / WORDLIST.length) * WORDLIST.length // rejection threshold
+  // Optimization: Instantiate typed array outside loop to minimize garbage collection overhead
+  const buffer = new Uint16Array(1)
   for (let i = 0; i < wordCount; i++) {
     let index: number
     do {
-      index = crypto.getRandomValues(new Uint16Array(1))[0]
+      index = crypto.getRandomValues(buffer)[0]
     } while (index >= max) // reject biased values
     words.push(WORDLIST[index % WORDLIST.length])
   }
