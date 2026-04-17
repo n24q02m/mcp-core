@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v1.1.1-beta.1 (2026-04-17)
+
+### Bug Fixes
+
+- Add diacritic preservation pre-commit hook ([#44](https://github.com/n24q02m/mcp-core/pull/44),
+  [`4c94db9`](https://github.com/n24q02m/mcp-core/commit/4c94db97a0b591ab6e474ef174be60cb6837ab30))
+
+- Bump authlib to 1.6.11 for CSRF cache bypass (GHSA-jj8c-mmj3-mmgv)
+  ([`c9d9c8b`](https://github.com/n24q02m/mcp-core/commit/c9d9c8baf97642f0782276e13b6469a25c83242f))
+
+- Drop unused llama-cpp-python to remove diskcache CVE-2025-69872
+  ([#45](https://github.com/n24q02m/mcp-core/pull/45),
+  [`5715187`](https://github.com/n24q02m/mcp-core/commit/571518710c1f7a2f64b1d8dfc418b488c9d6a72a))
+
+- Ignore coverage.xml and htmlcov artifacts ([#43](https://github.com/n24q02m/mcp-core/pull/43),
+  [`03f9af5`](https://github.com/n24q02m/mcp-core/commit/03f9af5bfc7fc44ea4ff03680cd920a4c99137ff))
+
+- Ignore coverage.xml and htmlcov artifacts
+  ([`eb25182`](https://github.com/n24q02m/mcp-core/commit/eb2518260d54c286a25ce0cb267f26825cbefc0a))
+
+- Sync docs with Phase M completion reality ([#43](https://github.com/n24q02m/mcp-core/pull/43),
+  [`03f9af5`](https://github.com/n24q02m/mcp-core/commit/03f9af5bfc7fc44ea4ff03680cd920a4c99137ff))
+
+### Performance Improvements
+
+- Cache derived file key in config_file.py ([#12](https://github.com/n24q02m/mcp-core/pull/12),
+  [`d582afc`](https://github.com/n24q02m/mcp-core/commit/d582afcb47ff1a6c975d346b148bb4622401e948))
+
+
 ## v1.1.0 (2026-04-17)
 
 ### Chores
