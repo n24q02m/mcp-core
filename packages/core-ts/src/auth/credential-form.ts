@@ -195,7 +195,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
         .server-id {
             font-size: 0.8125rem;
-            color: #666;
+            color: #9ca3af;
             font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
             margin-bottom: 0.5rem;
         }
@@ -242,7 +242,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
         .optional-badge {
             font-size: 0.6875rem;
             font-weight: 400;
-            color: #666;
+            color: #9ca3af;
             background-color: rgba(255, 255, 255, 0.04);
             border: 1px solid #333;
             border-radius: 4px;
@@ -267,12 +267,12 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
         }
 
         .field-input::placeholder {
-            color: #555;
+            color: #9ca3af;
         }
 
         .help-text {
             font-size: 0.8125rem;
-            color: #666;
+            color: #9ca3af;
             margin-top: 0.375rem;
         }
 
@@ -397,7 +397,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
         .capability-desc {
             font-size: 0.8125rem;
-            color: #666;
+            color: #9ca3af;
         }
     </style>
 </head>
@@ -601,8 +601,10 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     if (input.hasAttribute("required") && input.value.trim() === "") {
                         valid = false;
                         input.style.borderColor = "#f87171";
+                        input.setAttribute("aria-invalid", "true");
                     } else {
                         input.style.borderColor = "";
+                        input.removeAttribute("aria-invalid");
                         payload[input.name] = input.value;
                     }
                 });
@@ -614,6 +616,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
                 submitBtn.disabled = true;
                 submitBtn.textContent = "Connecting...";
+                submitBtn.setAttribute("aria-busy", "true");
                 statusBox.style.display = "none";
 
                 fetch(submitUrl, {
@@ -629,6 +632,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 });
                                 submitBtn.disabled = true;
                                 submitBtn.textContent = "Connected";
+                                submitBtn.removeAttribute("aria-busy");
                                 if (data.next_step && data.next_step.type === "oauth_device_code") {
                                     var ns = data.next_step;
                                     statusBox.textContent = "";
@@ -659,7 +663,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                     statusBox.appendChild(document.createElement("br"));
                                     var waiting = document.createElement("span");
                                     waiting.id = "gdrive-waiting";
-                                    waiting.style.color = "#888";
+                                    waiting.style.color = "#9ca3af";
                                     waiting.textContent = "Waiting for authorization...";
                                     statusBox.appendChild(waiting);
                                     statusBox.className = "status-box info";
@@ -694,6 +698,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 showStatus("error", data.error || data.error_description || "Request failed.");
                                 submitBtn.disabled = false;
                                 submitBtn.textContent = "Connect";
+                                submitBtn.removeAttribute("aria-busy");
                             }
                         });
                     })
@@ -701,6 +706,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                         showStatus("error", "Network error: " + err.message);
                         submitBtn.disabled = false;
                         submitBtn.textContent = "Connect";
+                        submitBtn.removeAttribute("aria-busy");
                     });
             });
         })();
