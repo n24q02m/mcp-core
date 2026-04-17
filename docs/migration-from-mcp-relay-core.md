@@ -52,7 +52,7 @@ grep -rl "mcp_relay_core" src tests | xargs sed -i 's/mcp_relay_core/mcp_core/g'
  [project]
  dependencies = [
 -    "mcp-relay-core>=1.4.0",
-+    "n24q02m-mcp-core>=0.1.0",
++    "n24q02m-mcp-core>=1.0.0",
  ]
 ```
 
@@ -108,7 +108,7 @@ grep -rl "@n24q02m/mcp-relay-core" src tests | xargs sed -i 's|@n24q02m/mcp-rela
 ```diff
  "dependencies": {
 -  "@n24q02m/mcp-relay-core": "^1.1.0"
-+  "@n24q02m/mcp-core": "^0.1.0"
++  "@n24q02m/mcp-core": "^1.0.0"
  }
 ```
 
@@ -132,7 +132,7 @@ Once migrated, you can adopt these without further breaking changes:
 - `mcp_core.install.agents.AgentInstaller` — write or remove an MCP server
   entry in agent config files (Claude Code, Cursor, Codex, Windsurf, OpenCode).
 - `mcp-embedding-daemon` PyPI package — shared FastAPI server scaffold for
-  the upcoming ONNX/GGUF embedding backend. v0.1.0 alpha exposes `/health` and
+  the upcoming ONNX/GGUF embedding backend. Exposes `/health` and
   scaffolded `/embed` + `/rerank` (501 with roadmap link).
 - `mcp-stdio-proxy` PyPI package — `mcp-stdio-proxy` CLI that forwards
   stdio MCP frames to an HTTP MCP server, for agents without native HTTP.
