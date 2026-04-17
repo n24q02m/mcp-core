@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-04-17)
+
+### Chores
+
+- Ignore AI assistant traces
+  ([`0c11ad8`](https://github.com/n24q02m/mcp-core/commit/0c11ad89221a8cb122f0f7dcfe0b8c283e2e32a8))
+
+### Features
+
+- Add host option to Python run_local_server
+  ([`8b96267`](https://github.com/n24q02m/mcp-core/commit/8b9626745d0b64266bd8b4661754c42cbfb20e04))
+
+
 ## v1.0.0 (2026-04-13)
 
 ### Bug Fixes
