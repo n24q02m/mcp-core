@@ -30,7 +30,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gguf = ["llama-cpp-python>=0.2.70"]
+# `gguf` extra is intentionally empty for v1.x: the GGUF backend is a stub
+# (see src/mcp_embedding_daemon/backends/gguf.py). Pulling `llama-cpp-python`
+# in eagerly drags the unmaintained `diskcache` package (CVE-2025-69872, no
+# upstream patch) into the lock without any code path actually using it.
+# Re-add the dep (and gate `LlamaDiskCache` behind a JSON/msgpack alternative
+# or runtime opt-in) when the GGUF backend lands.
+gguf = []
 cuda = ["onnxruntime-gpu>=1.18.0"]
 
 [project.urls]
