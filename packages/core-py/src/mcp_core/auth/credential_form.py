@@ -563,7 +563,7 @@ def _get_scripts(submit_url: str) -> str:
                                     showStatus("success", successMsg);
                                 }}
                             }} else {{
-                                showStatus("error", data.error || data.error_description || "Request failed.");
+                                showStatus("error", "Request failed.");
                                 submitBtn.disabled = false;
                                 submitBtn.textContent = "Connect";
                                 submitBtn.removeAttribute("aria-busy");
