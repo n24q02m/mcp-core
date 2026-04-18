@@ -478,3 +478,48 @@ async def _run_server_for_test(
         open_browser=open_browser,
         jwt_keys_dir=jwt_keys_dir,
     )
+
+
+# ---------------------------------------------------------------------------
+# build_local_app -- delegated_oauth option
+# ---------------------------------------------------------------------------
+
+
+def test_build_local_app_rejects_both_options():
+    mcp = FastMCP(name="test")
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        build_local_app(
+            mcp,
+            server_name="test",
+            relay_schema={"fields": []},
+            delegated_oauth={
+                "flow": "redirect",
+                "upstream": {
+                    "authorize_url": "https://x.example",
+                    "token_url": "https://y.example",
+                    "client_id": "c",
+                },
+                "on_token_received": lambda t: None,
+            },
+        )
+
+
+def test_build_local_app_delegated_mode_produces_app(tmp_path: Path):
+    mcp = FastMCP(name="test")
+    app, issuer = build_local_app(
+        mcp,
+        server_name="test-notion",
+        jwt_keys_dir=tmp_path / "jwt-keys",
+        delegated_oauth={
+            "flow": "redirect",
+            "upstream": {
+                "authorize_url": "https://example.com/authorize",
+                "token_url": "https://example.com/token",
+                "client_id": "c",
+                "client_secret": "s",
+            },
+            "on_token_received": lambda t: None,
+        },
+    )
+    assert app is not None
+    assert issuer.server_name == "test-notion"
