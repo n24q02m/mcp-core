@@ -21,6 +21,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { RelayConfigSchema } from '../auth/credential-form.js'
 import {
+  createDelegatedOAuthApp,
+  type DelegatedOAuthAppOptions,
+  type DelegatedOAuthAppResult
+} from '../auth/delegated-oauth-app.js'
+import {
   type CredentialsCallback,
   createLocalOAuthApp,
   type LocalOAuthAppResult,
@@ -34,6 +39,13 @@ export interface RunLocalServerOptions {
   serverName: string
   /** If undefined, server has NO auth (e.g., godot). */
   relaySchema?: RelayConfigSchema
+  /**
+   * Mutually exclusive with `relaySchema`. When set, the OAuth app is the
+   * delegated provider (upstream redirect or device_code) instead of the local
+   * credential form. The `serverName` and `jwtIssuer` are supplied by this
+   * function; callers provide only `flow`, `upstream`, and `onTokenReceived`.
+   */
+  delegatedOAuth?: Omit<DelegatedOAuthAppOptions, 'serverName' | 'jwtIssuer'>
   /** 0 = auto-find a free port. Default: 0. */
   port?: number
   /** Host to bind. Default '127.0.0.1'. */
@@ -83,10 +95,22 @@ export async function runLocalServer(
   const host = options.host ?? '127.0.0.1'
   const wantedPort = options.port ?? 0
 
-  let oauthApp: LocalOAuthAppResult | null = null
+  let oauthApp: LocalOAuthAppResult | DelegatedOAuthAppResult | null = null
   let jwtIssuer: JWTIssuer | null = null
 
-  if (options.relaySchema) {
+  if (options.relaySchema && options.delegatedOAuth) {
+    throw new Error('`relaySchema` and `delegatedOAuth` are mutually exclusive')
+  }
+
+  if (options.delegatedOAuth) {
+    oauthApp = await createDelegatedOAuthApp({
+      serverName: options.serverName,
+      flow: options.delegatedOAuth.flow,
+      upstream: options.delegatedOAuth.upstream,
+      onTokenReceived: options.delegatedOAuth.onTokenReceived
+    })
+    jwtIssuer = oauthApp.jwtIssuer
+  } else if (options.relaySchema) {
     oauthApp = await createLocalOAuthApp({
       serverName: options.serverName,
       relaySchema: options.relaySchema,
@@ -183,8 +207,9 @@ export async function runLocalServer(
     host,
     close: () =>
       new Promise<void>((resolve, reject) => {
-        transport
-          .close()
+        const delegatedShutdown = oauthApp && 'shutdown' in oauthApp ? oauthApp.shutdown() : Promise.resolve()
+        delegatedShutdown
+          .then(() => transport.close())
           .then(() => {
             httpServer.close((err) => (err ? reject(err) : resolve()))
           })
