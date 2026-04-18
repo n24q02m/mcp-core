@@ -13,7 +13,7 @@ from mcp_stdio_proxy.main import main
 
 def test_main_returns_1_when_no_url(capsys: pytest.CaptureFixture[str]) -> None:
     with patch.dict("os.environ", {}, clear=True):
-        result = main(url=None, token=None)
+        result = main(url=None)
     captured = capsys.readouterr()
     assert result == 1
     assert "MCP_CORE_SERVER_URL not set" in captured.err
@@ -54,7 +54,7 @@ def test_cli_resolves_url_from_argument(capsys: pytest.CaptureFixture[str]) -> N
         # Empty --url falls through to env var (also empty), so it should still
         # report missing URL. This validates that argparse doesn't crash on
         # the flag and that empty string is treated like missing.
-        result = main_fn(url="", token=None)
+        result = main_fn(url="")
     captured = capsys.readouterr()
     assert result == 1
     assert "MCP_CORE_SERVER_URL not set" in captured.err
