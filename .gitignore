@@ -41,3 +41,7 @@ coverage/
 superpower/
 superpowers/
 docs/superpowers/
+
+# Coverage
+.coverage
+htmlcov/
