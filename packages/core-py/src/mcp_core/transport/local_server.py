@@ -186,17 +186,7 @@ def build_local_app(
     combined_app = Starlette(routes=combined_routes, lifespan=lifespan)
 
     # Forward state from OAuth app to combined app
-    # This is required since we moved handlers to module level and they
-    # access state via request.app.state
-    combined_app.state.pending_sessions = oauth_app.state.pending_sessions
-    combined_app.state.auth_codes = oauth_app.state.auth_codes
-    combined_app.state.pending_step = oauth_app.state.pending_step
-    combined_app.state.setup_status = oauth_app.state.setup_status
-    combined_app.state.relay_schema = oauth_app.state.relay_schema
-    combined_app.state.custom_credential_form_html = oauth_app.state.custom_credential_form_html
-    combined_app.state.on_credentials_saved = oauth_app.state.on_credentials_saved
-    combined_app.state.on_step_submitted = oauth_app.state.on_step_submitted
-    combined_app.state.jwt_issuer = oauth_app.state.jwt_issuer
+    combined_app.state._state.update(oauth_app.state._state)
 
     # Forward mark_setup_complete from OAuth app to combined app
     mark_fn = getattr(oauth_app.state, "mark_setup_complete", None)

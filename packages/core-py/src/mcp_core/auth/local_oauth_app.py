@@ -44,16 +44,9 @@ _AUTH_CODE_TTL_S = 600
 _SESSION_TTL_S = 600
 
 # Multi-step auth (OTP / 2FA password) constraints.
-# _OTP_TIMEOUT_S: khoảng thời gian tối đa giữa lúc submit credentials và
-# lúc user nhập OTP/password. _OTP_MAX_ATTEMPTS: số lần submit sai tối đa
-# trước khi reset pending step session.
 _OTP_TIMEOUT_S = 300
 _OTP_MAX_ATTEMPTS = 5
 
-# Callback types -- may be sync or async. When async, the handler awaits the
-# returned coroutine. This lets telegram-style servers perform async backend
-# operations (Telethon connect, send_code, sign_in) without resorting to
-# loop.run_until_complete() on a running event loop.
 CredentialsCallback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
 StepCallback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
 
@@ -63,18 +56,6 @@ def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
     digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
     computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     return secrets.compare_digest(computed, code_challenge)
-
-
-def _mark_pending_step(pending_step: dict[str, Any]) -> None:
-    """Đánh dấu pending step session đang active (reset counters)."""
-    pending_step["active"] = True
-    pending_step["created_at"] = time.monotonic()
-    pending_step["attempts"] = 0
-
-
-def _clear_pending_step(pending_step: dict[str, Any]) -> None:
-    """Xóa pending step session (sau khi complete hoặc expired)."""
-    pending_step.clear()
 
 
 def _prune_expired(store: dict[str, dict[str, Any]], ttl: float) -> None:
@@ -90,18 +71,9 @@ def _base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
-# ------------------------------------------------------------------
-# Route handlers
-# ------------------------------------------------------------------
-
-
-async def authorize_get(request: Request) -> HTMLResponse | JSONResponse:
+async def _authorize_get(request: Request) -> HTMLResponse | JSONResponse:
     """GET /authorize -- render the credential form."""
     state = request.app.state
-    pending_sessions = state.pending_sessions
-    relay_schema = state.relay_schema
-    custom_credential_form_html = state.custom_credential_form_html
-
     params = request.query_params
     client_id = params.get("client_id")
     redirect_uri = params.get("redirect_uri")
@@ -115,9 +87,8 @@ async def authorize_get(request: Request) -> HTMLResponse | JSONResponse:
             status_code=400,
         )
 
-    # Create a session nonce that ties the form submission to this PKCE flow
     nonce = secrets.token_urlsafe(32)
-    pending_sessions[nonce] = {
+    state.pending_sessions[nonce] = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "state": req_state,
@@ -125,36 +96,28 @@ async def authorize_get(request: Request) -> HTMLResponse | JSONResponse:
         "code_challenge_method": code_challenge_method,
         "created_at": time.monotonic(),
     }
-
-    _prune_expired(pending_sessions, _SESSION_TTL_S)
+    _prune_expired(state.pending_sessions, _SESSION_TTL_S)
 
     base = _base_url(request)
     submit_url = f"{base}/authorize?nonce={nonce}"
-    if custom_credential_form_html is not None:
-        html_content = custom_credential_form_html(relay_schema, submit_url)
+    if state.custom_credential_form_html:
+        html = state.custom_credential_form_html(state.relay_schema, submit_url)
     else:
-        html_content = render_credential_form(relay_schema, submit_url=submit_url)
-    return HTMLResponse(html_content)
+        html = render_credential_form(state.relay_schema, submit_url=submit_url)
+    return HTMLResponse(html)
 
 
-async def authorize_post(request: Request) -> JSONResponse:
+async def _authorize_post(request: Request) -> JSONResponse:
     """POST /authorize -- receive credentials, save, return redirect URL with auth code."""
     state = request.app.state
-    pending_sessions = state.pending_sessions
-    auth_codes = state.auth_codes
-    pending_step = state.pending_step
-    on_credentials_saved = state.on_credentials_saved
-
     nonce = request.query_params.get("nonce")
-    if not nonce or nonce not in pending_sessions:
+    if not nonce or nonce not in state.pending_sessions:
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Invalid or expired nonce"},
             status_code=400,
         )
 
-    session = pending_sessions.pop(nonce)
-
-    # Check TTL
+    session = state.pending_sessions.pop(nonce)
     if time.monotonic() - session["created_at"] > _SESSION_TTL_S:
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Session expired"},
@@ -162,245 +125,144 @@ async def authorize_post(request: Request) -> JSONResponse:
         )
 
     try:
-        credentials: dict[str, str] = await request.json()
+        credentials = await request.json()
     except Exception:
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Invalid JSON body"},
             status_code=400,
         )
 
-    # Save credentials via callback. Callback may return a dict with
-    # next_step info (e.g., GDrive OAuth device code to show in the form).
-    next_step: dict | None = None
-    if on_credentials_saved is not None:
+    next_step = None
+    if state.on_credentials_saved:
         try:
-            result = on_credentials_saved(credentials)
-            if inspect.iscoroutine(result):
-                result = await result
-            if isinstance(result, dict):
-                next_step = result
+            res = state.on_credentials_saved(credentials)
+            if inspect.iscoroutine(res):
+                res = await res
+            if isinstance(res, dict):
+                next_step = res
         except Exception:
-            logger.exception("on_credentials_saved callback failed")
+            logger.exception("on_credentials_saved failed")
             return JSONResponse(
                 {"error": "server_error", "error_description": "Failed to save credentials"},
                 status_code=500,
             )
 
-    # Generate auth code
     auth_code = secrets.token_urlsafe(32)
-    auth_codes[auth_code] = {
+    state.auth_codes[auth_code] = {
         "code_challenge": session["code_challenge"],
         "code_challenge_method": session["code_challenge_method"],
         "created_at": time.monotonic(),
     }
-
-    _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
+    _prune_expired(state.auth_codes, _AUTH_CODE_TTL_S)
 
     redirect_uri = session["redirect_uri"]
     req_state = session["state"]
-    separator = "&" if "?" in redirect_uri else "?"
-    redirect_url = f"{redirect_uri}{separator}code={auth_code}&state={req_state}"
+    sep = "&" if "?" in redirect_uri else "?"
+    redirect_url = f"{redirect_uri}{sep}code={auth_code}&state={req_state}"
 
-    response_body: dict = {"ok": True, "redirect_url": redirect_url}
+    response_body = {"ok": True, "redirect_url": redirect_url}
     if next_step:
         response_body["next_step"] = next_step
-        # Nếu next_step yêu cầu input thêm (OTP hoặc 2FA password),
-        # activate pending step session để /otp endpoint chấp nhận input.
         if next_step.get("type") in ("otp_required", "password_required"):
-            _mark_pending_step(pending_step)
+            state.pending_step.update(
+                {"active": True, "created_at": time.monotonic(), "attempts": 0}
+            )
 
     return JSONResponse(response_body)
 
 
-async def authorize(request: Request) -> HTMLResponse | JSONResponse:
-    """Dispatch GET/POST on /authorize."""
+async def _authorize(request: Request) -> HTMLResponse | JSONResponse:
     if request.method == "GET":
-        return await authorize_get(request)
-    return await authorize_post(request)
+        return await _authorize_get(request)
+    return await _authorize_post(request)
 
 
-async def token(request: Request) -> JSONResponse:
-    """POST /token -- exchange auth code + PKCE code_verifier for JWT."""
+async def _token(request: Request) -> JSONResponse:
     state = request.app.state
-    auth_codes = state.auth_codes
-    jwt_issuer = state.jwt_issuer
-
     try:
         form = await request.form()
     except Exception:
         return JSONResponse({"error": "invalid_request"}, status_code=400)
 
-    grant_type = form.get("grant_type")
-    if grant_type != "authorization_code":
+    if form.get("grant_type") != "authorization_code":
         return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
 
-    code = form.get("code")
-    code_verifier = form.get("code_verifier")
-
-    if not code or not code_verifier:
+    code = str(form.get("code", ""))
+    verifier = str(form.get("code_verifier", ""))
+    if not code or not verifier:
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Missing code or code_verifier"},
             status_code=400,
         )
 
-    code = str(code)
-    code_verifier = str(code_verifier)
-
-    # Look up auth code
-    entry = auth_codes.pop(code, None)
-    if entry is None:
+    entry = state.auth_codes.pop(code, None)
+    if entry is None or (time.monotonic() - entry["created_at"] > _AUTH_CODE_TTL_S):
         return JSONResponse({"error": "invalid_grant"}, status_code=400)
 
-    # Check TTL
-    if time.monotonic() - entry["created_at"] > _AUTH_CODE_TTL_S:
+    if entry["code_challenge_method"] != "S256" or not _s256_verify(
+        verifier, entry["code_challenge"]
+    ):
         return JSONResponse({"error": "invalid_grant"}, status_code=400)
 
-    # Verify PKCE
-    method = entry["code_challenge_method"]
-    if method != "S256":
-        return JSONResponse(
-            {"error": "invalid_request", "error_description": "Only S256 is supported"},
-            status_code=400,
-        )
-
-    if not _s256_verify(code_verifier, entry["code_challenge"]):
-        return JSONResponse({"error": "invalid_grant"}, status_code=400)
-
-    # Issue JWT -- single-user local mode, sub is always "local-user"
-    access_token = jwt_issuer.issue_access_token(sub="local-user")
-
-    return JSONResponse(
-        {
-            "access_token": access_token,
-            "token_type": "Bearer",
-            "expires_in": 3600,
-        }
-    )
+    access_token = state.jwt_issuer.issue_access_token(sub="local-user")
+    return JSONResponse({"access_token": access_token, "token_type": "Bearer", "expires_in": 3600})
 
 
-async def otp_handler(request: Request) -> JSONResponse:
-    """POST /otp -- receive multi-step auth input (OTP code or 2FA password).
-
-    Protocol (order of checks):
-    1. No active step session -> 400 ``invalid_request`` (no state change).
-    2. Pending session expired (>``_OTP_TIMEOUT_S``s) -> clear, 400.
-    3. Parse JSON body -> 400 on invalid (do NOT increment attempts or
-       clear session; malformed input should not burn user's retry quota).
-    4. Increment attempts counter.
-    5. Attempts exceeded (>``_OTP_MAX_ATTEMPTS``) -> clear, 400.
-    6. Call ``on_step_submitted(step_data)``:
-        - ``None`` -> clear pending, return ``{"ok": true}`` (complete).
-        - ``{"type": "error", "text": ...}`` -> return ``{"ok": false,
-          "error": ...}`` (keep pending, allow retry; attempts already
-          incremented before the callback).
-        - ``{"type": "otp_required"|"password_required", ...}`` -> reset
-          counters (new step), return ``{"ok": true, "next_step": {...}}``.
-    """
+async def _otp_handler(request: Request) -> JSONResponse:
     state = request.app.state
-    pending_step = state.pending_step
-    on_step_submitted = state.on_step_submitted
-
-    # 1. Active session check.
-    if not pending_step.get("active"):
+    if not state.pending_step.get("active"):
         return JSONResponse(
-            {
-                "error": "invalid_request",
-                "error_description": "No active step session",
-            },
+            {"error": "invalid_request", "error_description": "No active step session"},
             status_code=400,
         )
 
-    # 2. Timeout check.
-    created_at = pending_step.get("created_at", 0.0)
-    if time.monotonic() - created_at > _OTP_TIMEOUT_S:
-        _clear_pending_step(pending_step)
+    if time.monotonic() - state.pending_step.get("created_at", 0.0) > _OTP_TIMEOUT_S:
+        state.pending_step.clear()
         return JSONResponse(
-            {
-                "error": "invalid_request",
-                "error_description": "Step session expired",
-            },
+            {"error": "invalid_request", "error_description": "Step session expired"},
             status_code=400,
         )
 
-    # 3. Parse JSON body BEFORE incrementing attempts. Malformed input
-    # should not consume the user's retry quota nor clear the session.
     try:
-        step_data: dict[str, str] = await request.json()
+        step_data = await request.json()
     except Exception:
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Invalid JSON body"},
             status_code=400,
         )
 
-    # 4. Increment attempts counter (count every valid-JSON submit).
-    pending_step["attempts"] = pending_step.get("attempts", 0) + 1
-
-    # 5. Attempt limit check.
-    if pending_step["attempts"] > _OTP_MAX_ATTEMPTS:
-        _clear_pending_step(pending_step)
+    state.pending_step["attempts"] = state.pending_step.get("attempts", 0) + 1
+    if state.pending_step["attempts"] > _OTP_MAX_ATTEMPTS:
+        state.pending_step.clear()
         return JSONResponse(
-            {
-                "error": "invalid_request",
-                "error_description": "Too many attempts",
-            },
+            {"error": "invalid_request", "error_description": "Too many attempts"},
             status_code=400,
         )
 
-    next_step: dict | None = None
-    if on_step_submitted is not None:
+    next_step = None
+    if state.on_step_submitted:
         try:
-            result = on_step_submitted(step_data)
-            if inspect.iscoroutine(result):
-                result = await result
-            if isinstance(result, dict):
-                next_step = result
+            res = state.on_step_submitted(step_data)
+            if inspect.iscoroutine(res):
+                res = await res
+            if isinstance(res, dict):
+                next_step = res
         except Exception:
-            logger.exception("on_step_submitted callback failed")
+            logger.exception("on_step_submitted failed")
             return JSONResponse(
-                {
-                    "error": "server_error",
-                    "error_description": "Failed to process step input",
-                },
+                {"error": "server_error", "error_description": "Failed to process step input"},
                 status_code=500,
             )
 
-    # Error from callback: keep pending, allow retry (don't clear).
-    if next_step is not None and next_step.get("type") == "error":
+    if next_step and next_step.get("type") == "error":
         return JSONResponse({"ok": False, "error": next_step.get("text", "Invalid input")})
 
-    # Chain to next step: reset counters so the new step gets its own quota.
-    if next_step is not None and next_step.get("type") in (
-        "otp_required",
-        "password_required",
-    ):
-        _mark_pending_step(pending_step)
+    if next_step and next_step.get("type") in ("otp_required", "password_required"):
+        state.pending_step.update({"active": True, "created_at": time.monotonic(), "attempts": 0})
         return JSONResponse({"ok": True, "next_step": next_step})
 
-    # Completion (callback returned None or unknown dict type).
-    _clear_pending_step(pending_step)
+    state.pending_step.clear()
     return JSONResponse({"ok": True})
-
-
-async def well_known_as(request: Request) -> JSONResponse:
-    """GET /.well-known/oauth-authorization-server -- RFC 8414."""
-    base = _base_url(request)
-    return JSONResponse(authorization_server_metadata(base))
-
-
-async def well_known_pr(request: Request) -> JSONResponse:
-    """GET /.well-known/oauth-protected-resource -- RFC 9728."""
-    base = _base_url(request)
-    return JSONResponse(
-        protected_resource_metadata(
-            resource=base,
-            authorization_servers=[base],
-        )
-    )
-
-
-async def setup_status(request: Request) -> JSONResponse:
-    """GET /setup-status -- polled by the form to detect GDrive auth completion."""
-    return JSONResponse(request.app.state.setup_status)
 
 
 def create_local_oauth_app(
@@ -412,56 +274,35 @@ def create_local_oauth_app(
     jwt_issuer: JWTIssuer | None = None,
     custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
-    """Create OAuth 2.1 Authorization Server Starlette app.
-
-    Args:
-        server_name: Identifier for the MCP server (used for JWT iss/aud).
-        relay_schema: RelayConfigSchema dict describing the credential form.
-        on_credentials_saved: Callback invoked with credentials dict after
-            the user submits the form. Typically wraps ``write_config``.
-            May return a ``next_step`` dict (e.g. ``{"type": "otp_required"}``)
-            to trigger multi-step auth flows.
-        on_step_submitted: Callback invoked with step input dict (e.g.
-            ``{"otp_code": "12345"}`` or ``{"password": "secret"}``) when
-            the user submits data to ``/otp``. Return ``None`` to complete
-            the flow, ``{"type": "otp_required"|"password_required", ...}``
-            to chain to another step, or ``{"type": "error", "text": "..."}``
-            to reject the current input and allow retry. Callbacks that
-            compare secrets MUST use ``secrets.compare_digest`` or similar
-            timing-safe comparison to prevent timing attacks.
-        jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
-            automatically using ``server_name``.
-        custom_credential_form_html: Optional callable ``(schema, submit_url)
-            -> html_string`` used to render GET /authorize. When provided,
-            replaces the default ``render_credential_form`` output. Consumers
-            (email, telegram) use this to inject rich UX (multi-account cards,
-            tabs, domain detection) while reusing core OAuth plumbing. The
-            returned HTML MUST include a form/fetch that POSTs JSON to
-            ``submit_url`` (which embeds the PKCE nonce).
-
-    Returns:
-        ``(app, jwt_issuer)`` tuple. The ``jwt_issuer`` is needed by the
-        transport layer to verify Bearer tokens on ``/mcp`` requests.
-    """
+    """Create OAuth 2.1 Authorization Server Starlette app."""
     if jwt_issuer is None:
         jwt_issuer = JWTIssuer(server_name=server_name)
 
-    # ------------------------------------------------------------------
-    # Build Starlette app
-    # ------------------------------------------------------------------
+    app = Starlette(
+        routes=[
+            Route("/authorize", _authorize, methods=["GET", "POST"]),
+            Route("/otp", _otp_handler, methods=["POST"]),
+            Route("/token", _token, methods=["POST"]),
+            Route(
+                "/setup-status",
+                lambda r: JSONResponse(r.app.state.setup_status),
+                methods=["GET"],
+            ),
+            Route(
+                "/.well-known/oauth-authorization-server",
+                lambda r: JSONResponse(authorization_server_metadata(_base_url(r))),
+                methods=["GET"],
+            ),
+            Route(
+                "/.well-known/oauth-protected-resource",
+                lambda r: JSONResponse(
+                    protected_resource_metadata(resource=_base_url(r), authorization_servers=[_base_url(r)])
+                ),
+                methods=["GET"],
+            ),
+        ]
+    )
 
-    routes = [
-        Route("/authorize", authorize, methods=["GET", "POST"]),
-        Route("/otp", otp_handler, methods=["POST"]),
-        Route("/token", token, methods=["POST"]),
-        Route("/setup-status", setup_status, methods=["GET"]),
-        Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),
-        Route("/.well-known/oauth-protected-resource", well_known_pr, methods=["GET"]),
-    ]
-
-    app = Starlette(routes=routes)
-
-    # Initialize state
     app.state.pending_sessions = {}
     app.state.auth_codes = {}
     app.state.pending_step = {}
@@ -473,10 +314,7 @@ def create_local_oauth_app(
     app.state.jwt_issuer = jwt_issuer
 
     def mark_setup_complete(key: str = "gdrive") -> None:
-        """Mark a background setup step as complete (called externally)."""
         app.state.setup_status[key] = "complete"
 
-    # Expose mark_setup_complete on the app for external callers
     app.state.mark_setup_complete = mark_setup_complete  # type: ignore[attr-defined]
-
     return app, jwt_issuer
