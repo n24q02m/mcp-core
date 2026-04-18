@@ -1,18 +1,26 @@
-// Local OAuth 2.1 Authorization Server (single-user, 127.0.0.1)
+// Local OAuth 2.1 Authorization Server (single-user, 127.0.0.1) +
+// Delegated OAuth (upstream redirect / device code) for remote multi-user.
 export {
   authorizationServerMetadata,
   type CapabilityInfo,
   type ConfigField,
   type CredentialsCallback,
+  createDelegatedOAuthApp,
   createLocalOAuthApp,
+  type DelegatedOAuthAppOptions,
+  type DelegatedOAuthAppResult,
+  type FlowType,
   type LocalOAuthAppOptions,
   type LocalOAuthAppResult,
   type NextStep,
+  type OAuthTokens,
   protectedResourceMetadata,
   type RelayConfigSchema,
   type RenderOptions,
   renderCredentialForm,
-  type StepCallback
+  type StepCallback,
+  type TokenCallback,
+  type UpstreamOAuthConfig
 } from './auth/index.js'
 export * from './crypto/index.js'
 // OAuth 2.1 multi-user infrastructure (HTTP mode)
