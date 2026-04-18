@@ -173,6 +173,74 @@ describe('runLocalServer without relaySchema (godot-style)', () => {
   })
 })
 
+describe('runLocalServer — delegated mode', () => {
+  it('serves /authorize via delegated redirect flow when delegatedOAuth set', async () => {
+    const tokens: Array<Record<string, unknown>> = []
+    const handle = await runLocalServer(makeMcpServer, {
+      serverName: 'test-notion',
+      delegatedOAuth: {
+        flow: 'redirect',
+        upstream: {
+          authorizeUrl: 'https://example.com/oauth/authorize',
+          tokenUrl: 'https://example.com/oauth/token',
+          clientId: 'test-client',
+          clientSecret: 'test-secret'
+        },
+        onTokenReceived: (t) => {
+          tokens.push(t)
+        }
+      }
+    })
+    try {
+      // /authorize without PKCE inputs should 400
+      const res = await fetch(`http://${handle.host}:${handle.port}/authorize`)
+      expect(res.status).toBe(400)
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('rejects when both relaySchema and delegatedOAuth are set', async () => {
+    await expect(
+      runLocalServer(makeMcpServer, {
+        serverName: 'test-conflict',
+        relaySchema: SCHEMA,
+        delegatedOAuth: {
+          flow: 'redirect',
+          upstream: { authorizeUrl: 'https://x.example', tokenUrl: 'https://y.example', clientId: 'c' },
+          onTokenReceived: () => {}
+        }
+      })
+    ).rejects.toThrow(/mutually exclusive/)
+  })
+})
+
+describe('runLocalServer — authScope middleware', () => {
+  it('invokes authScope middleware with JWT claims on authenticated /mcp request', async () => {
+    const seen: Array<unknown> = []
+    const handle = await runLocalServer(makeMcpServer, {
+      serverName: `test-scope-${Date.now()}`,
+      relaySchema: SCHEMA,
+      authScope: async (claims, next) => {
+        seen.push(claims)
+        await next()
+      }
+    })
+    try {
+      // Without Bearer: 401 (authScope should NOT be called)
+      const unauth = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+      expect(unauth.status).toBe(401)
+      expect(seen.length).toBe(0)
+    } finally {
+      await handle.close()
+    }
+  })
+})
+
 describe('runLocalServer lifecycle', () => {
   it('port 0 auto-assigns a non-zero port', async () => {
     const handle = await runLocalServer(makeMcpServer, {

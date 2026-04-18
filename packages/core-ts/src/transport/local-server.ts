@@ -19,7 +19,13 @@ import type { AddressInfo } from 'node:net'
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import type { JWTPayload } from 'jose'
 import type { RelayConfigSchema } from '../auth/credential-form.js'
+import {
+  createDelegatedOAuthApp,
+  type DelegatedOAuthAppOptions,
+  type DelegatedOAuthAppResult
+} from '../auth/delegated-oauth-app.js'
 import {
   type CredentialsCallback,
   createLocalOAuthApp,
@@ -29,11 +35,21 @@ import {
 import { jsonResponse } from '../auth/router.js'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 
+/** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
+export type JWTClaims = JWTPayload
+
 export interface RunLocalServerOptions {
   /** Identifier used for JWT iss/aud and credential storage. */
   serverName: string
   /** If undefined, server has NO auth (e.g., godot). */
   relaySchema?: RelayConfigSchema
+  /**
+   * Mutually exclusive with `relaySchema`. When set, the OAuth app is the
+   * delegated provider (upstream redirect or device_code) instead of the local
+   * credential form. The `serverName` and `jwtIssuer` are supplied by this
+   * function; callers provide only `flow`, `upstream`, and `onTokenReceived`.
+   */
+  delegatedOAuth?: Omit<DelegatedOAuthAppOptions, 'serverName' | 'jwtIssuer'>
   /** 0 = auto-find a free port. Default: 0. */
   port?: number
   /** Host to bind. Default '127.0.0.1'. */
@@ -53,6 +69,13 @@ export interface RunLocalServerOptions {
    * /authorize. Passed through to ``createLocalOAuthApp``.
    */
   customCredentialFormHtml?: (schema: RelayConfigSchema, options: { submitUrl: string }) => string
+  /**
+   * Optional middleware invoked after JWT verification and before the MCP
+   * transport handles the request. Called with verified claims and a ``next``
+   * function that invokes the MCP transport. Consumers use this to wrap the
+   * request in AsyncLocalStorage (e.g., for per-user token lookup).
+   */
+  authScope?: (claims: JWTClaims, next: () => Promise<void>) => Promise<void>
 }
 
 export interface LocalServerHandle {
@@ -83,10 +106,22 @@ export async function runLocalServer(
   const host = options.host ?? '127.0.0.1'
   const wantedPort = options.port ?? 0
 
-  let oauthApp: LocalOAuthAppResult | null = null
+  let oauthApp: LocalOAuthAppResult | DelegatedOAuthAppResult | null = null
   let jwtIssuer: JWTIssuer | null = null
 
-  if (options.relaySchema) {
+  if (options.relaySchema && options.delegatedOAuth) {
+    throw new Error('`relaySchema` and `delegatedOAuth` are mutually exclusive')
+  }
+
+  if (options.delegatedOAuth) {
+    oauthApp = await createDelegatedOAuthApp({
+      serverName: options.serverName,
+      flow: options.delegatedOAuth.flow,
+      upstream: options.delegatedOAuth.upstream,
+      onTokenReceived: options.delegatedOAuth.onTokenReceived
+    })
+    jwtIssuer = oauthApp.jwtIssuer
+  } else if (options.relaySchema) {
     oauthApp = await createLocalOAuthApp({
       serverName: options.serverName,
       relaySchema: options.relaySchema,
@@ -114,11 +149,18 @@ export async function runLocalServer(
         res.end()
         return
       }
+      let claims: JWTClaims
       try {
-        await jwtIssuer.verifyAccessToken(token)
+        claims = await jwtIssuer.verifyAccessToken(token)
       } catch {
         res.writeHead(401, { 'WWW-Authenticate': 'Bearer error="invalid_token"' })
         res.end()
+        return
+      }
+      if (options.authScope) {
+        await options.authScope(claims, async () => {
+          await transport.handleRequest(req, res)
+        })
         return
       }
     }
@@ -183,8 +225,9 @@ export async function runLocalServer(
     host,
     close: () =>
       new Promise<void>((resolve, reject) => {
-        transport
-          .close()
+        const delegatedShutdown = oauthApp && 'shutdown' in oauthApp ? oauthApp.shutdown() : Promise.resolve()
+        delegatedShutdown
+          .then(() => transport.close())
           .then(() => {
             httpServer.close((err) => (err ? reject(err) : resolve()))
           })

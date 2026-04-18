@@ -13,6 +13,14 @@ from mcp_core.crypto.ecdh import (
 )
 from mcp_core.crypto.kdf import derive_aes_key
 
+# Delegated OAuth 2.1 AS (upstream redirect / device code) for remote multi-user.
+from mcp_core.auth.delegated_oauth_app import (
+    FlowType,
+    TokenCallback,
+    UpstreamOAuthConfig,
+    create_delegated_oauth_app,
+)
+
 # OAuth 2.1 multi-user infrastructure (HTTP mode)
 from mcp_core.oauth import (
     InMemoryAuthCache,
@@ -87,4 +95,8 @@ __all__ = [
     "OAuthProvider",
     "PreAuthSession",
     "SqliteUserStore",
+    "FlowType",
+    "TokenCallback",
+    "UpstreamOAuthConfig",
+    "create_delegated_oauth_app",
 ]
