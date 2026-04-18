@@ -45,28 +45,13 @@ interface SessionInfoJson {
   created_at: number
 }
 
-async function readSessionLockFile(path: string): Promise<SessionInfo | null> {
+async function readSessionLockFile(path: string): Promise<SessionInfoJson | null> {
   if (!existsSync(path)) {
     return null
   }
 
   const raw = await readFile(path, 'utf-8')
-  const data = JSON.parse(raw) as SessionInfoJson
-
-  // Validate required fields
-  if (
-    typeof data.session_id !== 'string' ||
-    typeof data.relay_url !== 'string' ||
-    typeof data.created_at !== 'number'
-  ) {
-    throw new Error('Invalid lock file format')
-  }
-
-  return {
-    sessionId: data.session_id,
-    relayUrl: data.relay_url,
-    createdAt: data.created_at
-  }
+  return JSON.parse(raw) as SessionInfoJson
 }
 
 export async function acquireSessionLock(
@@ -75,9 +60,25 @@ export async function acquireSessionLock(
 ): Promise<SessionInfo | null> {
   const path = lockPath(serverName)
   try {
-    const info = await readSessionLockFile(path)
-    if (!info) {
+    const data = await readSessionLockFile(path)
+    if (!data) {
       return null
+    }
+
+    // Validate required fields
+    if (
+      typeof data.session_id !== 'string' ||
+      typeof data.relay_url !== 'string' ||
+      typeof data.created_at !== 'number'
+    ) {
+      await releaseSessionLock(serverName)
+      return null
+    }
+
+    const info: SessionInfo = {
+      sessionId: data.session_id,
+      relayUrl: data.relay_url,
+      createdAt: data.created_at
     }
 
     const age = Date.now() - info.createdAt
