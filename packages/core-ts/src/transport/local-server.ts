@@ -107,7 +107,7 @@ export async function runLocalServer(
     // Bearer auth if configured.
     if (jwtIssuer) {
       const authHeader = req.headers.authorization
-      const match = authHeader?.match(/^Bearer\s+(.+)$/i)
+      const match = authHeader?.match(/^Bearer\s+(\S.*)$/i)
       const token = match?.[1]?.trim()
       if (!token) {
         res.writeHead(401, { 'WWW-Authenticate': 'Bearer' })
