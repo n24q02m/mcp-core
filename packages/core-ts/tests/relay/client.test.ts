@@ -103,7 +103,7 @@ describe('createSession', () => {
     const session = await createSession('https://relay.example.com', 'test-server', mockSchema)
 
     expect(session.sessionId).toHaveLength(64) // 32 bytes hex
-    expect(session.passphrase).toMatch(/^\w+-\w+-\w+-\w+$/)
+    expect(session.passphrase).toMatch(/^[a-z-]+$/)
     expect(session.relayUrl).toContain('https://relay.example.com/setup?s=')
     expect(session.relayUrl).toContain('#k=')
     expect(session.relayUrl).toContain('&p=')

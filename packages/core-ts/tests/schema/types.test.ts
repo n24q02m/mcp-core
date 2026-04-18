@@ -7,6 +7,7 @@ import type {
   OAuthRoute,
   RelayConfigSchema
 } from '../../src/schema/types.js'
+import { GOOGLE_CLIENT_ID } from '../constants.js'
 
 describe('schema/types', () => {
   it('should type-check a simple fields schema (Telegram example)', () => {
@@ -82,7 +83,7 @@ describe('schema/types', () => {
       action: 'oauth2_device_code',
       message: 'Sign in with Google',
       oauthConfig: {
-        clientId: 'xxx.apps.googleusercontent.com',
+        clientId: GOOGLE_CLIENT_ID,
         scopes: ['https://mail.google.com/']
       }
     }

@@ -8,6 +8,7 @@ from mcp_core.schema.types import (
     OAuthRoute,
     RelayConfigSchema,
 )
+from ..constants import GOOGLE_CLIENT_ID
 
 
 class TestSchemaTypes:
@@ -96,7 +97,7 @@ class TestSchemaTypes:
             "action": "oauth2_device_code",
             "message": "Sign in with Google",
             "oauthConfig": {
-                "clientId": "xxx.apps.googleusercontent.com",
+                "clientId": GOOGLE_CLIENT_ID,
                 "scopes": ["https://mail.google.com/"],
             },
         }
