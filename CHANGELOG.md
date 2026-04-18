@@ -2,6 +2,101 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-04-18)
+
+### Bug Fixes
+
+- Add caching to get_machine_id ([#16](https://github.com/n24q02m/mcp-core/pull/16),
+  [`2f02117`](https://github.com/n24q02m/mcp-core/commit/2f02117983a4d8ffe382f1d46b20aa61c2909d43))
+
+- Add unit tests for SqliteUserStore ([#15](https://github.com/n24q02m/mcp-core/pull/15),
+  [`0070834`](https://github.com/n24q02m/mcp-core/commit/0070834bda3e80aad093a0df2972cc8cd96c17a4))
+
+- Eliminate polynomial ReDoS in Bearer auth regex
+  ([`69f5637`](https://github.com/n24q02m/mcp-core/commit/69f563775de494f5887870aa8959a9317eda5e24))
+
+- Improve LifecycleLock error handling and add tests for error paths
+  ([#23](https://github.com/n24q02m/mcp-core/pull/23),
+  [`2213053`](https://github.com/n24q02m/mcp-core/commit/221305340ec1d7b2b56d4f7d4b9c43ccbce9a06c))
+
+- Move better-godot-mcp to TS downstream in auto-issue step
+  ([`c4f9343`](https://github.com/n24q02m/mcp-core/commit/c4f9343c1f6b2cf24035f0c1706a1078378f3d9e))
+
+- Replace hardcoded client id and fix CI failures
+  ([#52](https://github.com/n24q02m/mcp-core/pull/52),
+  [`e49d244`](https://github.com/n24q02m/mcp-core/commit/e49d244dc85020de81c9331689e315db5c7b5328))
+
+- Replace hardcoded client id and fix CI failures
+  ([#26](https://github.com/n24q02m/mcp-core/pull/26),
+  [`499ebee`](https://github.com/n24q02m/mcp-core/commit/499ebee3c2563b77c0fb5a8e746e42de4b161448))
+
+- Replace hardcoded client id in schema tests ([#52](https://github.com/n24q02m/mcp-core/pull/52),
+  [`e49d244`](https://github.com/n24q02m/mcp-core/commit/e49d244dc85020de81c9331689e315db5c7b5328))
+
+- Replace hardcoded client id in schema tests ([#26](https://github.com/n24q02m/mcp-core/pull/26),
+  [`499ebee`](https://github.com/n24q02m/mcp-core/commit/499ebee3c2563b77c0fb5a8e746e42de4b161448))
+
+- Replace hardcoded client id in schema tests and fix flaky passphrase test
+  ([#52](https://github.com/n24q02m/mcp-core/pull/52),
+  [`e49d244`](https://github.com/n24q02m/mcp-core/commit/e49d244dc85020de81c9331689e315db5c7b5328))
+
+- Replace hardcoded client id in schema tests and fix flaky passphrase test
+  ([#26](https://github.com/n24q02m/mcp-core/pull/26),
+  [`499ebee`](https://github.com/n24q02m/mcp-core/commit/499ebee3c2563b77c0fb5a8e746e42de4b161448))
+
+- Split long validateSchema into smaller validation functions
+  ([#34](https://github.com/n24q02m/mcp-core/pull/34),
+  [`4029bd5`](https://github.com/n24q02m/mcp-core/commit/4029bd52fa7e3842996b31c099920eb0e16aa051))
+
+- Untrack .jules/.Jules AI trace files from public repo
+  ([`2ae6292`](https://github.com/n24q02m/mcp-core/commit/2ae62921304c0552a9a884b503dc77834686d708))
+
+- 🛡️ Sentinel: Fix command injection in tryOpenBrowser
+  ([#36](https://github.com/n24q02m/mcp-core/pull/36),
+  [`a829a5f`](https://github.com/n24q02m/mcp-core/commit/a829a5f340f9188ec6596557767fc4d89cca1c30))
+
+### Features
+
+- [TEST] Missing tests for OAuthProvider class ([#33](https://github.com/n24q02m/mcp-core/pull/33),
+  [`8f20cae`](https://github.com/n24q02m/mcp-core/commit/8f20caee03fde563207d072fcf30a1b9c835eace))
+
+- Add authScope/auth_scope hook to runLocalServer for JWT claims propagation
+  ([#52](https://github.com/n24q02m/mcp-core/pull/52),
+  [`e49d244`](https://github.com/n24q02m/mcp-core/commit/e49d244dc85020de81c9331689e315db5c7b5328))
+
+- Add delegated_oauth option to run_local_server in core-py
+  ([#52](https://github.com/n24q02m/mcp-core/pull/52),
+  [`e49d244`](https://github.com/n24q02m/mcp-core/commit/e49d244dc85020de81c9331689e315db5c7b5328))
+
+- Add delegatedOAuth option to runLocalServer in core-ts
+  ([#52](https://github.com/n24q02m/mcp-core/pull/52),
+  [`e49d244`](https://github.com/n24q02m/mcp-core/commit/e49d244dc85020de81c9331689e315db5c7b5328))
+
+- Add tests for Python JWTIssuer class ([#21](https://github.com/n24q02m/mcp-core/pull/21),
+  [`6c45fe8`](https://github.com/n24q02m/mcp-core/commit/6c45fe81886198e213f2efc8a26364275fb42eca))
+
+- Add tests for SqliteUserStore and validate master_key length
+  ([#14](https://github.com/n24q02m/mcp-core/pull/14),
+  [`325b48c`](https://github.com/n24q02m/mcp-core/commit/325b48c2cfdd18f977fcc80da78a45fc757f883f))
+
+- Cache `getMachineId` to reduce redundant OS command executions
+  ([#48](https://github.com/n24q02m/mcp-core/pull/48),
+  [`2dde3c7`](https://github.com/n24q02m/mcp-core/commit/2dde3c7b55c015ef390bdc67555adc0e3ef27761))
+
+- Expose createDelegatedOAuthApp in core-ts + core-py root indexes
+  ([#52](https://github.com/n24q02m/mcp-core/pull/52),
+  [`e49d244`](https://github.com/n24q02m/mcp-core/commit/e49d244dc85020de81c9331689e315db5c7b5328))
+
+- Phase L2 delegated OAuth primitives + integration hooks
+  ([#52](https://github.com/n24q02m/mcp-core/pull/52),
+  [`e49d244`](https://github.com/n24q02m/mcp-core/commit/e49d244dc85020de81c9331689e315db5c7b5328))
+
+### Testing
+
+- Add missing tests for JWTIssuer class ([#20](https://github.com/n24q02m/mcp-core/pull/20),
+  [`f24f53c`](https://github.com/n24q02m/mcp-core/commit/f24f53cbb98c4a6efc94940464ff388d29718290))
+
+
 ## v1.2.0 (2026-04-17)
 
 ### Bug Fixes
