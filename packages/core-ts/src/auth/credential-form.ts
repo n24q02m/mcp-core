@@ -62,11 +62,13 @@ function renderField(field: ConfigField): string {
     : '<span class="optional-badge">Optional</span>'
 
   let helpHtml = ''
+  let ariaDescribedby = ''
   if (helpText) {
+    ariaDescribedby = ` aria-describedby="help-${key}"`
     if (helpUrl) {
-      helpHtml = `<p class="help-text"><a href="${helpUrl}" target="_blank" rel="noopener noreferrer">${helpText}</a></p>`
+      helpHtml = `<p class="help-text" id="help-${key}"><a href="${helpUrl}" target="_blank" rel="noopener noreferrer">${helpText}</a></p>`
     } else {
-      helpHtml = `<p class="help-text">${helpText}</p>`
+      helpHtml = `<p class="help-text" id="help-${key}">${helpText}</p>`
     }
   }
 
@@ -85,7 +87,7 @@ function renderField(field: ConfigField): string {
                 autocomplete="off"
                 autocorrect="off"
                 autocapitalize="off"
-                spellcheck="false"${requiredAttr}
+                spellcheck="false"${requiredAttr}${ariaDescribedby}
             />
             ${helpHtml}
         </div>`
@@ -542,7 +544,9 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                 errorEl.textContent = "";
                 buttonEl.disabled = true;
                 buttonEl.textContent = "Verifying...";
+                buttonEl.setAttribute("aria-busy", "true");
                 inputEl.disabled = true;
+                inputEl.removeAttribute("aria-invalid");
 
                 var body = {};
                 body[fieldName] = value;
@@ -575,8 +579,10 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 errorEl.textContent = data.error || data.error_description || "Verification failed.";
                                 errorEl.style.display = "block";
                                 inputEl.disabled = false;
+                                inputEl.setAttribute("aria-invalid", "true");
                                 buttonEl.disabled = false;
                                 buttonEl.textContent = "Verify";
+                                buttonEl.removeAttribute("aria-busy");
                                 inputEl.focus();
                             }
                         });
@@ -585,8 +591,10 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                         errorEl.textContent = "Network error: " + err.message;
                         errorEl.style.display = "block";
                         inputEl.disabled = false;
+                        inputEl.setAttribute("aria-invalid", "true");
                         buttonEl.disabled = false;
                         buttonEl.textContent = "Verify";
+                        buttonEl.removeAttribute("aria-busy");
                     });
             }
 
@@ -601,8 +609,10 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     if (input.hasAttribute("required") && input.value.trim() === "") {
                         valid = false;
                         input.style.borderColor = "#f87171";
+                        input.setAttribute("aria-invalid", "true");
                     } else {
                         input.style.borderColor = "";
+                        input.removeAttribute("aria-invalid");
                         payload[input.name] = input.value;
                     }
                 });
@@ -614,6 +624,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
                 submitBtn.disabled = true;
                 submitBtn.textContent = "Connecting...";
+                submitBtn.setAttribute("aria-busy", "true");
                 statusBox.style.display = "none";
 
                 fetch(submitUrl, {
@@ -629,6 +640,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 });
                                 submitBtn.disabled = true;
                                 submitBtn.textContent = "Connected";
+                                submitBtn.removeAttribute("aria-busy");
                                 if (data.next_step && data.next_step.type === "oauth_device_code") {
                                     var ns = data.next_step;
                                     statusBox.textContent = "";
@@ -694,6 +706,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 showStatus("error", data.error || data.error_description || "Request failed.");
                                 submitBtn.disabled = false;
                                 submitBtn.textContent = "Connect";
+                                submitBtn.removeAttribute("aria-busy");
                             }
                         });
                     })
@@ -701,6 +714,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                         showStatus("error", "Network error: " + err.message);
                         submitBtn.disabled = false;
                         submitBtn.textContent = "Connect";
+                        submitBtn.removeAttribute("aria-busy");
                     });
             });
         })();
