@@ -197,3 +197,44 @@ def test_render_form_omits_device_code_js_when_disabled():
     assert "oauth_device_code" not in html
     assert "gdrive-waiting" not in html
     assert "/setup-status" not in html
+
+
+def test_render_field_with_help_text():
+    """Field with helpText and helpUrl should render link and aria-describedby."""
+    schema = {
+        "server": "test",
+        "displayName": "Test",
+        "fields": [
+            {
+                "key": "token",
+                "label": "Token",
+                "helpText": "Get token here",
+                "helpUrl": "https://example.com/help",
+            }
+        ],
+    }
+    html = render_credential_form(schema, submit_url="/auth")
+    assert 'aria-describedby="help-token"' in html
+    assert 'id="help-token"' in html
+    assert 'href="https://example.com/help"' in html
+    assert "Get token here" in html
+
+
+def test_render_field_with_help_text_no_url():
+    """Field with helpText but no helpUrl should render plain text help."""
+    schema = {
+        "server": "test",
+        "displayName": "Test",
+        "fields": [
+            {
+                "key": "token",
+                "label": "Token",
+                "helpText": "Plain help text",
+            }
+        ],
+    }
+    html = render_credential_form(schema, submit_url="/auth")
+    assert 'aria-describedby="help-token"' in html
+    assert 'id="help-token"' in html
+    assert "Plain help text" in html
+    assert "<a" not in html  # Should not have a link if no helpUrl
