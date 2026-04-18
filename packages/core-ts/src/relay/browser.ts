@@ -24,6 +24,22 @@ async function isWsl(): Promise<boolean> {
   }
 }
 
+function encodePowerShellCommand(command: string): string {
+  return Buffer.from(command, 'utf16le').toString('base64')
+}
+
+async function openInPowerShell(url: string): Promise<boolean> {
+  try {
+    const escapedUrl = url.replace(/'/g, "''")
+    const command = `Start-Process '${escapedUrl}'`
+    const encodedCommand = encodePowerShellCommand(command)
+    await execFileAsync('powershell.exe', ['-EncodedCommand', encodedCommand])
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function openInWsl(url: string): Promise<boolean> {
   // Try wslview first (from wslu package, commonly available)
   try {
@@ -33,31 +49,24 @@ async function openInWsl(url: string): Promise<boolean> {
     /* fall through */
   }
 
-  // Fallback to rundll32.exe url.dll,FileProtocolHandler
-  try {
-    await execFileAsync('rundll32.exe', ['url.dll,FileProtocolHandler', url])
-    return true
-  } catch {
-    /* fall through */
-  }
-
-  return false
+  // Fallback to powershell.exe -EncodedCommand
+  return openInPowerShell(url)
 }
 
 /**
  * Try to open URL in default browser. Returns true if likely succeeded.
  *
  * Detection order:
- * 1. win32: rundll32.exe
- * 2. darwin: `open` command
- * 3. linux: check WSL then `xdg-open`
+ * 1. win32: powershell.exe -EncodedCommand
+ * 2. darwin: \`open\` command
+ * 3. linux: check WSL then \`xdg-open\`
  *
  * Never throws. Returns false on failure.
  */
 export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Validate URL
-    if (!/^https?:\/\//i.test(url)) {
+    if (!/^https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!$&%*+,=]+$/i.test(url)) {
       return false
     }
 
@@ -70,8 +79,7 @@ export async function tryOpenBrowser(url: string): Promise<boolean> {
     const platform = process.platform
 
     if (platform === 'win32') {
-      await execFileAsync('rundll32.exe', ['url.dll,FileProtocolHandler', url])
-      return true
+      return openInPowerShell(url)
     }
 
     if (platform === 'darwin') {
