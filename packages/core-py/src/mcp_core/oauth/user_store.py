@@ -30,6 +30,8 @@ class SqliteUserStore(IUserCredentialStore):
             db_path: Path to the SQLite DB file.
             master_key: 32-byte AES key for at-rest encryption.
         """
+        if len(master_key) != 32:
+            raise ValueError("master_key must be exactly 32 bytes")
         self.db_path = db_path
         self._master_key = master_key
 
