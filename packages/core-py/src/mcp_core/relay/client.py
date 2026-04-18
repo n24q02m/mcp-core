@@ -201,6 +201,9 @@ async def poll_for_result(
                     raise RuntimeError(msg)
 
                 result = body.get("result", body)
+
+                # Don't delete session — keep alive for bidirectional messaging.
+                # Session auto-expires via TTL (10 min).
                 return _decrypt_relay_credentials(session, result)
 
             if response.status_code == 404:
