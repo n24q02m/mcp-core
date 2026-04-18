@@ -89,7 +89,7 @@ describe('createSession', () => {
     const _session = await createSession('https://relay.example.com', 'test-server', mockSchema)
 
     expect(fetch).toHaveBeenCalledOnce()
-    const call = (fetch as any).mock.calls[0]
+    const call = vi.mocked(fetch).mock.calls[0]
     expect(call[0]).toBe('https://relay.example.com/api/sessions')
     expect(call[1]?.method).toBe('POST')
 
@@ -112,7 +112,7 @@ describe('createSession', () => {
   })
 
   it('should throw on non-ok response', async () => {
-    ;(fetch as any).mockResolvedValueOnce(new Response('', { status: 500 }))
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 500 }))
 
     await expect(createSession('https://relay.example.com', 'test-server', mockSchema)).rejects.toThrow(
       'Relay session creation failed: 500'
@@ -166,7 +166,7 @@ describe('pollForResult', () => {
     expect(result).toEqual(credentials)
 
     // Session kept alive for bidirectional messaging (no DELETE on success)
-    const deleteCalls = (fetch as any).mock.calls.filter((c: any) => c[1]?.method === 'DELETE')
+    const deleteCalls = vi.mocked(fetch).mock.calls.filter((c) => c[1]?.method === 'DELETE')
     expect(deleteCalls).toHaveLength(0)
   })
 
