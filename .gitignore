@@ -46,3 +46,6 @@ docs/superpowers/
 coverage.xml
 htmlcov/
 .coverage
+
+# AI traces (capital J variant)
+.Jules/
