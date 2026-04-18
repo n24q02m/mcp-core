@@ -7,8 +7,10 @@ import re
 import socket
 import subprocess
 import uuid
+from functools import lru_cache
 
 
+@lru_cache(maxsize=1)
 def get_machine_id() -> str:
     """Get a stable machine identifier.
 
