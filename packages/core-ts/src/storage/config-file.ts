@@ -20,6 +20,31 @@ interface ConfigStore {
   servers: Record<string, Record<string, string>>
 }
 
+function validateAuth(config: Record<string, unknown>): boolean {
+  return Object.values(config).every((value) => typeof value === 'string')
+}
+
+function validateServer(server: unknown): boolean {
+  if (!server || typeof server !== 'object') return false
+  return validateAuth(server as Record<string, unknown>)
+}
+
+function validateSchema(data: unknown): data is ConfigStore {
+  if (!data || typeof data !== 'object') return false
+  const d = data as Record<string, unknown>
+  if (d.version !== 1) return false
+  if (!d.servers || typeof d.servers !== 'object') return false
+
+  const servers = d.servers as Record<string, unknown>
+  for (const serverName in servers) {
+    if (typeof serverName !== 'string' || !validateServer(servers[serverName])) {
+      return false
+    }
+  }
+
+  return true
+}
+
 // Allow overriding config path for testing
 let configPathOverride: string | null = null
 
@@ -74,12 +99,19 @@ async function loadStore(): Promise<ConfigStore> {
   try {
     const key = await getKey()
     const json = await decryptData(key, data)
-    return JSON.parse(json) as ConfigStore
+    const store = JSON.parse(json)
+    if (!validateSchema(store)) {
+      throw new Error('Invalid config schema')
+    }
+    return store
   } catch (err) {
     try {
       const legacyKey = await deriveFileKey(machineId, username, LEGACY_PBKDF2_ITERATIONS)
       const json = await decryptData(legacyKey, data)
-      const store = JSON.parse(json) as ConfigStore
+      const store = JSON.parse(json)
+      if (!validateSchema(store)) {
+        throw new Error('Invalid config schema')
+      }
       // Auto-migrate to current iterations
       await saveStore(store)
       return store
@@ -163,7 +195,10 @@ export async function importConfig(passphrase: string, data: Buffer): Promise<vo
       throw err
     }
   }
-  const imported = JSON.parse(json) as ConfigStore
+  const imported = JSON.parse(json)
+  if (!validateSchema(imported)) {
+    throw new Error('Invalid config schema in imported data')
+  }
 
   const store = await loadStore()
   // Merge imported servers into local config
