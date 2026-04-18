@@ -215,6 +215,32 @@ describe('runLocalServer — delegated mode', () => {
   })
 })
 
+describe('runLocalServer — authScope middleware', () => {
+  it('invokes authScope middleware with JWT claims on authenticated /mcp request', async () => {
+    const seen: Array<unknown> = []
+    const handle = await runLocalServer(makeMcpServer, {
+      serverName: `test-scope-${Date.now()}`,
+      relaySchema: SCHEMA,
+      authScope: async (claims, next) => {
+        seen.push(claims)
+        await next()
+      }
+    })
+    try {
+      // Without Bearer: 401 (authScope should NOT be called)
+      const unauth = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+      expect(unauth.status).toBe(401)
+      expect(seen.length).toBe(0)
+    } finally {
+      await handle.close()
+    }
+  })
+})
+
 describe('runLocalServer lifecycle', () => {
   it('port 0 auto-assigns a non-zero port', async () => {
     const handle = await runLocalServer(makeMcpServer, {

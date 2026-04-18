@@ -19,6 +19,7 @@ import type { AddressInfo } from 'node:net'
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import type { JWTPayload } from 'jose'
 import type { RelayConfigSchema } from '../auth/credential-form.js'
 import {
   createDelegatedOAuthApp,
@@ -33,6 +34,9 @@ import {
 } from '../auth/local-oauth-app.js'
 import { jsonResponse } from '../auth/router.js'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
+
+/** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
+export type JWTClaims = JWTPayload
 
 export interface RunLocalServerOptions {
   /** Identifier used for JWT iss/aud and credential storage. */
@@ -65,6 +69,13 @@ export interface RunLocalServerOptions {
    * /authorize. Passed through to ``createLocalOAuthApp``.
    */
   customCredentialFormHtml?: (schema: RelayConfigSchema, options: { submitUrl: string }) => string
+  /**
+   * Optional middleware invoked after JWT verification and before the MCP
+   * transport handles the request. Called with verified claims and a ``next``
+   * function that invokes the MCP transport. Consumers use this to wrap the
+   * request in AsyncLocalStorage (e.g., for per-user token lookup).
+   */
+  authScope?: (claims: JWTClaims, next: () => Promise<void>) => Promise<void>
 }
 
 export interface LocalServerHandle {
@@ -138,11 +149,18 @@ export async function runLocalServer(
         res.end()
         return
       }
+      let claims: JWTClaims
       try {
-        await jwtIssuer.verifyAccessToken(token)
+        claims = await jwtIssuer.verifyAccessToken(token)
       } catch {
         res.writeHead(401, { 'WWW-Authenticate': 'Bearer error="invalid_token"' })
         res.end()
+        return
+      }
+      if (options.authScope) {
+        await options.authScope(claims, async () => {
+          await transport.handleRequest(req, res)
+        })
         return
       }
     }

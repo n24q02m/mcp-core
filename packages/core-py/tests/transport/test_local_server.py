@@ -523,3 +523,24 @@ def test_build_local_app_delegated_mode_produces_app(tmp_path: Path):
     )
     assert app is not None
     assert issuer.server_name == "test-notion"
+
+
+def test_build_local_app_auth_scope_not_invoked_on_unauthed_request(tmp_path: Path):
+    """auth_scope must NOT be invoked when the request has no Bearer token."""
+    calls: list[dict] = []
+
+    async def scope(claims: dict, next_: object) -> None:
+        calls.append(claims)
+
+    mcp = FastMCP(name="test-scope")
+    app, _ = build_local_app(
+        mcp,
+        server_name="test-scope",
+        relay_schema={"fields": [{"key": "FOO", "label": "foo", "type": "text"}]},
+        jwt_keys_dir=tmp_path / "jwt-keys",
+        auth_scope=scope,
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.post("/mcp", json={})
+        assert resp.status_code == 401
+        assert calls == []

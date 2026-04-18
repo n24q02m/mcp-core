@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 # running-loop hacks. See mcp_core.auth.local_oauth_app for details.
 _Callback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
 
+# Middleware invoked after JWT verification. Receives the decoded claims dict
+# and a ``next`` coroutine that forwards to the MCP transport.
+AuthScope = Callable[[dict[str, Any], Callable[[], Awaitable[None]]], Awaitable[None]]
+
 
 def find_free_port() -> int:
     """Find an available TCP port on 127.0.0.1.
@@ -59,9 +63,10 @@ class BearerMCPApp:
     remain publicly accessible.
     """
 
-    def __init__(self, inner: ASGIApp, jwt_issuer: JWTIssuer) -> None:
+    def __init__(self, inner: ASGIApp, jwt_issuer: JWTIssuer, auth_scope: AuthScope | None = None) -> None:
         self._inner = inner
         self._jwt_issuer = jwt_issuer
+        self._auth_scope = auth_scope
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -89,7 +94,7 @@ class BearerMCPApp:
             return
 
         try:
-            self._jwt_issuer.verify_access_token(bearer)
+            claims = self._jwt_issuer.verify_access_token(bearer)
         except Exception:
             from starlette.responses import Response
 
@@ -98,6 +103,14 @@ class BearerMCPApp:
                 headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
             )
             await resp(scope, receive, send)
+            return
+
+        if self._auth_scope is not None:
+
+            async def _next() -> None:
+                await self._inner(scope, receive, send)
+
+            await self._auth_scope(claims, _next)
             return
 
         await self._inner(scope, receive, send)
@@ -113,6 +126,7 @@ def build_local_app(
     jwt_keys_dir: Path | None = None,
     custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
+    auth_scope: AuthScope | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Construct a combined Starlette app with OAuth AS + MCP transport.
 
@@ -144,6 +158,10 @@ def build_local_app(
             ``client_secret``, ``scopes``, ``authorize_url``, ``callback_path``,
             ``device_auth_url``, ``poll_interval_ms``),
             ``on_token_received`` (callback invoked with upstream token dict).
+        auth_scope: Optional middleware invoked after JWT verification and
+            before the MCP transport handles the request. Receives the decoded
+            claims dict and a ``next`` coroutine. Consumers use this to wrap
+            the request in a context var (e.g., for per-user token lookup).
 
     Returns:
         ``(app, jwt_issuer)`` tuple.
@@ -213,7 +231,7 @@ def build_local_app(
     mcp_asgi_handler = StreamableHTTPASGIApp(session_manager)
 
     # Wrap with Bearer auth
-    bearer_mcp_app = BearerMCPApp(inner=mcp_asgi_handler, jwt_issuer=jwt_issuer)
+    bearer_mcp_app = BearerMCPApp(inner=mcp_asgi_handler, jwt_issuer=jwt_issuer, auth_scope=auth_scope)
 
     # Combine OAuth routes + /mcp route into a single Starlette app
     # Reuse the OAuth app's routes and add our /mcp endpoint
@@ -250,6 +268,7 @@ async def run_local_server(
     jwt_keys_dir: Path | None = None,
     custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
+    auth_scope: AuthScope | None = None,
 ) -> None:
     """Start MCP server with local OAuth AS on 127.0.0.1.
 
@@ -284,6 +303,8 @@ async def run_local_server(
         delegated_oauth: Dict configuring upstream OAuth delegation. Mutually
             exclusive with ``relay_schema``. See ``build_local_app`` for the
             expected keys.
+        auth_scope: Optional middleware invoked after JWT verification. Passed
+            through to ``build_local_app``. See ``BearerMCPApp`` for details.
     """
     import uvicorn
 
@@ -304,6 +325,7 @@ async def run_local_server(
         jwt_keys_dir=jwt_keys_dir,
         custom_credential_form_html=custom_credential_form_html,
         delegated_oauth=delegated_oauth,
+        auth_scope=auth_scope,
     )
 
     # Wire setup completion: pass mark_setup_complete to caller so
