@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { getMachineId, getUsername } from '../../src/storage/machine-id.js'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { clearMachineIdCacheForTesting, getMachineId, getUsername } from '../../src/storage/machine-id.js'
 
 describe('getMachineId', () => {
+  beforeEach(() => {
+    clearMachineIdCacheForTesting()
+  })
+
   it('returns a non-empty string', async () => {
     const id = await getMachineId()
     expect(id).toBeTruthy()
