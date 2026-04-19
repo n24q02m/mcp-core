@@ -2,6 +2,46 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-04-19)
+
+### Bug Fixes
+
+- Clickable local relay URL + failure state propagation
+  ([#61](https://github.com/n24q02m/mcp-core/pull/61),
+  [`57f8326`](https://github.com/n24q02m/mcp-core/commit/57f8326465d3700b61ef668e987d81386a40356e))
+
+- Per-request transport in runLocalServer stateless HTTP
+  ([`3f05744`](https://github.com/n24q02m/mcp-core/commit/3f057440110cacf8156c852fd472fab0c84e2398))
+
+- Prevent token leakage via CLI arguments in stdio-proxy
+  ([#13](https://github.com/n24q02m/mcp-core/pull/13),
+  [`27da69d`](https://github.com/n24q02m/mcp-core/commit/27da69d7f38e14cdf18b25cd358f546a0ba15673))
+
+### Chores
+
+- **deps**: Update actions/create-github-app-token digest to 1b10c78
+  ([#53](https://github.com/n24q02m/mcp-core/pull/53),
+  [`f8d7264`](https://github.com/n24q02m/mcp-core/commit/f8d72644769744066a5989702800ab648d169947))
+
+- **deps**: Update actions/upload-artifact digest to 043fb46
+  ([#54](https://github.com/n24q02m/mcp-core/pull/54),
+  [`23d04b4`](https://github.com/n24q02m/mcp-core/commit/23d04b4290e81c00b822b38c39a59f9094bb160a))
+
+- **deps**: Update semgrep/semgrep docker digest to d7d67e1
+  ([#55](https://github.com/n24q02m/mcp-core/pull/55),
+  [`3748b02`](https://github.com/n24q02m/mcp-core/commit/3748b02da146216bd84a53b4a11bf8e14c432e03))
+
+### Features
+
+- Add ARIA accessibility states to credential forms
+  ([#50](https://github.com/n24q02m/mcp-core/pull/50),
+  [`03ca30a`](https://github.com/n24q02m/mcp-core/commit/03ca30ab4648d00335958269018d0fe825a1f9e2))
+
+- Hoist Uint16Array allocation in generatePassphrase
+  ([#49](https://github.com/n24q02m/mcp-core/pull/49),
+  [`8109225`](https://github.com/n24q02m/mcp-core/commit/8109225dc837e4eee62dac94fb4ddbe19050216e))
+
+
 ## v1.3.0 (2026-04-18)
 
 ### Bug Fixes
