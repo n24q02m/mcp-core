@@ -254,6 +254,56 @@ describe('runLocalServer without relaySchema (godot-style)', () => {
       await handle.close()
     }
   })
+
+  it('handles sequential POST requests on /mcp (stateless per-request transport)', async () => {
+    // Regression: sharing one stateless StreamableHTTPServerTransport across
+    // requests caused the first POST to succeed and every subsequent POST to
+    // return HTTP 500 ("message ID collisions" per SDK source).
+    // runLocalServer now creates a fresh server + transport per /mcp request.
+    const handle = await runLocalServer(makeMcpServer, {
+      serverName: `test-sequential-${Date.now()}`,
+      port: 0
+    })
+    try {
+      const baseUrl = `http://${handle.host}:${handle.port}/mcp`
+      const commonHeaders = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream'
+      }
+
+      const init = await fetch(baseUrl, {
+        method: 'POST',
+        headers: commonHeaders,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'regression-test', version: '0' }
+          }
+        })
+      })
+      expect(init.status).toBe(200)
+
+      const list = await fetch(baseUrl, {
+        method: 'POST',
+        headers: commonHeaders,
+        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+      })
+      expect(list.status).toBe(200)
+
+      const list2 = await fetch(baseUrl, {
+        method: 'POST',
+        headers: commonHeaders,
+        body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })
+      })
+      expect(list2.status).toBe(200)
+    } finally {
+      await handle.close()
+    }
+  })
 })
 
 describe('runLocalServer — delegated mode', () => {

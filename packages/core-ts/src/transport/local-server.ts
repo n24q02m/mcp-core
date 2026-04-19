@@ -142,11 +142,33 @@ export async function runLocalServer(
     jwtIssuer = oauthApp.jwtIssuer
   }
 
-  // MCP server + transport. Stateless mode (sessionIdGenerator undefined) to
-  // match the Python StreamableHTTPSessionManager default.
-  const mcpServer = serverFactory()
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-  await mcpServer.connect(transport)
+  // MCP stateless pattern: create a fresh Server + StreamableHTTPServerTransport
+  // per request. The official SDK comment in webStandardStreamableHttp.js line 137
+  // states: "In stateless mode (no sessionIdGenerator), each request must use a
+  // fresh transport. Reusing a stateless transport causes message ID collisions
+  // between clients." Sharing one transport across requests made the first POST
+  // succeed but every subsequent POST return HTTP 500 for servers without Bearer
+  // auth (e.g. better-godot-mcp). This pattern mirrors the Python side's
+  // StreamableHTTPSessionManager which creates per-request session state.
+  async function handleStatelessRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const server = serverFactory()
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+    try {
+      await server.connect(transport)
+      await transport.handleRequest(req, res)
+    } finally {
+      try {
+        await transport.close()
+      } catch {
+        /* best-effort cleanup */
+      }
+      try {
+        await server.close()
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
+  }
 
   async function mcpHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // Bearer auth if configured.
@@ -169,13 +191,13 @@ export async function runLocalServer(
       }
       if (options.authScope) {
         await options.authScope(claims, async () => {
-          await transport.handleRequest(req, res)
+          await handleStatelessRequest(req, res)
         })
         return
       }
     }
-    // Delegate to MCP transport.
-    await transport.handleRequest(req, res)
+    // Delegate to per-request MCP transport.
+    await handleStatelessRequest(req, res)
   }
 
   const handler = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -250,7 +272,6 @@ export async function runLocalServer(
       new Promise<void>((resolve, reject) => {
         const delegatedShutdown = oauthApp && 'shutdown' in oauthApp ? oauthApp.shutdown() : Promise.resolve()
         delegatedShutdown
-          .then(() => transport.close())
           .then(() => {
             httpServer.close((err) => (err ? reject(err) : resolve()))
           })
