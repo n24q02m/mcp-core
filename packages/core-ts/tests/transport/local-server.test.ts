@@ -108,7 +108,7 @@ describe('runLocalServer with relaySchema (OAuth enabled)', () => {
       serverName: `test-hook-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
-      setupCompleteHook: (mark) => {
+      setupCompleteHook: (mark: (key?: string) => void) => {
         receivedMark = mark
       }
     })
@@ -126,6 +126,89 @@ describe('runLocalServer with relaySchema (OAuth enabled)', () => {
       const afterResp = await fetch(`http://${handle.host}:${handle.port}/setup-status`)
       const afterBody = (await afterResp.json()) as Record<string, string>
       expect(afterBody.gdrive).toBe('complete')
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('invokes 2-arg setupCompleteHook with both markComplete and markFailed', async () => {
+    // Simulates the new failure-propagation wiring used by wet-mcp GDrive
+    // device code flow. Google returning ``invalid_grant`` must be reflected
+    // in /setup-status so the browser poll stops spinning.
+    let receivedComplete: ((key?: string) => void) | null = null
+    let receivedFailed: ((key?: string, error?: string) => void) | null = null
+    const handle = await runLocalServer(makeMcpServer, {
+      serverName: `test-hook-2arg-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0,
+      setupCompleteHook: (markComplete: (key?: string) => void, markFailed: (key?: string, error?: string) => void) => {
+        receivedComplete = markComplete
+        receivedFailed = markFailed
+      }
+    })
+    try {
+      expect(typeof receivedComplete).toBe('function')
+      expect(typeof receivedFailed).toBe('function')
+
+      if (receivedFailed) (receivedFailed as (k?: string, e?: string) => void)('gdrive', 'invalid_grant')
+      const resp = await fetch(`http://${handle.host}:${handle.port}/setup-status`)
+      const body = (await resp.json()) as Record<string, string>
+      expect(body.gdrive).toBe('error:invalid_grant')
+    } finally {
+      await handle.close()
+    }
+  })
+})
+
+describe('runLocalServer — root bootstrap UX', () => {
+  it('GET / redirects to /authorize with valid PKCE params', async () => {
+    const handle = await runLocalServer(makeMcpServer, {
+      serverName: `test-root-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const resp = await fetch(`http://${handle.host}:${handle.port}/`, { redirect: 'manual' })
+      expect(resp.status).toBe(302)
+      const location = resp.headers.get('location') as string
+      expect(location.startsWith('/authorize?')).toBe(true)
+      const params = new URLSearchParams(location.replace(/^\/authorize\?/, ''))
+      expect(params.get('client_id')).toBe('local-browser')
+      expect(params.get('code_challenge_method')).toBe('S256')
+      expect(params.get('code_challenge') as string).toHaveLength(43)
+      expect(params.get('redirect_uri')).toContain('/callback-done')
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('GET / followed produces credential form', async () => {
+    const handle = await runLocalServer(makeMcpServer, {
+      serverName: `test-root-follow-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const resp = await fetch(`http://${handle.host}:${handle.port}/`, { redirect: 'follow' })
+      expect(resp.status).toBe(200)
+      const body = await resp.text()
+      expect(body).toContain('Enter your credentials')
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('GET /callback-done returns terminal success page', async () => {
+    const handle = await runLocalServer(makeMcpServer, {
+      serverName: `test-callback-done-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const resp = await fetch(`http://${handle.host}:${handle.port}/callback-done`)
+      expect(resp.status).toBe(200)
+      const body = await resp.text()
+      expect(body).toContain('Setup complete')
     } finally {
       await handle.close()
     }

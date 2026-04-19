@@ -6,11 +6,13 @@
  * browser-rendered form.
  *
  * Routes:
+ * - GET  /                                         -- Auto-bootstrap PKCE then redirect to /authorize
  * - GET  /authorize                                -- Render credential form
  * - POST /authorize                                -- Save credentials, return auth code
  * - POST /otp                                      -- Submit multi-step credential (OTP / 2FA password)
  * - POST /token                                    -- Exchange auth code + PKCE verifier for JWT
  * - GET  /setup-status                             -- Poll background setup completion
+ * - GET  /callback-done                            -- Friendly "tab can be closed" page after PKCE callback
  * - GET  /.well-known/oauth-authorization-server   -- RFC 8414 metadata
  * - GET  /.well-known/oauth-protected-resource     -- RFC 9728 metadata
  *
@@ -84,6 +86,14 @@ export interface LocalOAuthAppResult {
   jwtIssuer: JWTIssuer
   /** Mark a background setup step as complete (polled by GET /setup-status). */
   markSetupComplete: (key?: string) => void
+  /**
+   * Mark a background setup step as failed (polled by GET /setup-status).
+   * Encodes the status as ``"error:<message>"`` so the browser poll handler
+   * can distinguish success, failure, and still-pending states without
+   * spinning forever on upstream errors (e.g. Google returning
+   * ``invalid_grant`` / ``expired_token`` / ``access_denied``).
+   */
+  markSetupFailed: (key?: string, error?: string) => void
 }
 
 // Auth codes and PKCE sessions expire after 10 minutes.
@@ -481,15 +491,80 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     setupStatus[key] = 'complete'
   }
 
+  /**
+   * Mark a background setup step as failed. The status becomes
+   * ``"error:<message>"`` so the frontend poll handler can surface the
+   * message and stop spinning. Whitespace is collapsed to keep the value
+   * single-line (the frontend inlines it verbatim).
+   */
+  function markSetupFailed(key = 'gdrive', error = 'unknown error'): void {
+    const collapsed = String(error).split(/\s+/).filter(Boolean).join(' ')
+    const message = collapsed.length > 0 ? collapsed : 'unknown error'
+    setupStatus[key] = `error:${message}`
+  }
+
+  /**
+   * GET / -- auto-generate PKCE and redirect to /authorize.
+   *
+   * The ``/authorize`` endpoint requires 4 PKCE parameters; users arriving
+   * from a log line / bookmark have no way to construct them. Bootstrap a
+   * default ``local-browser`` client here: generate random state + S256
+   * challenge, redirect to ``/authorize``, and on success return to
+   * ``/callback-done`` for a friendly close message. Keeps the one-URL UX
+   * ("open http://... in browser") working without exposing the raw OAuth
+   * machinery to end users.
+   */
+  async function rootHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const base = getBaseUrl(req)
+    const codeVerifier = randomBytes(64).toString('base64url')
+    const codeChallenge = createHash('sha256').update(codeVerifier, 'ascii').digest('base64url')
+    const state = randomBytes(16).toString('base64url')
+
+    const params = new URLSearchParams({
+      client_id: 'local-browser',
+      redirect_uri: `${base}/callback-done`,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256'
+    })
+    res.writeHead(302, { Location: `/authorize?${params.toString()}` })
+    res.end()
+  }
+
+  /**
+   * GET /callback-done -- terminal "tab can be closed" landing page.
+   *
+   * Users redirected from the bootstrap flow land here on success. Exists
+   * purely so the bare URL doesn't 404 after the PKCE redirect completes.
+   */
+  async function callbackDoneHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const html =
+      "<!DOCTYPE html><html><head><meta charset='utf-8'>" +
+      '<title>Setup complete</title>' +
+      '<style>body{font-family:-apple-system,Segoe UI,sans-serif;' +
+      'background:#111;color:#eee;display:flex;align-items:center;' +
+      'justify-content:center;height:100vh;margin:0}' +
+      '.box{text-align:center;padding:2rem;border:1px solid #333;' +
+      'border-radius:8px;background:#1a1a1a}' +
+      'h1{color:#34c759;margin:0 0 0.5rem}p{color:#aaa;margin:0}' +
+      '</style></head><body><div class="box">' +
+      '<h1>Setup complete</h1>' +
+      '<p>You can close this tab.</p>' +
+      '</div></body></html>'
+    htmlResponse(res, 200, html)
+  }
+
   const handler = createRouter([
+    { method: 'GET', path: '/', handler: rootHandler },
     { method: 'GET', path: '/authorize', handler: authorize },
     { method: 'POST', path: '/authorize', handler: authorize },
     { method: 'POST', path: '/token', handler: token },
     { method: 'POST', path: '/otp', handler: otpHandler },
     { method: 'GET', path: '/setup-status', handler: setupStatusHandler },
+    { method: 'GET', path: '/callback-done', handler: callbackDoneHandler },
     { method: 'GET', path: '/.well-known/oauth-authorization-server', handler: wellKnownAs },
     { method: 'GET', path: '/.well-known/oauth-protected-resource', handler: wellKnownPr }
   ])
 
-  return { handler, jwtIssuer, markSetupComplete }
+  return { handler, jwtIssuer, markSetupComplete, markSetupFailed }
 }

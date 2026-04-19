@@ -246,10 +246,16 @@ def build_local_app(
 
     combined_app = Starlette(routes=combined_routes, lifespan=lifespan)
 
-    # Forward mark_setup_complete from OAuth app to combined app
+    # Forward mark_setup_complete / mark_setup_failed from OAuth app to combined app.
+    # Both are used by transport/local_server to wire the ``setup_complete_hook``
+    # so consumers (e.g. wet-mcp GDrive device code poll) can signal success
+    # AND propagate upstream errors to the browser form.
     mark_fn = getattr(oauth_app.state, "mark_setup_complete", None)
     if mark_fn:
         combined_app.state.mark_setup_complete = mark_fn  # type: ignore[attr-defined]
+    mark_failed_fn = getattr(oauth_app.state, "mark_setup_failed", None)
+    if mark_failed_fn:
+        combined_app.state.mark_setup_failed = mark_failed_fn  # type: ignore[attr-defined]
 
     return combined_app, jwt_issuer
 
@@ -264,7 +270,7 @@ async def run_local_server(
     open_browser: bool = True,
     on_credentials_saved: _Callback | None = None,
     on_step_submitted: _Callback | None = None,
-    setup_complete_hook: Callable[[Callable[[], None]], None] | None = None,
+    setup_complete_hook: Callable[..., None] | None = None,
     jwt_keys_dir: Path | None = None,
     custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
@@ -292,9 +298,15 @@ async def run_local_server(
             Receives the step input dict and returns ``None`` (complete),
             an error dict, or another step-required dict.
             Only used in relay (non-delegated) mode.
-        setup_complete_hook: Called with ``mark_setup_complete`` after app is
-            built. Callers use this to wire their credential_state module so
-            background tasks (e.g., GDrive token poll) can update the form.
+        setup_complete_hook: Wires credential_state so background tasks
+            (e.g. GDrive device code poll) can update the form's status.
+            Invoked after the app is built with either arity:
+
+            - ``hook(mark_complete)`` -- legacy 1-arg form, success only.
+            - ``hook(mark_complete, mark_failed)`` -- new 2-arg form.
+              ``mark_failed(key, error_message)`` signals ``error:<message>``
+              to ``/setup-status`` so the browser stops polling and shows
+              the error. Prefer the 2-arg form for new code.
         jwt_keys_dir: Directory for JWT key storage. Defaults to JWTIssuer's default.
         custom_credential_form_html: Optional ``(schema, submit_url) -> html``
             renderer used in place of the default credential form on GET
@@ -328,11 +340,33 @@ async def run_local_server(
         auth_scope=auth_scope,
     )
 
-    # Wire setup completion: pass mark_setup_complete to caller so
-    # background tasks (GDrive poll) can update the form's status.
+    # Wire setup completion + failure callbacks. ``mark_setup_complete``
+    # signals success; ``mark_setup_failed`` propagates background-task
+    # errors (e.g. Google returns ``invalid_grant`` / ``expired_token`` for
+    # the device code flow) to the browser form so it stops polling. The
+    # hook receives both callbacks and MUST accept either arity for
+    # backward compatibility:
+    #   - Legacy 1-arg: ``hook(mark_complete)``
+    #   - New 2-arg:    ``hook(mark_complete, mark_failed)``
+    # Callers wiring only completion should migrate to the 2-arg form to
+    # surface failures; the 1-arg form is detected and still supported.
     mark_fn = getattr(app.state, "mark_setup_complete", None)
+    mark_failed_fn = getattr(app.state, "mark_setup_failed", None)
     if setup_complete_hook is not None and mark_fn is not None:
-        setup_complete_hook(mark_fn)
+        import inspect as _inspect
+
+        try:
+            sig = _inspect.signature(setup_complete_hook)
+            positional = [p for p in sig.parameters.values() if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+            arity = len(positional)
+        except (TypeError, ValueError):
+            # Builtins / C functions: assume new 2-arg signature.
+            arity = 2
+
+        if arity >= 2 and mark_failed_fn is not None:
+            setup_complete_hook(mark_fn, mark_failed_fn)  # type: ignore[call-arg]
+        else:
+            setup_complete_hook(mark_fn)  # type: ignore[call-arg]
 
     # Acquire lifecycle lock
     lock = LifecycleLock(name=server_name, port=actual_port)
@@ -342,7 +376,7 @@ async def run_local_server(
         existing_config = read_config(server_name)
         if existing_config is None:
             logger.info(
-                "No credentials found. Server at http://{}:{}/authorize",
+                "No credentials found. Open http://{}:{} in browser to configure",
                 actual_host,
                 actual_port,
             )

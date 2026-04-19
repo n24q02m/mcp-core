@@ -31,6 +31,22 @@ def test_render_form_step_input_has_aria_label():
     assert re.search(r'promptEl\.id\s*=\s*"step-prompt"', html)
 
 
+def test_render_form_poll_handles_gdrive_error_status():
+    """Poll handler must also stop spinning on ``error:<msg>`` status.
+
+    Without this branch, a Google device code failure (invalid_grant /
+    expired_token / access_denied) left the browser waiting forever on
+    ``gdrive-waiting`` while the backend had already given up.
+    """
+    schema = {"server": "test", "displayName": "Test", "fields": []}
+    html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
+    # Explicit error-prefix detection branch.
+    assert 'indexOf("error:") === 0' in html
+    # Failure message surfacing + retry instruction.
+    assert "Google Drive authorization failed" in html
+    assert "Please retry setup" in html
+
+
 class TestRenderCredentialForm:
     def test_render_basic_form(self):
         """Schema with 1 required password field -> HTML contains field key, label, placeholder, type=password, form action."""

@@ -59,11 +59,21 @@ export interface RunLocalServerOptions {
   /** Optional callback invoked with step data after POST /otp. */
   onStepSubmitted?: StepCallback
   /**
-   * Called with ``markSetupComplete`` function after server ready. Callers use
-   * this to wire their credential_state module so background tasks can update
-   * the form's status.
+   * Called after server ready so callers can wire background tasks (e.g.
+   * GDrive device code poll) to the form's ``/setup-status`` endpoint.
+   *
+   * Accepts either arity for backward compatibility:
+   *  - Legacy 1-arg: ``hook(markComplete)`` -- success-only (older consumers).
+   *  - New 2-arg:    ``hook(markComplete, markFailed)`` -- surfaces upstream
+   *    errors (``invalid_grant`` / ``expired_token`` / ``access_denied``)
+   *    to the browser form so it stops polling and shows the error.
+   *
+   * Prefer the 2-arg form for new code. Arity is detected via
+   * ``Function.prototype.length``.
    */
-  setupCompleteHook?: (markComplete: (key?: string) => void) => void
+  setupCompleteHook?:
+    | ((markComplete: (key?: string) => void) => void)
+    | ((markComplete: (key?: string) => void, markFailed: (key?: string, error?: string) => void) => void)
   /**
    * Optional renderer used in place of the default credential form on GET
    * /authorize. Passed through to ``createLocalOAuthApp``.
@@ -214,10 +224,23 @@ export async function runLocalServer(
   const addr = httpServer.address() as AddressInfo
   const actualPort = addr.port
 
-  // Invoke setup hook with markSetupComplete so caller can wire background
-  // tasks (e.g., GDrive token poll) to update the form status.
+  // Invoke setup hook. Supports legacy 1-arg (success-only) and new 2-arg
+  // (success + failure) signatures via Function.prototype.length so upstream
+  // errors (invalid_grant / expired_token / access_denied) propagate to the
+  // browser form instead of leaving the spinner waiting forever.
   if (options.setupCompleteHook && oauthApp) {
-    options.setupCompleteHook(oauthApp.markSetupComplete)
+    const markSetupFailed =
+      'markSetupFailed' in oauthApp && typeof oauthApp.markSetupFailed === 'function'
+        ? oauthApp.markSetupFailed
+        : undefined
+    if (options.setupCompleteHook.length >= 2 && markSetupFailed !== undefined) {
+      ;(options.setupCompleteHook as (mc: (key?: string) => void, mf: (key?: string, error?: string) => void) => void)(
+        oauthApp.markSetupComplete,
+        markSetupFailed
+      )
+    } else {
+      ;(options.setupCompleteHook as (mc: (key?: string) => void) => void)(oauthApp.markSetupComplete)
+    }
   }
 
   return {
