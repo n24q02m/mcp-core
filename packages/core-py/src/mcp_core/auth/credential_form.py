@@ -646,7 +646,9 @@ def render_credential_form(
                                     statusBox.appendChild(waiting);
                                     statusBox.className = "status-box info";
                                     statusBox.style.display = "block";
-                                    // Poll /setup-status until GDrive auth completes
+                                    // Poll /setup-status until GDrive auth completes or fails.
+                                    // Success:   gdrive === "complete"
+                                    // Failure:   gdrive starts with "error:" -- show red message + stop polling.
                                     var pollInterval = setInterval(function () {{
                                         fetch(submitUrl.replace(/\\/authorize.*/, "/setup-status"))
                                             .then(function (r) {{ return r.json(); }})
@@ -657,6 +659,13 @@ def render_credential_form(
                                                     if (w) {{
                                                         w.style.color = "#34c759";
                                                         w.textContent = "Google Drive authorized! Setup complete. You can close this tab.";
+                                                    }}
+                                                }} else if (typeof s.gdrive === "string" && s.gdrive.indexOf("error:") === 0) {{
+                                                    clearInterval(pollInterval);
+                                                    var w = document.getElementById("gdrive-waiting");
+                                                    if (w) {{
+                                                        w.style.color = "#ff453a";
+                                                        w.textContent = "Google Drive authorization failed: " + s.gdrive.slice(6) + ". Please retry setup.";
                                                     }}
                                                 }}
                                             }})

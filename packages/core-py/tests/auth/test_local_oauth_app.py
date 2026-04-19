@@ -763,3 +763,114 @@ def test_custom_renderer_receives_schema_and_submit_url():
     assert captured["schema"] == schema
     # Submit URL must contain the nonce query string.
     assert "/authorize?nonce=" in captured["submit_url"]
+
+
+# ---------------------------------------------------------------------------
+# Root bootstrap + callback-done UX
+# ---------------------------------------------------------------------------
+
+
+class TestRootBootstrapsPKCE:
+    """GET / must auto-generate PKCE + redirect to /authorize.
+
+    Without this endpoint, users clicking the server log URL landed on
+    ``/authorize`` without PKCE params and got a 400. The bootstrap makes
+    the single-URL UX work: "open http://... in browser to configure".
+    """
+
+    def test_root_returns_302_with_authorize_location(self, client):
+        # TestClient follows redirects by default; disable to inspect.
+        resp = client.get("/", follow_redirects=False)
+        assert resp.status_code == 302
+        location = resp.headers["location"]
+        # Must target /authorize with all 4 required PKCE params.
+        assert location.startswith("/authorize?")
+        from urllib.parse import parse_qs, urlparse
+
+        parsed = urlparse(location)
+        params = parse_qs(parsed.query)
+        assert params["client_id"] == ["local-browser"]
+        assert params["code_challenge_method"] == ["S256"]
+        assert len(params["state"][0]) >= 16  # token_urlsafe(16) ≥ 22 chars
+        # code_challenge MUST be base64url S256 output (43 chars, no padding).
+        challenge = params["code_challenge"][0]
+        assert len(challenge) == 43
+        assert "=" not in challenge
+        # redirect_uri should point at /callback-done on the same origin.
+        assert params["redirect_uri"][0].endswith("/callback-done")
+
+    def test_root_followed_to_authorize_renders_form(self, client):
+        # Following the redirect should land on /authorize with a rendered form.
+        resp = client.get("/", follow_redirects=True)
+        assert resp.status_code == 200
+        # Default renderer emits this marker.
+        assert "Enter your credentials" in resp.text
+        # A nonce must have been created and embedded in the form's submit URL.
+        assert "nonce=" in resp.text
+
+    def test_root_each_request_fresh_pkce(self, client):
+        """Bootstrap must NOT reuse PKCE -- each visit gets a fresh pair."""
+        r1 = client.get("/", follow_redirects=False)
+        r2 = client.get("/", follow_redirects=False)
+        assert r1.status_code == 302 and r2.status_code == 302
+        from urllib.parse import parse_qs, urlparse
+
+        p1 = parse_qs(urlparse(r1.headers["location"]).query)
+        p2 = parse_qs(urlparse(r2.headers["location"]).query)
+        assert p1["state"] != p2["state"]
+        assert p1["code_challenge"] != p2["code_challenge"]
+
+
+class TestCallbackDone:
+    """GET /callback-done -- terminal success page."""
+
+    def test_callback_done_returns_friendly_page(self, client):
+        resp = client.get("/callback-done")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+        assert "Setup complete" in resp.text
+        assert "close this tab" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Setup status: complete + failure propagation
+# ---------------------------------------------------------------------------
+
+
+class TestSetupStatus:
+    def test_idle_by_default(self, client):
+        resp = client.get("/setup-status")
+        assert resp.status_code == 200
+        assert resp.json() == {"gdrive": "idle"}
+
+    def test_mark_setup_complete_flips_state(self, app_and_issuer, client):
+        app, _issuer, _saved = app_and_issuer
+        app.state.mark_setup_complete("gdrive")
+        resp = client.get("/setup-status")
+        assert resp.json() == {"gdrive": "complete"}
+
+    def test_mark_setup_failed_encodes_error_prefix(self, app_and_issuer, client):
+        """mark_setup_failed sets ``error:<message>`` so the form can detect failure."""
+        app, _issuer, _saved = app_and_issuer
+        app.state.mark_setup_failed("gdrive", "invalid_grant")
+        resp = client.get("/setup-status")
+        assert resp.json() == {"gdrive": "error:invalid_grant"}
+
+    def test_mark_setup_failed_collapses_whitespace(self, app_and_issuer, client):
+        """Multi-line error strings are collapsed so the frontend can inline them."""
+        app, _issuer, _saved = app_and_issuer
+        app.state.mark_setup_failed("gdrive", "Google returned\n  expired_token\t\tretry later")
+        resp = client.get("/setup-status")
+        assert resp.json() == {"gdrive": "error:Google returned expired_token retry later"}
+
+    def test_mark_setup_failed_defaults_to_gdrive_key(self, app_and_issuer, client):
+        app, _issuer, _saved = app_and_issuer
+        app.state.mark_setup_failed(error="access_denied")
+        resp = client.get("/setup-status")
+        assert resp.json() == {"gdrive": "error:access_denied"}
+
+    def test_mark_setup_failed_empty_message_fallback(self, app_and_issuer, client):
+        app, _issuer, _saved = app_and_issuer
+        app.state.mark_setup_failed("gdrive", "")
+        resp = client.get("/setup-status")
+        assert resp.json() == {"gdrive": "error:unknown error"}

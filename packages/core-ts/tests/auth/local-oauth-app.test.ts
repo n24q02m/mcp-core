@@ -648,4 +648,128 @@ describe('GET /setup-status', () => {
       await srv.close()
     }
   })
+
+  it('reports error:<message> after markSetupFailed', async () => {
+    const srv = await startApp()
+    try {
+      srv.app.markSetupFailed('gdrive', 'invalid_grant')
+      const resp = await fetch(`${srv.url}/setup-status`)
+      expect(await resp.json()).toEqual({ gdrive: 'error:invalid_grant' })
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('collapses whitespace in multi-line error messages', async () => {
+    const srv = await startApp()
+    try {
+      srv.app.markSetupFailed('gdrive', 'Google returned\n  expired_token\t\tretry later')
+      const resp = await fetch(`${srv.url}/setup-status`)
+      expect(await resp.json()).toEqual({ gdrive: 'error:Google returned expired_token retry later' })
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('defaults to gdrive key and unknown error', async () => {
+    const srv = await startApp()
+    try {
+      srv.app.markSetupFailed()
+      const resp = await fetch(`${srv.url}/setup-status`)
+      expect(await resp.json()).toEqual({ gdrive: 'error:unknown error' })
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('empty message falls back to unknown error', async () => {
+    const srv = await startApp()
+    try {
+      srv.app.markSetupFailed('gdrive', '')
+      const resp = await fetch(`${srv.url}/setup-status`)
+      expect(await resp.json()).toEqual({ gdrive: 'error:unknown error' })
+    } finally {
+      await srv.close()
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Root bootstrap + callback-done UX
+// ---------------------------------------------------------------------------
+
+describe('GET /', () => {
+  it('returns 302 with /authorize Location containing all 4 PKCE params', async () => {
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/`, { redirect: 'manual' })
+      expect(resp.status).toBe(302)
+      const location = resp.headers.get('location') as string
+      expect(location).toBeTruthy()
+      expect(location.startsWith('/authorize?')).toBe(true)
+
+      // Parse query; relative Location uses same-origin.
+      const params = new URLSearchParams(location.replace(/^\/authorize\?/, ''))
+      expect(params.get('client_id')).toBe('local-browser')
+      expect(params.get('code_challenge_method')).toBe('S256')
+      const state = params.get('state') as string
+      expect(state).toBeTruthy()
+      expect(state.length).toBeGreaterThanOrEqual(16)
+      const challenge = params.get('code_challenge') as string
+      // base64url S256 output: 43 chars, no padding.
+      expect(challenge).toHaveLength(43)
+      expect(challenge.includes('=')).toBe(false)
+      expect(params.get('redirect_uri')).toContain('/callback-done')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('following redirect renders credential form', async () => {
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/`, { redirect: 'follow' })
+      expect(resp.status).toBe(200)
+      expect(resp.headers.get('content-type')).toContain('text/html')
+      const body = await resp.text()
+      expect(body).toContain('Enter your credentials')
+      expect(body).toMatch(/nonce=[A-Za-z0-9_-]+/)
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('each request generates fresh PKCE (no reuse)', async () => {
+    const srv = await startApp()
+    try {
+      const r1 = await fetch(`${srv.url}/`, { redirect: 'manual' })
+      const r2 = await fetch(`${srv.url}/`, { redirect: 'manual' })
+      expect(r1.status).toBe(302)
+      expect(r2.status).toBe(302)
+      const loc1 = r1.headers.get('location') as string
+      const loc2 = r2.headers.get('location') as string
+      const p1 = new URLSearchParams(loc1.replace(/^\/authorize\?/, ''))
+      const p2 = new URLSearchParams(loc2.replace(/^\/authorize\?/, ''))
+      expect(p1.get('state')).not.toBe(p2.get('state'))
+      expect(p1.get('code_challenge')).not.toBe(p2.get('code_challenge'))
+    } finally {
+      await srv.close()
+    }
+  })
+})
+
+describe('GET /callback-done', () => {
+  it('returns friendly setup-complete page', async () => {
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/callback-done`)
+      expect(resp.status).toBe(200)
+      expect(resp.headers.get('content-type')).toContain('text/html')
+      const body = await resp.text()
+      expect(body).toContain('Setup complete')
+      expect(body).toContain('close this tab')
+    } finally {
+      await srv.close()
+    }
+  })
 })

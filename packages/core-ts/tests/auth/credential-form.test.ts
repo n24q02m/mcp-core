@@ -252,4 +252,16 @@ describe('renderCredentialForm', () => {
     )
     expect(html).toContain(String.raw`submitUrl.replace(/\/authorize.*/, "/setup-status")`)
   })
+
+  it('poll handler detects error:<msg> status and surfaces the message', () => {
+    // Without this branch a Google device code failure leaves the browser
+    // waiting forever. Detection check + message surfacing + retry hint.
+    const html = renderCredentialForm(
+      { server: 'test', displayName: 'Test', fields: [] },
+      { submitUrl: '/authorize?nonce=abc' }
+    )
+    expect(html).toContain('indexOf("error:") === 0')
+    expect(html).toContain('Google Drive authorization failed')
+    expect(html).toContain('Please retry setup')
+  })
 })

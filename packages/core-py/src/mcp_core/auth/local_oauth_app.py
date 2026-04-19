@@ -5,11 +5,13 @@ Implements the OAuth 2.1 PKCE flow with credential collection via a
 browser-rendered form.
 
 Routes:
+- GET  /                                        -- Auto-bootstrap PKCE then redirect to /authorize
 - GET  /authorize                               -- Render credential form
 - POST /authorize                               -- Save credentials, return auth code
 - POST /otp                                     -- Submit multi-step credential (OTP / 2FA password)
 - POST /token                                   -- Exchange auth code + PKCE verifier for JWT
 - GET  /setup-status                            -- Poll background setup completion
+- GET  /callback-done                           -- Friendly "tab can be closed" page after PKCE callback
 - GET  /.well-known/oauth-authorization-server   -- RFC 8414 metadata
 - GET  /.well-known/oauth-protected-resource     -- RFC 9728 metadata
 
@@ -440,33 +442,118 @@ def create_local_oauth_app(
             )
         )
 
-    # In-memory setup status (set by background tasks via mark_setup_complete)
+    # In-memory setup status (set by background tasks via mark_setup_complete
+    # or mark_setup_failed). Values: "idle", "complete", or "error:<message>".
     _setup_status: dict[str, str] = {"gdrive": "idle"}
 
     def mark_setup_complete(key: str = "gdrive") -> None:
         """Mark a background setup step as complete (called externally)."""
         _setup_status[key] = "complete"
 
+    def mark_setup_failed(key: str = "gdrive", error: str = "unknown error") -> None:
+        """Mark a background setup step as failed (called externally).
+
+        The status is encoded as ``"error:<message>"`` so the frontend poll
+        handler can detect failure and surface the message to the user,
+        stopping the spinner that would otherwise wait forever.
+        """
+        # Sanitize: collapse whitespace so the error string is single-line
+        # (the frontend inlines it). Strip colons in the user-visible part
+        # only by replacing the rare ``error:`` prefix in callback text, to
+        # avoid double-prefixing.
+        message = " ".join(str(error).split()) or "unknown error"
+        _setup_status[key] = f"error:{message}"
+
     async def setup_status(request: Request) -> JSONResponse:
         """GET /setup-status -- polled by the form to detect GDrive auth completion."""
         return JSONResponse(_setup_status)
+
+    async def root(request: Request):
+        """GET / -- auto-generate PKCE and redirect to /authorize.
+
+        The ``/authorize`` endpoint requires 4 PKCE parameters (``client_id``,
+        ``redirect_uri``, ``state``, ``code_challenge``). Users arriving from
+        a log line or bookmark have no way to construct those parameters
+        themselves, so the server bootstraps a default ``local-browser``
+        client here: generate random state + S256 challenge, redirect to
+        ``/authorize`` with valid params, and on success return to
+        ``/callback-done`` for a friendly close message.
+
+        This keeps the one-URL UX ("open http://... in browser") working
+        without exposing the raw OAuth machinery to end users.
+        """
+        from starlette.responses import RedirectResponse
+
+        base = _base_url(request)
+
+        # Generate PKCE pair for this bootstrap session.
+        # We reuse the ``pending_sessions`` store keyed by nonce so the
+        # normal ``authorize_get`` path can consume it. But ``authorize_get``
+        # itself generates the nonce + session, so we just build the
+        # redirect URL with fresh PKCE params.
+        _code_verifier = secrets.token_urlsafe(64)
+        _challenge_digest = hashlib.sha256(_code_verifier.encode("ascii")).digest()
+        code_challenge = base64.urlsafe_b64encode(_challenge_digest).rstrip(b"=").decode("ascii")
+        state = secrets.token_urlsafe(16)
+
+        from urllib.parse import urlencode
+
+        redirect_uri = f"{base}/callback-done"
+        params = urlencode(
+            {
+                "client_id": "local-browser",
+                "redirect_uri": redirect_uri,
+                "state": state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+            }
+        )
+        return RedirectResponse(url=f"/authorize?{params}", status_code=302)
+
+    async def callback_done(request: Request) -> HTMLResponse:
+        """GET /callback-done -- friendly "tab can be closed" page.
+
+        ``/authorize`` POST returns a ``redirect_url`` that the frontend uses
+        to finalize the PKCE exchange. When the bootstrap flow from ``/``
+        completes, the browser lands here. This page exists purely as a
+        terminal landing so the bare URL doesn't 404.
+        """
+        html_content = (
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<title>Setup complete</title>"
+            "<style>body{font-family:-apple-system,Segoe UI,sans-serif;"
+            "background:#111;color:#eee;display:flex;align-items:center;"
+            "justify-content:center;height:100vh;margin:0}"
+            ".box{text-align:center;padding:2rem;border:1px solid #333;"
+            "border-radius:8px;background:#1a1a1a}"
+            "h1{color:#34c759;margin:0 0 0.5rem}p{color:#aaa;margin:0}"
+            "</style></head><body><div class='box'>"
+            "<h1>Setup complete</h1>"
+            "<p>You can close this tab.</p>"
+            "</div></body></html>"
+        )
+        return HTMLResponse(html_content)
 
     # ------------------------------------------------------------------
     # Build Starlette app
     # ------------------------------------------------------------------
 
     routes = [
+        Route("/", root, methods=["GET"]),
         Route("/authorize", authorize, methods=["GET", "POST"]),
         Route("/otp", otp_handler, methods=["POST"]),
         Route("/token", token, methods=["POST"]),
         Route("/setup-status", setup_status, methods=["GET"]),
+        Route("/callback-done", callback_done, methods=["GET"]),
         Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", well_known_pr, methods=["GET"]),
     ]
 
     app = Starlette(routes=routes)
 
-    # Expose mark_setup_complete on the app for external callers
+    # Expose mark_setup_complete / mark_setup_failed on the app for
+    # external callers (see transport/local_server.py for wiring).
     app.state.mark_setup_complete = mark_setup_complete  # type: ignore[attr-defined]
+    app.state.mark_setup_failed = mark_setup_failed  # type: ignore[attr-defined]
 
     return app, jwt_issuer

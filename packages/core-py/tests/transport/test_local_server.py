@@ -466,6 +466,7 @@ async def _run_server_for_test(
     port: int,
     open_browser: bool = True,
     jwt_keys_dir: Path | None = None,
+    setup_complete_hook=None,
 ) -> None:
     """Wrapper that calls run_local_server with test-friendly params."""
     from mcp_core.transport.local_server import run_local_server
@@ -477,7 +478,87 @@ async def _run_server_for_test(
         port=port,
         open_browser=open_browser,
         jwt_keys_dir=jwt_keys_dir,
+        setup_complete_hook=setup_complete_hook,
     )
+
+
+class TestSetupCompleteHookArity:
+    """``setup_complete_hook`` must support both legacy 1-arg and new 2-arg signatures.
+
+    Legacy callers pass ``(mark_complete)`` only (pre-failure-propagation).
+    New callers pass ``(mark_complete, mark_failed)`` to surface upstream
+    device-code errors to the browser form.
+    """
+
+    def test_legacy_one_arg_hook_receives_mark_complete_only(
+        self, mcp: FastMCP, relay_schema: dict, tmp_path: Path
+    ) -> None:
+        captured: list = []
+
+        def legacy_hook(mark_complete):
+            captured.append(("legacy", mark_complete))
+
+        mock_server = _mock_uvicorn_server()
+        with (
+            patch("mcp_core.storage.config_file.read_config", return_value=None),
+            patch("uvicorn.Server", return_value=mock_server),
+            patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
+        ):
+            mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__exit__ = lambda self, *a: None
+
+            import asyncio
+
+            asyncio.run(
+                _run_server_for_test(
+                    mcp,
+                    relay_schema=relay_schema,
+                    server_name="test",
+                    port=12345,
+                    jwt_keys_dir=tmp_path / "jwt-keys",
+                    setup_complete_hook=legacy_hook,
+                )
+            )
+
+        assert len(captured) == 1
+        assert captured[0][0] == "legacy"
+        # Callable exposed so background task can signal completion.
+        assert callable(captured[0][1])
+
+    def test_two_arg_hook_receives_mark_complete_and_mark_failed(
+        self, mcp: FastMCP, relay_schema: dict, tmp_path: Path
+    ) -> None:
+        captured: list = []
+
+        def new_hook(mark_complete, mark_failed):
+            captured.append(("new", mark_complete, mark_failed))
+
+        mock_server = _mock_uvicorn_server()
+        with (
+            patch("mcp_core.storage.config_file.read_config", return_value=None),
+            patch("uvicorn.Server", return_value=mock_server),
+            patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
+        ):
+            mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__exit__ = lambda self, *a: None
+
+            import asyncio
+
+            asyncio.run(
+                _run_server_for_test(
+                    mcp,
+                    relay_schema=relay_schema,
+                    server_name="test",
+                    port=12345,
+                    jwt_keys_dir=tmp_path / "jwt-keys",
+                    setup_complete_hook=new_hook,
+                )
+            )
+
+        assert len(captured) == 1
+        assert captured[0][0] == "new"
+        assert callable(captured[0][1])
+        assert callable(captured[0][2])
 
 
 # ---------------------------------------------------------------------------
