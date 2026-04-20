@@ -197,7 +197,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
         .server-id {
             font-size: 0.8125rem;
-            color: #9ca3af;
+            color: #666;
             font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
             margin-bottom: 0.5rem;
         }
@@ -244,7 +244,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
         .optional-badge {
             font-size: 0.6875rem;
             font-weight: 400;
-            color: #9ca3af;
+            color: #666;
             background-color: rgba(255, 255, 255, 0.04);
             border: 1px solid #333;
             border-radius: 4px;
@@ -269,12 +269,12 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
         }
 
         .field-input::placeholder {
-            color: #9ca3af;
+            color: #555;
         }
 
         .help-text {
             font-size: 0.8125rem;
-            color: #9ca3af;
+            color: #666;
             margin-top: 0.375rem;
         }
 
@@ -411,7 +411,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
         .capability-desc {
             font-size: 0.8125rem;
-            color: #9ca3af;
+            color: #666;
         }
     </style>
 </head>
