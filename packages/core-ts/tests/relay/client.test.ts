@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encrypt } from '../../src/crypto/aes.js'
 import { deriveSharedSecret, exportPublicKey, generateKeyPair } from '../../src/crypto/ecdh.js'
 import { deriveAesKey } from '../../src/crypto/kdf.js'
-import { createSession, generatePassphrase, pollForResult } from '../../src/relay/client.js'
+import { createSession, generatePassphrase, notifyComplete, pollForResult } from '../../src/relay/client.js'
 import { WORDLIST } from '../../src/relay/wordlist.js'
 import type { RelayConfigSchema } from '../../src/schema/types.js'
 
@@ -283,5 +283,120 @@ describe('pollForResult', () => {
     const result = await pollForResult('https://relay.example.com', session, 10, 5000)
     expect(result).toEqual({ key: 'value' })
     expect(callCount).toBe(3) // 2 x 202, then 1 x 200
+  })
+})
+
+describe('notifyComplete', () => {
+  const baseUrl = 'https://relay.example.com'
+  const sessionId = 'complete-session'
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('POSTs a type:complete message then schedules DELETE after the grace period', async () => {
+    const calls: Array<{ url: string; method?: string; body?: string }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString()
+      calls.push({
+        url,
+        method: (init?.method as string | undefined) ?? 'GET',
+        body: typeof init?.body === 'string' ? init.body : undefined
+      })
+      if ((init?.method as string | undefined) === 'POST') {
+        return new Response(JSON.stringify({ id: 'msg-xyz' }), { status: 201 })
+      }
+      return new Response('', { status: 204 })
+    })
+
+    await notifyComplete(baseUrl, sessionId, 'Setup complete!', { gracePeriodMs: 500 })
+
+    // sendMessage fired immediately
+    expect(calls.length).toBe(1)
+    expect(calls[0].url).toBe(`${baseUrl}/api/sessions/${sessionId}/messages`)
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].body).toContain('"type":"complete"')
+    expect(calls[0].body).toContain('"text":"Setup complete!"')
+
+    // Before grace elapses: DELETE not issued yet
+    await vi.advanceTimersByTimeAsync(499)
+    expect(calls.filter((c) => c.method === 'DELETE').length).toBe(0)
+
+    // After grace elapses: DELETE fired
+    await vi.advanceTimersByTimeAsync(2)
+    const deleteCalls = calls.filter((c) => c.method === 'DELETE')
+    expect(deleteCalls.length).toBe(1)
+    expect(deleteCalls[0].url).toBe(`${baseUrl}/api/sessions/${sessionId}`)
+  })
+
+  it('logs via console.error and returns without scheduling DELETE when sendMessage fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const calls: Array<{ url: string; method?: string }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString()
+      const method = (init?.method as string | undefined) ?? 'GET'
+      calls.push({ url, method })
+      if (method === 'POST') return new Response('server down', { status: 500 })
+      return new Response('', { status: 204 })
+    })
+
+    await notifyComplete(baseUrl, sessionId, 'done', { gracePeriodMs: 10 })
+
+    expect(calls.length).toBe(1)
+    expect(calls[0].method).toBe('POST')
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to send relay 'complete' message"))
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(calls.filter((c) => c.method === 'DELETE').length).toBe(0)
+  })
+
+  it("unref's the cleanup timer so it does not block process exit", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const unrefSpy = vi.fn()
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      handler: () => void,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      const timer = originalSetTimeout(handler, ms, ...args) as unknown as { unref?: () => void }
+      timer.unref = unrefSpy
+      return timer as unknown as ReturnType<typeof setTimeout>
+    }) as typeof setTimeout)
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ id: 'm' }), { status: 201 }))
+
+    await notifyComplete(baseUrl, sessionId, 'done', { gracePeriodMs: 100 })
+
+    expect(unrefSpy).toHaveBeenCalledOnce()
+    setTimeoutSpy.mockRestore()
+  })
+
+  it('defaults text to "Setup complete!" and gracePeriodMs to 5000', async () => {
+    const calls: Array<{ url: string; method?: string; body?: string }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString()
+      calls.push({
+        url,
+        method: (init?.method as string | undefined) ?? 'GET',
+        body: typeof init?.body === 'string' ? init.body : undefined
+      })
+      if ((init?.method as string | undefined) === 'POST') {
+        return new Response(JSON.stringify({ id: 'msg' }), { status: 201 })
+      }
+      return new Response('', { status: 204 })
+    })
+
+    await notifyComplete(baseUrl, sessionId)
+    expect(calls[0].body).toContain('"text":"Setup complete!"')
+
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(calls.filter((c) => c.method === 'DELETE').length).toBe(0)
+    await vi.advanceTimersByTimeAsync(2)
+    expect(calls.filter((c) => c.method === 'DELETE').length).toBe(1)
   })
 })

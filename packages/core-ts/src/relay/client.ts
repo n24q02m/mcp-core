@@ -132,3 +132,40 @@ export async function pollForResponses(
 
   throw new Error('Timed out waiting for response')
 }
+
+/**
+ * Notify the browser that relay setup is complete, then clean up the session.
+ *
+ * The browser polls ``/api/sessions/:id/messages`` every 2s and stops on the
+ * first ``type:'complete'`` message. If the caller deletes the session before
+ * that poll lands, the browser sees 404 on its next fetch and the UI stalls
+ * on "Waiting for server...". This helper sends the ``complete`` message,
+ * then schedules the DELETE after a grace period long enough to cover a few
+ * poll cycles, and unref's the cleanup timer so it doesn't block process
+ * shutdown. If the process exits before the timer fires, the relay server's
+ * 10-minute TTL reclaims the session.
+ *
+ * Errors from ``sendMessage`` are logged via ``console.error`` and swallowed
+ * — the helper is a best-effort post-setup notification and must not fail
+ * the caller's primary flow.
+ */
+export async function notifyComplete(
+  relayBaseUrl: string,
+  sessionId: string,
+  text: string = 'Setup complete!',
+  options: { gracePeriodMs?: number } = {}
+): Promise<void> {
+  try {
+    await sendMessage(relayBaseUrl, sessionId, { type: 'complete', text })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[mcp-core] Failed to send relay 'complete' message: ${msg}`)
+    return
+  }
+
+  const gracePeriodMs = options.gracePeriodMs ?? 5000
+  const timer = setTimeout(() => {
+    fetch(`${relayBaseUrl}/api/sessions/${sessionId}`, { method: 'DELETE' }).catch(() => {})
+  }, gracePeriodMs)
+  timer.unref?.()
+}

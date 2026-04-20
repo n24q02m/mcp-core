@@ -17,6 +17,7 @@ from mcp_core.relay.client import (
     RelaySession,
     create_session,
     generate_passphrase,
+    notify_complete,
     poll_for_result,
 )
 from mcp_core.relay.wordlist import WORDLIST
@@ -330,3 +331,89 @@ class TestPollForResult:
             )
             assert result == {"key": "value"}
             assert call_count == 3
+
+
+class TestNotifyComplete:
+    @pytest.mark.asyncio
+    async def test_posts_complete_then_schedules_delete(self):
+        base_url = "https://relay.example.com"
+        session_id = "complete-session"
+        calls: list[dict[str, object]] = []
+
+        class _MockResponse:
+            def __init__(self, status_code: int, payload: object):
+                self.status_code = status_code
+                self._payload = payload
+
+            def json(self) -> object:
+                return self._payload
+
+        async def fake_post(url, json=None):  # noqa: A002
+            calls.append({"method": "POST", "url": url, "json": json})
+            return _MockResponse(201, {"id": "msg-1"})
+
+        async def fake_delete(url):
+            calls.append({"method": "DELETE", "url": url})
+            return _MockResponse(204, None)
+
+        with patch("mcp_core.relay.client.httpx.AsyncClient") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.post = AsyncMock(side_effect=fake_post)
+            mock_client.delete = AsyncMock(side_effect=fake_delete)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            await notify_complete(base_url, session_id, "Done!", grace_period_s=0.05)
+
+            # send_message fired synchronously inside notify_complete.
+            assert len(calls) == 1
+            assert calls[0]["method"] == "POST"
+            assert calls[0]["url"] == f"{base_url}/api/sessions/{session_id}/messages"
+            assert calls[0]["json"] == {"type": "complete", "text": "Done!"}
+
+            # Let the background sleep + DELETE run.
+            import asyncio as _asyncio
+
+            await _asyncio.sleep(0.2)
+
+            delete_calls = [c for c in calls if c["method"] == "DELETE"]
+            assert len(delete_calls) == 1
+            assert delete_calls[0]["url"] == f"{base_url}/api/sessions/{session_id}"
+
+    @pytest.mark.asyncio
+    async def test_logs_to_stderr_and_skips_delete_when_send_fails(self, capsys):
+        base_url = "https://relay.example.com"
+        session_id = "broken-session"
+        delete_calls: list[str] = []
+
+        class _MockResponse:
+            status_code = 500
+
+            def json(self):
+                return {"error": "server_error"}
+
+        async def fake_post(url, json=None):  # noqa: A002
+            return _MockResponse()
+
+        async def fake_delete(url):
+            delete_calls.append(url)
+            return _MockResponse()
+
+        with patch("mcp_core.relay.client.httpx.AsyncClient") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.post = AsyncMock(side_effect=fake_post)
+            mock_client.delete = AsyncMock(side_effect=fake_delete)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            await notify_complete(base_url, session_id, grace_period_s=0.01)
+
+            import asyncio as _asyncio
+
+            await _asyncio.sleep(0.1)
+
+            captured = capsys.readouterr()
+            assert "Failed to send relay 'complete' message" in captured.err
+            assert delete_calls == []

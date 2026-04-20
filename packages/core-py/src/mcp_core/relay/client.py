@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import secrets
+import sys
 from dataclasses import dataclass
 from urllib.parse import quote
 
@@ -263,3 +264,53 @@ async def poll_for_responses(
 
     msg = "Timed out waiting for response"
     raise RuntimeError(msg)
+
+
+async def notify_complete(
+    relay_base_url: str,
+    session_id: str,
+    text: str = "Setup complete!",
+    *,
+    grace_period_s: float = 5.0,
+) -> None:
+    """Notify the browser that relay setup is complete, then clean up the session.
+
+    The browser polls ``/api/sessions/<id>/messages`` every ~2 s and stops on
+    the first ``type='complete'`` message. Deleting the session before that
+    poll lands makes the browser see 404 on its next fetch and the UI stalls
+    on "Waiting for server...". This helper posts the ``complete`` message
+    first, then schedules the DELETE after a grace period long enough to
+    cover a few poll cycles. If the process exits before the scheduled delete
+    fires, the relay server's 10-minute TTL reclaims the session.
+
+    Errors from ``send_message`` are logged to stderr and swallowed — this
+    helper is best-effort post-setup notification and must not fail the
+    caller's primary flow.
+    """
+    try:
+        await send_message(
+            relay_base_url,
+            session_id,
+            {"type": "complete", "text": text},
+        )
+    except Exception as err:  # noqa: BLE001
+        print(
+            f"[mcp-core] Failed to send relay 'complete' message: {err}",
+            file=sys.stderr,
+        )
+        return
+
+    async def _delayed_delete() -> None:
+        try:
+            await asyncio.sleep(grace_period_s)
+            async with httpx.AsyncClient() as client:
+                await client.delete(f"{relay_base_url}/api/sessions/{session_id}")
+        except Exception:  # noqa: BLE001
+            # Best-effort cleanup; the relay server's TTL will reclaim if this
+            # fails (e.g. process exits before the sleep resolves).
+            pass
+
+    task = asyncio.create_task(_delayed_delete())
+    # Retain a reference so the event loop GC doesn't cancel the task
+    # prematurely. ``done_callback`` runs when the task finishes naturally.
+    task.add_done_callback(lambda _t: None)

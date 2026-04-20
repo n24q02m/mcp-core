@@ -37,6 +37,7 @@ export { tryOpenBrowser } from './relay/browser.js'
 export {
   createSession,
   generatePassphrase,
+  notifyComplete,
   pollForResponses,
   pollForResult,
   type RelaySession,
