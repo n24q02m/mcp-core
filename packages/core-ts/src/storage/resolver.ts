@@ -16,8 +16,9 @@ export async function resolveConfig(
   const envConfig: Record<string, string> = {}
   let allEnvPresent = requiredFields.length > 0
   const serverPrefix = serverName.toUpperCase().replaceAll('-', '_')
+  const envPrefix = `MCP_${serverPrefix}_`
   for (const field of requiredFields) {
-    const envKey = `MCP_${serverPrefix}_${field.toUpperCase().replaceAll('-', '_')}`
+    const envKey = `${envPrefix}${field.toUpperCase().replaceAll('-', '_')}`
     const value = process.env[envKey]
     if (value !== undefined && value !== '') {
       envConfig[field] = value

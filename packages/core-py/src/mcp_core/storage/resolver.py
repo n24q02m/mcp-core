@@ -46,8 +46,9 @@ def resolve_config(
     env_config: dict[str, str] = {}
     all_env_present = len(required_fields) > 0
     server_prefix = server_name.replace("-", "_").upper()
+    env_prefix = f"MCP_{server_prefix}_"
     for field in required_fields:
-        env_key = f"MCP_{server_prefix}_{field.replace('-', '_').upper()}"
+        env_key = f"{env_prefix}{field.replace('-', '_').upper()}"
         value = os.environ.get(env_key, "")
         if value:
             env_config[field] = value
