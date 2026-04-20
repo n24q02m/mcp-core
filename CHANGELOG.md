@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.3 (2026-04-20)
+
+### Bug Fixes
+
+- Clear aria-busy on step-input reset to unblock chained submit
+  ([`c70daf2`](https://github.com/n24q02m/mcp-core/commit/c70daf2525b9063f1f1314fda15ded1d5a4d4e6f))
+
+
 ## v1.4.2 (2026-04-20)
 
 ### Bug Fixes
