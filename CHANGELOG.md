@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.2 (2026-04-20)
+
+### Bug Fixes
+
+- Use HTTP Basic auth for upstream OAuth token exchange
+  ([`59bedb4`](https://github.com/n24q02m/mcp-core/commit/59bedb4544c0c9a3f3ec8b3b034fdcdef1c0fc1b))
+
+
 ## v1.4.1 (2026-04-20)
 
 ### Bug Fixes
