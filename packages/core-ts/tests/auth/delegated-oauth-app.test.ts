@@ -219,8 +219,11 @@ describe('redirect flow', () => {
         const form = new URLSearchParams(body)
         expect(form.get('grant_type')).toBe('authorization_code')
         expect(form.get('code')).toBe('upstream-code')
-        expect(form.get('client_id')).toBe('up-client')
-        expect(form.get('client_secret')).toBe('shh')
+        // Client credentials default to HTTP Basic (RFC 6749 §2.3.1).
+        const expectedBasic = Buffer.from('up-client:shh', 'utf8').toString('base64')
+        expect(req.headers.authorization).toBe(`Basic ${expectedBasic}`)
+        expect(form.get('client_id')).toBeNull()
+        expect(form.get('client_secret')).toBeNull()
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ access_token: 'upstream-at', refresh_token: 'upstream-rt' }))
         return

@@ -29,12 +29,21 @@ import { authorizationServerMetadata, protectedResourceMetadata } from './well-k
 
 export type FlowType = 'device_code' | 'redirect'
 
+export type TokenEndpointAuthMethod = 'client_secret_basic' | 'client_secret_post'
+
 export interface UpstreamOAuthConfig {
   // Common
   tokenUrl: string
   clientId: string
   clientSecret?: string
   scopes?: string[]
+  /**
+   * How to pass client credentials to the upstream token endpoint.
+   * Defaults to ``client_secret_basic`` per RFC 6749 §2.3.1 which mandates
+   * basic-auth support. Notion, GitHub, Microsoft identity platform all
+   * require basic; Google and Slack accept both.
+   */
+  tokenEndpointAuthMethod?: TokenEndpointAuthMethod
   // Redirect flow only
   authorizeUrl?: string
   callbackPath?: string
@@ -89,6 +98,32 @@ function s256Verify(codeVerifier: string, codeChallenge: string): boolean {
   } catch {
     return false
   }
+}
+
+/**
+ * Mutates ``body`` to include client credentials per the configured auth
+ * method and returns any HTTP headers required to authenticate the token
+ * request with the upstream endpoint.
+ *
+ * Default is ``client_secret_basic`` (HTTP Basic) per RFC 6749 §2.3.1 which
+ * says clients MUST support basic and MAY support post. Notion / GitHub /
+ * Microsoft identity platform reject ``client_secret_post`` with
+ * ``invalid_client``; Google/Slack accept both. Public clients (no secret)
+ * always use ``client_id`` in the body regardless of method.
+ */
+function buildClientAuth(body: URLSearchParams, upstream: UpstreamOAuthConfig): Record<string, string> {
+  const method: TokenEndpointAuthMethod = upstream.tokenEndpointAuthMethod ?? 'client_secret_basic'
+  if (!upstream.clientSecret) {
+    body.set('client_id', upstream.clientId)
+    return {}
+  }
+  if (method === 'client_secret_post') {
+    body.set('client_id', upstream.clientId)
+    body.set('client_secret', upstream.clientSecret)
+    return {}
+  }
+  const encoded = Buffer.from(`${upstream.clientId}:${upstream.clientSecret}`, 'utf8').toString('base64')
+  return { Authorization: `Basic ${encoded}` }
 }
 
 function pruneExpired<T extends { createdAt: number }>(store: Map<string, T>, ttlMs: number): void {
@@ -292,18 +327,19 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     const form = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      client_id: options.upstream.clientId,
       redirect_uri: `${base}${callbackPath}`
     })
-    if (options.upstream.clientSecret) {
-      form.set('client_secret', options.upstream.clientSecret)
-    }
+    const authHeaders = buildClientAuth(form, options.upstream)
 
     let upstreamResp: Response
     try {
       upstreamResp = await fetch(options.upstream.tokenUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+          ...authHeaders
+        },
         body: form.toString()
       })
     } catch {
@@ -370,12 +406,9 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     let intervalMs = Math.max(initialIntervalMs, 0)
     const body = new URLSearchParams({
       grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-      device_code: deviceCode,
-      client_id: options.upstream.clientId
+      device_code: deviceCode
     })
-    if (options.upstream.clientSecret) {
-      body.set('client_secret', options.upstream.clientSecret)
-    }
+    const authHeaders = buildClientAuth(body, options.upstream)
 
     while (!controller.signal.aborted) {
       await new Promise<void>((resolve) => {
@@ -395,7 +428,11 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
       try {
         resp = await fetch(options.upstream.tokenUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Accept: 'application/json',
+            ...authHeaders
+          },
           body: body.toString(),
           signal: controller.signal
         })

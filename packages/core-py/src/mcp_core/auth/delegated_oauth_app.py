@@ -62,6 +62,8 @@ _SESSION_TTL_S = 600
 
 FlowType = Literal["device_code", "redirect"]
 
+TokenEndpointAuthMethod = Literal["client_secret_basic", "client_secret_post"]
+
 TokenCallback = Callable[[dict[str, Any]], Union[None, Awaitable[None]]]
 
 
@@ -80,12 +82,34 @@ class UpstreamOAuthConfig:
     client_id: str
     scopes: list[str] = field(default_factory=list)
     client_secret: str | None = None
+    # How to pass client credentials to the upstream token endpoint.
+    # Defaults to ``client_secret_basic`` per RFC 6749 §2.3.1. Notion / GitHub
+    # / Microsoft require basic; Google / Slack accept both.
+    token_endpoint_auth_method: TokenEndpointAuthMethod = "client_secret_basic"
     # Redirect flow only
     authorize_url: str | None = None
     callback_path: str = "/callback"
     # Device code flow only
     device_auth_url: str | None = None
     poll_interval_ms: int = 5000
+
+
+def _build_client_auth(form_data: dict[str, str], upstream: UpstreamOAuthConfig) -> dict[str, str]:
+    """Mutate ``form_data`` with client credentials and return auth headers.
+
+    Public clients (no ``client_secret``) put ``client_id`` in the body and
+    no header. Confidential clients default to HTTP Basic per RFC 6749;
+    callers can opt into ``client_secret_post`` for providers that require it.
+    """
+    if upstream.client_secret is None:
+        form_data["client_id"] = upstream.client_id
+        return {}
+    if upstream.token_endpoint_auth_method == "client_secret_post":
+        form_data["client_id"] = upstream.client_id
+        form_data["client_secret"] = upstream.client_secret
+        return {}
+    encoded = base64.b64encode(f"{upstream.client_id}:{upstream.client_secret}".encode("utf-8")).decode("ascii")
+    return {"Authorization": f"Basic {encoded}"}
 
 
 def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
@@ -305,18 +329,20 @@ def create_delegated_oauth_app(
             )
 
         base = _base_url(request)
-        form_data = {
+        form_data: dict[str, str] = {
             "grant_type": "authorization_code",
             "code": code,
-            "client_id": upstream.client_id,
             "redirect_uri": f"{base}{upstream.callback_path}",
         }
-        if upstream.client_secret:
-            form_data["client_secret"] = upstream.client_secret
+        auth_headers = _build_client_auth(form_data, upstream)
 
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.post(upstream.token_url, data=form_data)
+                resp = await client.post(
+                    upstream.token_url,
+                    data=form_data,
+                    headers={"Accept": "application/json", **auth_headers},
+                )
         except Exception:  # noqa: BLE001
             logger.exception("Upstream token exchange failed")
             return JSONResponse(
@@ -372,20 +398,22 @@ def create_delegated_oauth_app(
         -> continue; ``slow_down`` -> increase interval; terminal errors stop.
         """
         interval = max(interval_ms, 1000) / 1000.0
-        form_data = {
+        form_data: dict[str, str] = {
             "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
             "device_code": device_code,
-            "client_id": upstream.client_id,
         }
-        if upstream.client_secret:
-            form_data["client_secret"] = upstream.client_secret
+        auth_headers = _build_client_auth(form_data, upstream)
 
         try:
             async with httpx.AsyncClient() as client:
                 while True:
                     await asyncio.sleep(interval)
                     try:
-                        resp = await client.post(upstream.token_url, data=form_data)
+                        resp = await client.post(
+                            upstream.token_url,
+                            data=form_data,
+                            headers={"Accept": "application/json", **auth_headers},
+                        )
                     except Exception:  # noqa: BLE001
                         logger.exception("Upstream poll request failed")
                         _mark_setup_error()
