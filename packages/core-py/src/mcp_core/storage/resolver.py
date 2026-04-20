@@ -1,7 +1,6 @@
 """Config resolution: env vars -> config file -> defaults -> None."""
 
 import os
-import re
 from typing import Literal
 
 from mcp_core.storage.config_file import read_config
@@ -46,8 +45,9 @@ def resolve_config(
     # 1. Check env vars
     env_config: dict[str, str] = {}
     all_env_present = len(required_fields) > 0
+    server_prefix = server_name.replace("-", "_").upper()
     for field in required_fields:
-        env_key = "MCP_" + re.sub(r"-", "_", server_name).upper() + "_" + re.sub(r"-", "_", field).upper()
+        env_key = f"MCP_{server_prefix}_{field.replace('-', '_').upper()}"
         value = os.environ.get(env_key, "")
         if value:
             env_config[field] = value
