@@ -257,6 +257,12 @@ def render_credential_form(
             text-decoration: underline;
         }}
 
+        .help-text a:focus-visible {{
+            outline: 2px solid #4a6fa5;
+            outline-offset: 2px;
+            border-radius: 2px;
+        }}
+
         .submit-btn {{
             width: 100%;
             background-color: #4a6fa5;
@@ -273,6 +279,11 @@ def render_credential_form(
 
         .submit-btn:hover {{
             background-color: #5a7fb5;
+        }}
+
+        .submit-btn:focus-visible {{
+            outline: 2px solid #6c9bd2;
+            outline-offset: 2px;
         }}
 
         .submit-btn:disabled {{
