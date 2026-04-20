@@ -197,14 +197,14 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
         .server-id {
             font-size: 0.8125rem;
-            color: #666;
+            color: #9ca3af;
             font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
             margin-bottom: 0.5rem;
         }
 
         .server-description {
             font-size: 0.9rem;
-            color: #999;
+            color: #9ca3af;
             margin-top: 0.5rem;
         }
 
@@ -244,7 +244,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
         .optional-badge {
             font-size: 0.6875rem;
             font-weight: 400;
-            color: #666;
+            color: #9ca3af;
             background-color: rgba(255, 255, 255, 0.04);
             border: 1px solid #333;
             border-radius: 4px;
@@ -269,12 +269,12 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
         }
 
         .field-input::placeholder {
-            color: #555;
+            color: #9ca3af;
         }
 
         .help-text {
             font-size: 0.8125rem;
-            color: #666;
+            color: #9ca3af;
             margin-top: 0.375rem;
         }
 
@@ -399,7 +399,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
         .capability-desc {
             font-size: 0.8125rem;
-            color: #666;
+            color: #9ca3af;
         }
     </style>
 </head>
@@ -672,7 +672,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                     statusBox.appendChild(document.createElement("br"));
                                     var waiting = document.createElement("span");
                                     waiting.id = "gdrive-waiting";
-                                    waiting.style.color = "#888";
+                                    waiting.style.color = "#9ca3af";
                                     waiting.textContent = "Waiting for authorization...";
                                     statusBox.appendChild(waiting);
                                     statusBox.className = "status-box info";
