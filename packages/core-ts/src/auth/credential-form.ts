@@ -467,6 +467,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     inputEl.value = "";
                     inputEl.disabled = false;
                     buttonEl.disabled = false;
+                    buttonEl.removeAttribute("aria-busy");
                     buttonEl.textContent = "Verify";
                 } else {
                     // Build a fresh step-input container inside the card.
