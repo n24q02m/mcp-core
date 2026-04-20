@@ -53,6 +53,52 @@ class _StubUpstream:
 # ---------------------------------------------------------------------------
 
 
+def test_root_auto_redirects_to_authorize_with_pkce():
+    """GET / auto-generates PKCE + redirects to /authorize (parity with local-oauth-app)."""
+    cfg = UpstreamOAuthConfig(
+        token_url="https://example.test/token",
+        client_id="upstream-client",
+        scopes=["read"],
+        authorize_url="https://example.test/authorize",
+    )
+    app, _ = create_delegated_oauth_app(
+        server_name="test",
+        flow="redirect",
+        upstream=cfg,
+        on_token_received=lambda tokens: None,
+    )
+    client = TestClient(app, base_url="http://localhost")
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code in (302, 307)
+    loc = resp.headers["location"]
+    assert loc.startswith("/authorize?")
+    qs = parse_qs(loc.split("?", 1)[1])
+    assert qs["client_id"] == ["local-browser"]
+    assert qs["code_challenge_method"] == ["S256"]
+    assert len(qs["code_challenge"][0]) >= 40
+    assert qs["redirect_uri"] == ["http://localhost/callback-done"]
+
+
+def test_callback_done_returns_terminal_page():
+    """GET /callback-done renders the friendly "tab can be closed" page."""
+    cfg = UpstreamOAuthConfig(
+        token_url="https://example.test/token",
+        client_id="upstream-client",
+        scopes=["read"],
+        authorize_url="https://example.test/authorize",
+    )
+    app, _ = create_delegated_oauth_app(
+        server_name="test",
+        flow="redirect",
+        upstream=cfg,
+        on_token_received=lambda tokens: None,
+    )
+    client = TestClient(app, base_url="http://localhost")
+    resp = client.get("/callback-done")
+    assert resp.status_code == 200
+    assert "Setup complete" in resp.text
+
+
 def test_redirect_authorize_redirects_to_upstream(monkeypatch):
     """GET /authorize redirects to upstream.authorize_url with state + redirect_uri."""
     cfg = UpstreamOAuthConfig(

@@ -103,6 +103,69 @@ afterEach(() => {
   rmSync(tempKeysDir, { recursive: true, force: true })
 })
 
+describe('root bootstrap UX', () => {
+  it('GET / auto-generates PKCE and redirects to /authorize (delegated redirect flow)', async () => {
+    const upstream = await startUpstream(() => {})
+    try {
+      const srv = await startApp({
+        flow: 'redirect',
+        upstream: {
+          tokenUrl: `${upstream.url}/token`,
+          clientId: 'up-client',
+          scopes: ['read'],
+          authorizeUrl: `${upstream.url}/authorize`
+        },
+        onTokenReceived: () => {},
+        keysDir: tempKeysDir
+      })
+      try {
+        const resp = await fetch(`${srv.url}/`, { redirect: 'manual' })
+        expect(resp.status).toBe(302)
+        const loc = resp.headers.get('location') as string
+        expect(loc.startsWith('/authorize?')).toBe(true)
+        const qs = new URLSearchParams(loc.slice('/authorize?'.length))
+        expect(qs.get('client_id')).toBe('local-browser')
+        expect(qs.get('code_challenge_method')).toBe('S256')
+        expect(qs.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]{40,}$/)
+        expect(qs.get('state')).toMatch(/^[A-Za-z0-9_-]+$/)
+        expect(qs.get('redirect_uri')).toBe(`${srv.url}/callback-done`)
+      } finally {
+        await srv.close()
+      }
+    } finally {
+      await upstream.close()
+    }
+  })
+
+  it('GET /callback-done returns terminal success page', async () => {
+    const upstream = await startUpstream(() => {})
+    try {
+      const srv = await startApp({
+        flow: 'redirect',
+        upstream: {
+          tokenUrl: `${upstream.url}/token`,
+          clientId: 'up-client',
+          scopes: ['read'],
+          authorizeUrl: `${upstream.url}/authorize`
+        },
+        onTokenReceived: () => {},
+        keysDir: tempKeysDir
+      })
+      try {
+        const resp = await fetch(`${srv.url}/callback-done`)
+        expect(resp.status).toBe(200)
+        expect(resp.headers.get('content-type') || '').toMatch(/text\/html/)
+        const body = await resp.text()
+        expect(body).toContain('Setup complete')
+      } finally {
+        await srv.close()
+      }
+    } finally {
+      await upstream.close()
+    }
+  })
+})
+
 describe('redirect flow', () => {
   it('GET /authorize redirects to upstream with our nonce as state', async () => {
     const upstream = await startUpstream(() => {

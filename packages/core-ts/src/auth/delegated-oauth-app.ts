@@ -630,7 +630,59 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     jsonResponse(res, 200, protectedResourceMetadata(base, [base]))
   }
 
+  /**
+   * GET / -- auto-generate PKCE and redirect to /authorize.
+   *
+   * Parity with createLocalOAuthApp's rootHandler. Users arriving from a
+   * bookmark / log line at the bare server URL get a usable OAuth flow
+   * without having to construct PKCE params manually. The delegated
+   * /authorize endpoint validates these params against its delegated
+   * upstream configuration, so using "local-browser" as client_id works
+   * for both redirect and device_code flows.
+   */
+  async function rootHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const base = getBaseUrl(req)
+    const codeVerifier = randomBytes(64).toString('base64url')
+    const codeChallenge = createHash('sha256').update(codeVerifier, 'ascii').digest('base64url')
+    const state = randomBytes(16).toString('base64url')
+
+    const params = new URLSearchParams({
+      client_id: 'local-browser',
+      redirect_uri: `${base}/callback-done`,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256'
+    })
+    res.writeHead(302, { Location: `/authorize?${params.toString()}` })
+    res.end()
+  }
+
+  /**
+   * GET /callback-done -- terminal "tab can be closed" landing page.
+   * Mirrors createLocalOAuthApp so the redirect target from rootHandler
+   * resolves to a friendly message instead of 404 when the user finishes
+   * the delegated OAuth flow.
+   */
+  async function callbackDoneHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const html =
+      "<!DOCTYPE html><html><head><meta charset='utf-8'>" +
+      '<title>Setup complete</title>' +
+      '<style>body{font-family:-apple-system,Segoe UI,sans-serif;' +
+      'background:#111;color:#eee;display:flex;align-items:center;' +
+      'justify-content:center;height:100vh;margin:0}' +
+      '.box{text-align:center;padding:2rem;border:1px solid #333;' +
+      'border-radius:8px;background:#1a1a1a}' +
+      'h1{color:#34c759;margin:0 0 0.5rem}p{color:#aaa;margin:0}' +
+      '</style></head><body><div class="box">' +
+      '<h1>Setup complete</h1>' +
+      '<p>You can close this tab.</p>' +
+      '</div></body></html>'
+    htmlResponse(res, 200, html)
+  }
+
   const routes: Parameters<typeof createRouter>[0] = [
+    { method: 'GET', path: '/', handler: rootHandler },
+    { method: 'GET', path: '/callback-done', handler: callbackDoneHandler },
     { method: 'GET', path: '/authorize', handler: authorize },
     { method: 'POST', path: '/token', handler: token },
     { method: 'GET', path: '/setup-status', handler: setupStatusHandler },

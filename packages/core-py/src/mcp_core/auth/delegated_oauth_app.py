@@ -567,7 +567,55 @@ def create_delegated_oauth_app(
         base = _base_url(request)
         return JSONResponse(protected_resource_metadata(resource=base, authorization_servers=[base]))
 
+    async def root(request: Request) -> RedirectResponse:
+        """GET / -- auto-generate PKCE and redirect to /authorize.
+
+        Parity with ``create_local_oauth_app``'s ``root`` handler. Users
+        arriving at the bare server URL (bookmark, log line) get a usable
+        OAuth flow without constructing PKCE params manually. Delegated
+        ``/authorize`` validates these against its upstream configuration,
+        so ``local-browser`` as ``client_id`` works for both redirect and
+        device-code flows.
+        """
+        base = _base_url(request)
+        _code_verifier = secrets.token_urlsafe(64)
+        _challenge_digest = hashlib.sha256(_code_verifier.encode("ascii")).digest()
+        code_challenge = base64.urlsafe_b64encode(_challenge_digest).rstrip(b"=").decode("ascii")
+        state = secrets.token_urlsafe(16)
+        from urllib.parse import urlencode
+
+        params = urlencode(
+            {
+                "client_id": "local-browser",
+                "redirect_uri": f"{base}/callback-done",
+                "state": state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+            }
+        )
+        return RedirectResponse(url=f"/authorize?{params}", status_code=302)
+
+    async def callback_done(_request: Request) -> HTMLResponse:
+        """GET /callback-done -- terminal "tab can be closed" landing page."""
+        html_content = (
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<title>Setup complete</title>"
+            "<style>body{font-family:-apple-system,Segoe UI,sans-serif;"
+            "background:#111;color:#eee;display:flex;align-items:center;"
+            "justify-content:center;height:100vh;margin:0}"
+            ".box{text-align:center;padding:2rem;border:1px solid #333;"
+            "border-radius:8px;background:#1a1a1a}"
+            "h1{color:#34c759;margin:0 0 0.5rem}p{color:#aaa;margin:0}"
+            "</style></head><body><div class='box'>"
+            "<h1>Setup complete</h1>"
+            "<p>You can close this tab.</p>"
+            "</div></body></html>"
+        )
+        return HTMLResponse(html_content)
+
     routes = [
+        Route("/", root, methods=["GET"]),
+        Route("/callback-done", callback_done, methods=["GET"]),
         Route("/authorize", authorize, methods=["GET"]),
         Route("/token", token, methods=["POST"]),
         Route("/setup-status", setup_status, methods=["GET"]),
