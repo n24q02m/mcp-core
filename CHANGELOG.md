@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.1 (2026-04-20)
+
+### Bug Fixes
+
+- Parity GET / bootstrap redirect in delegated OAuth app (core-ts + core-py)
+  ([`ea12dde`](https://github.com/n24q02m/mcp-core/commit/ea12dde3531a8e6b90c5dab14b6852617a961d49))
+
+
 ## v1.4.0 (2026-04-19)
 
 ### Bug Fixes
