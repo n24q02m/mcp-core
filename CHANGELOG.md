@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.5.1 (2026-04-21)
+
+### Bug Fixes
+
+- Add focus rings to credential form for WCAG 2.4.7
+  ([`4ada9db`](https://github.com/n24q02m/mcp-core/commit/4ada9db1d377a7b26daf84bf5f4c6b8315e2fa0f))
+
+- Bump actions/setup-node digest to 48b55a0
+  ([`73ce205`](https://github.com/n24q02m/mcp-core/commit/73ce205a7eb20cb04af31b991c138f69900c71af))
+
+- Bump step-security/harden-runner digest to 8d3c67d
+  ([`f588094`](https://github.com/n24q02m/mcp-core/commit/f588094285a90a466de637d3023647b983d31fe6))
+
+
 ## v1.5.0 (2026-04-21)
 
 ### Bug Fixes
