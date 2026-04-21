@@ -2,6 +2,37 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-04-21)
+
+### Bug Fixes
+
+- Avoid relay session DELETE race that leaves browser UI stuck
+  ([`7057e5c`](https://github.com/n24q02m/mcp-core/commit/7057e5c3d0503729621c3174303a3c45399b4347))
+
+- Hoist invariant string transforms in config resolvers + native replaceAll
+  ([`8d7b1a5`](https://github.com/n24q02m/mcp-core/commit/8d7b1a5f85724ca001098c4835fd42fc9886b581))
+
+- Improve dark mode color contrast for accessibility
+  ([`3f25033`](https://github.com/n24q02m/mcp-core/commit/3f25033e1f3a93a7c46b1362086ce7da1952d3f3))
+
+- Remove AI traces (.jules / superpowers content — belongs in private n24q02m/.superpower repo)
+  ([`e9e354b`](https://github.com/n24q02m/mcp-core/commit/e9e354b9586a66a5e751485882f01ca3c83a3c27))
+
+- **auth**: Thread per-authorize-request sub through credential + step callbacks
+  ([`3649aec`](https://github.com/n24q02m/mcp-core/commit/3649aecaab804ffc72290031ebbfe1b530e2149a))
+
+- **deps**: Update env-paths to v4
+  ([`6601e20`](https://github.com/n24q02m/mcp-core/commit/6601e202f03c9b3d77e2cd82fbd3922f256d485c))
+
+- **deps**: Update step-security/harden-runner digest to 6c3c2f2
+  ([`c5bc0f0`](https://github.com/n24q02m/mcp-core/commit/c5bc0f0be3175eff0a8076f7f1f69c3af5705f9f))
+
+### Features
+
+- **core-py**: Add start_local_server_background for stdio fallback
+  ([`54081fb`](https://github.com/n24q02m/mcp-core/commit/54081fb0942914c1eca72b9e3df9e178f8e27256))
+
+
 ## v1.4.3 (2026-04-20)
 
 ### Bug Fixes
