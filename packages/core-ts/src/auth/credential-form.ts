@@ -272,6 +272,14 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
             color: #9ca3af;
         }
 
+        .field-input[aria-invalid="true"] {
+            border-color: #f87171;
+        }
+
+        .field-input[aria-invalid="true"]:focus {
+            box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2);
+        }
+
         .help-text {
             font-size: 0.8125rem;
             color: #9ca3af;
@@ -308,6 +316,10 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
         .submit-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        .submit-btn[aria-busy="true"] {
+            cursor: wait;
         }
 
         .status-box {
@@ -519,6 +531,10 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                             submitStep();
                         }
                     });
+                    inputEl.addEventListener("input", function() {
+                        inputEl.removeAttribute("aria-invalid");
+                        errorEl.style.display = "none";
+                    });
                 }
 
                 // Populate prompt + input attributes via safe DOM APIs.
@@ -599,6 +615,13 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     });
             }
 
+            form.addEventListener("input", function (event) {
+                if (event.target.classList.contains("field-input")) {
+                    event.target.removeAttribute("aria-invalid");
+                    statusBox.style.display = "none";
+                }
+            });
+
             form.addEventListener("submit", function (event) {
                 event.preventDefault();
 
@@ -609,10 +632,8 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                 inputs.forEach(function (input) {
                     if (input.hasAttribute("required") && input.value.trim() === "") {
                         valid = false;
-                        input.style.borderColor = "#f87171";
                         input.setAttribute("aria-invalid", "true");
                     } else {
-                        input.style.borderColor = "";
                         input.removeAttribute("aria-invalid");
                         payload[input.name] = input.value;
                     }
