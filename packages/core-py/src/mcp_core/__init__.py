@@ -58,6 +58,11 @@ from mcp_core.storage.session_lock import (
     release_session_lock,
     write_session_lock,
 )
+from mcp_core.transport.local_server import (
+    LocalServerHandle,
+    run_local_server,
+    start_local_server_background,
+)
 
 __all__ = [
     "decrypt",
@@ -101,4 +106,7 @@ __all__ = [
     "TokenCallback",
     "UpstreamOAuthConfig",
     "create_delegated_oauth_app",
+    "LocalServerHandle",
+    "run_local_server",
+    "start_local_server_background",
 ]

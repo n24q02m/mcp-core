@@ -394,3 +394,154 @@ async def run_local_server(
 
         await server.serve()
         logger.info("Server stopped (should_exit={})", server.should_exit)
+
+
+class LocalServerHandle:
+    """Handle returned by ``start_local_server_background``.
+
+    Exposes the bound ``host`` and ``port`` plus an ``async close()`` that
+    stops the uvicorn server cleanly. Use this from credential-state code
+    paths (stdio fallback) that need a non-blocking local credential form
+    on a random port. Parity with core-ts's ``runLocalServer`` return type.
+    """
+
+    def __init__(self, host: str, port: int, server: Any, task: Any) -> None:
+        self.host = host
+        self.port = port
+        self._server = server
+        self._task = task
+
+    async def close(self) -> None:
+        """Stop the background uvicorn server and wait for the task to finish."""
+        import asyncio as _asyncio
+
+        server = self._server
+        task = self._task
+        if server is not None:
+            server.should_exit = True
+        if task is not None and not task.done():
+            try:
+                await _asyncio.wait_for(task, timeout=5.0)
+            except _asyncio.TimeoutError:
+                task.cancel()
+                try:
+                    await task
+                except (_asyncio.CancelledError, Exception):  # noqa: BLE001
+                    pass
+
+
+async def start_local_server_background(
+    mcp: FastMCP,
+    *,
+    server_name: str,
+    relay_schema: dict[str, Any] | None = None,
+    port: int = 0,
+    host: str | None = None,
+    on_credentials_saved: _Callback | None = None,
+    on_step_submitted: _Callback | None = None,
+    setup_complete_hook: Callable[..., None] | None = None,
+    jwt_keys_dir: Path | None = None,
+    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
+    delegated_oauth: dict[str, Any] | None = None,
+    auth_scope: AuthScope | None = None,
+    startup_timeout: float = 5.0,
+) -> LocalServerHandle:
+    """Start a local OAuth + MCP server in the background and return a handle.
+
+    Non-blocking variant of ``run_local_server``. Intended for stdio-mode
+    credential-state fallback: a stdio MCP server needs a short-lived local
+    HTTP credential form on a random port without blocking its own event
+    loop. The returned ``LocalServerHandle`` exposes ``host``/``port`` and
+    ``close()`` for clean shutdown once the form has been submitted.
+
+    No ``LifecycleLock`` is acquired (the spawn is ephemeral and per-process);
+    callers must ensure they only call this when credentials are missing and
+    close the handle once ``on_credentials_saved`` has persisted the config.
+
+    Args:
+        mcp: FastMCP server instance. May be a minimal stub — the spawn is
+            credential-form-focused and ``/mcp`` should not be exercised
+            against it.
+        server_name: Identifier used for JWT iss/aud and credential storage.
+        relay_schema: RelayConfigSchema dict describing the credential form.
+            Mutually exclusive with ``delegated_oauth``.
+        port: TCP port to bind. 0 means auto-find a free port.
+        host: Host to bind. Defaults to 127.0.0.1.
+        on_credentials_saved: Callback invoked when the user submits creds.
+        on_step_submitted: Callback for multi-step credential input (OTP / 2FA).
+        setup_complete_hook: See ``run_local_server``.
+        jwt_keys_dir: JWT key storage directory. Optional.
+        custom_credential_form_html: Optional form renderer override.
+        delegated_oauth: Delegated OAuth config. Mutually exclusive with
+            ``relay_schema``.
+        auth_scope: Optional middleware after JWT verification.
+        startup_timeout: Seconds to wait for uvicorn to report ``started``
+            before raising ``RuntimeError``. Defaults to 5s.
+
+    Returns:
+        ``LocalServerHandle`` pointing at the bound address.
+
+    Raises:
+        RuntimeError: If uvicorn does not start within ``startup_timeout``.
+    """
+    import asyncio
+
+    import uvicorn
+
+    actual_port = port if port != 0 else find_free_port()
+    actual_host = host or "127.0.0.1"
+
+    app, _jwt_issuer = build_local_app(
+        mcp,
+        server_name=server_name,
+        relay_schema=relay_schema,
+        on_credentials_saved=on_credentials_saved,
+        on_step_submitted=on_step_submitted,
+        jwt_keys_dir=jwt_keys_dir,
+        custom_credential_form_html=custom_credential_form_html,
+        delegated_oauth=delegated_oauth,
+        auth_scope=auth_scope,
+    )
+
+    mark_fn = getattr(app.state, "mark_setup_complete", None)
+    mark_failed_fn = getattr(app.state, "mark_setup_failed", None)
+    if setup_complete_hook is not None and mark_fn is not None:
+        import inspect as _inspect
+
+        try:
+            sig = _inspect.signature(setup_complete_hook)
+            positional = [p for p in sig.parameters.values() if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+            arity = len(positional)
+        except (TypeError, ValueError):
+            arity = 2
+
+        if arity >= 2 and mark_failed_fn is not None:
+            setup_complete_hook(mark_fn, mark_failed_fn)  # type: ignore[call-arg]
+        else:
+            setup_complete_hook(mark_fn)  # type: ignore[call-arg]
+
+    uv_config = uvicorn.Config(app, host=actual_host, port=actual_port, log_level="warning")
+    server = uvicorn.Server(uv_config)
+    # Prevent uvicorn from installing SIGINT/SIGTERM handlers that would
+    # otherwise hijack the parent process (e.g. the stdio MCP server that
+    # needs to keep responding to its own transport).
+    setattr(server, "install_signal_handlers", lambda: None)
+
+    task = asyncio.create_task(server.serve(), name=f"{server_name}-credential-form")
+
+    deadline = asyncio.get_event_loop().time() + startup_timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if getattr(server, "started", False):
+            break
+        if task.done():
+            exc = task.exception()
+            if exc is not None:
+                raise exc
+            raise RuntimeError("Local credential-form server exited before binding")
+        await asyncio.sleep(0.05)
+    else:
+        server.should_exit = True
+        raise RuntimeError(f"Local credential-form server did not start within {startup_timeout:.1f}s")
+
+    logger.info("Local credential-form server ready at http://{}:{}", actual_host, actual_port)
+    return LocalServerHandle(host=actual_host, port=actual_port, server=server, task=task)

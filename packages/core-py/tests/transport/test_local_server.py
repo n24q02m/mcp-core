@@ -17,8 +17,10 @@ from starlette.testclient import TestClient
 
 from mcp_core.transport.local_server import (
     BearerMCPApp,
+    LocalServerHandle,
     build_local_app,
     find_free_port,
+    start_local_server_background,
 )
 
 
@@ -604,6 +606,71 @@ def test_build_local_app_delegated_mode_produces_app(tmp_path: Path):
     )
     assert app is not None
     assert issuer.server_name == "test-notion"
+
+
+class TestStartLocalServerBackground:
+    """``start_local_server_background`` must bind a real port, stay non-blocking, and close cleanly."""
+
+    async def test_returns_handle_and_serves_authorize(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
+        import httpx
+
+        handle = await start_local_server_background(
+            mcp,
+            server_name="test-bg",
+            relay_schema=relay_schema,
+            jwt_keys_dir=tmp_path / "jwt-keys",
+        )
+        try:
+            assert isinstance(handle, LocalServerHandle)
+            assert handle.host == "127.0.0.1"
+            assert handle.port > 0
+
+            # /.well-known is public — hit it to prove server is serving.
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"http://{handle.host}:{handle.port}/.well-known/oauth-authorization-server",
+                    timeout=5.0,
+                )
+            assert resp.status_code == 200
+        finally:
+            await handle.close()
+
+    async def test_close_is_idempotent(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
+        handle = await start_local_server_background(
+            mcp,
+            server_name="test-bg-close",
+            relay_schema=relay_schema,
+            jwt_keys_dir=tmp_path / "jwt-keys",
+        )
+        await handle.close()
+        # Second close must not raise.
+        await handle.close()
+
+    async def test_startup_timeout_raises(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
+        """If uvicorn never reports started within startup_timeout, raise RuntimeError."""
+
+        class NeverStartsServer:
+            should_exit = False
+            started = False
+
+            def __init__(self, *_a, **_kw) -> None:
+                pass
+
+            async def serve(self) -> None:
+                import asyncio as _a
+
+                while not self.should_exit:
+                    await _a.sleep(0.05)
+
+        with patch("uvicorn.Server", side_effect=lambda cfg: NeverStartsServer()):
+            with pytest.raises(RuntimeError, match="did not start"):
+                await start_local_server_background(
+                    mcp,
+                    server_name="test-bg-timeout",
+                    relay_schema=relay_schema,
+                    jwt_keys_dir=tmp_path / "jwt-keys",
+                    startup_timeout=0.2,
+                )
 
 
 def test_build_local_app_auth_scope_not_invoked_on_unauthed_request(tmp_path: Path):
