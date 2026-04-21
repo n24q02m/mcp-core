@@ -21,12 +21,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "fastapi>=0.111.0",
-    "uvicorn>=0.30.0",
-    "onnxruntime>=1.18.0",
-    "numpy>=1.26.0",
+    "fastapi>=0.136.0",
+    "uvicorn>=0.44.0",
+    "onnxruntime>=1.24.4",
+    "numpy>=1.26.4",
     "httpx>=0.28.1",
-    "pydantic>=2.7.0",
+    "pydantic>=2.13.3",
 ]
 
 [project.optional-dependencies]
@@ -37,7 +37,7 @@ dependencies = [
 # Re-add the dep (and gate `LlamaDiskCache` behind a JSON/msgpack alternative
 # or runtime opt-in) when the GGUF backend lands.
 gguf = []
-cuda = ["onnxruntime-gpu>=1.18.0"]
+cuda = ["onnxruntime-gpu>=1.24.4"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
@@ -51,9 +51,9 @@ mcp-embedding-daemon = "mcp_embedding_daemon.__main__:main"
 dev = [
     "httpx>=0.28.1",
     "pytest>=9.0.3",
-    "pytest-cov>=7.0.0",
-    "ruff>=0.15.7",
-    "ty>=0.0.1a22",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.11",
+    "ty>=0.0.32",
 ]
 
 [tool.hatch.build.targets.wheel]

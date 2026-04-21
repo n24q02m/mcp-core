@@ -22,15 +22,15 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "fastmcp>=0.5.0",
+    "fastmcp>=3.2.4",
     "httpx>=0.28.1",
-    "cryptography>=46.0.5",
-    "authlib>=1.6.11",
-    "starlette>=0.37.0",
-    "pydantic>=2.7.0",
-    "loguru>=0.7.0",
+    "cryptography>=46.0.7",
+    "authlib>=1.7.0",
+    "starlette>=0.52.1",
+    "pydantic>=2.13.3",
+    "loguru>=0.7.3",
     "platformdirs>=4.9.6",
-    "tomli-w>=1.0.0",
+    "tomli-w>=1.2.0",
 ]
 
 [project.urls]
@@ -41,11 +41,11 @@ Issues = "https://github.com/n24q02m/mcp-core/issues"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
-    "pytest-asyncio>=1.2.0",
-    "pytest-cov>=7.0.0",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.15.7",
-    "ty>=0.0.1a22",
+    "ruff>=0.15.11",
+    "ty>=0.0.32",
 ]
 
 [tool.hatch.build.targets.wheel]
