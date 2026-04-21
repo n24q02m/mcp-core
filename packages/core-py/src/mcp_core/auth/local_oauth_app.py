@@ -57,8 +57,23 @@ _OTP_MAX_ATTEMPTS = 5
 # returned coroutine. This lets telegram-style servers perform async backend
 # operations (Telethon connect, send_code, sign_in) without resorting to
 # loop.run_until_complete() on a running event loop.
-CredentialsCallback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
-StepCallback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
+#
+# ``on_credentials_saved`` receives the submitted credentials AND a
+# per-authorize-session ``SubjectContext`` (``{"sub": "<uuid>"}``). The sub is
+# generated fresh when GET /authorize renders the form, threaded through POST
+# /authorize, and stamped onto the JWT issued at /token — so consumers that
+# persist credentials keyed by ``sub`` (remote-relay multi-user mode) can
+# later look them up via AsyncLocalStorage in the Bearer auth scope. Without
+# this primitive every browser session collapsed to a static ``local-user``
+# subject and leaked credentials across users.
+SubjectContext = dict[str, str]
+CredentialsCallback = Callable[[dict[str, str], SubjectContext], Union[dict | None, Awaitable[dict | None]]]
+# ``on_step_submitted`` also receives the ``SubjectContext`` carried through
+# from the original POST /authorize that opened the multi-step flow. /otp
+# clients have no sub in their body, so this primitive is the only way for
+# telegram-style servers to route OTP / 2FA input to the correct per-user
+# Telethon client when serving multi-tenant remote-relay.
+StepCallback = Callable[[dict[str, str], SubjectContext], Union[dict | None, Awaitable[dict | None]]]
 
 
 def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
@@ -118,17 +133,22 @@ def create_local_oauth_app(
     # Structure: {auth_code: {code_challenge, code_challenge_method, created_at}}
     auth_codes: dict[str, dict[str, Any]] = {}
 
-    # Single-user local mode: one pending multi-step session at a time.
-    # Keys: "active" (bool), "created_at" (monotonic), "attempts" (int).
-    # Được set khi ``on_credentials_saved`` (hoặc ``on_step_submitted``)
-    # trả về ``next_step`` type ``otp_required`` hoặc ``password_required``.
+    # One pending multi-step session at a time. POST /otp has no sub in its
+    # body, so we also capture the sub that opened this flow (via POST
+    # /authorize → on_credentials_saved → otp_required NextStep) and thread
+    # it into on_step_submitted as SubjectContext. Concurrent remote-relay
+    # OTP flows are inherently serialized by this design — that's acceptable
+    # for multi-step auth UX and prevents cross-user step corruption.
+    # Keys: "active" (bool), "created_at" (monotonic), "attempts" (int),
+    # "sub" (str, the JWT sub that owns this step session).
     _pending_step: dict[str, Any] = {}
 
-    def _mark_pending_step() -> None:
-        """Đánh dấu pending step session đang active (reset counters)."""
+    def _mark_pending_step(sub: str) -> None:
+        """Activate the pending step session keyed by the authorize subject."""
         _pending_step["active"] = True
         _pending_step["created_at"] = time.monotonic()
         _pending_step["attempts"] = 0
+        _pending_step["sub"] = sub
 
     def _clear_pending_step() -> None:
         """Xóa pending step session (sau khi complete hoặc expired)."""
@@ -181,7 +201,13 @@ def create_local_oauth_app(
             )
 
         # Create a session nonce that ties the form submission to this PKCE flow
+        # and a fresh per-authorize ``sub`` that will be passed to the credential
+        # save callback and stamped onto the JWT at /token. Generating the sub
+        # here (not at /token) is what makes multi-user isolation actually work:
+        # two concurrent browser sessions get two distinct subjects, so the
+        # consumer's per-user credential store writes to two different keys.
         nonce = secrets.token_urlsafe(32)
+        sub = secrets.token_urlsafe(16)
         pending_sessions[nonce] = {
             "client_id": client_id,
             "redirect_uri": redirect_uri,
@@ -189,6 +215,7 @@ def create_local_oauth_app(
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
             "created_at": time.monotonic(),
+            "sub": sub,
         }
 
         _prune_expired(pending_sessions, _SESSION_TTL_S)
@@ -229,10 +256,14 @@ def create_local_oauth_app(
 
         # Save credentials via callback. Callback may return a dict with
         # next_step info (e.g., GDrive OAuth device code to show in the form).
+        # The ``SubjectContext`` carries the per-authorize sub so the consumer
+        # can persist credentials keyed by subject, matching the JWT that
+        # /token will issue.
+        context: SubjectContext = {"sub": session["sub"]}
         next_step: dict | None = None
         if on_credentials_saved is not None:
             try:
-                result = on_credentials_saved(credentials)
+                result = on_credentials_saved(credentials, context)
                 if inspect.iscoroutine(result):
                     result = await result
                 if isinstance(result, dict):
@@ -244,12 +275,14 @@ def create_local_oauth_app(
                     status_code=500,
                 )
 
-        # Generate auth code
+        # Generate auth code. Copy ``sub`` so /token issues the JWT with the
+        # same subject the credentials were saved under.
         auth_code = secrets.token_urlsafe(32)
         auth_codes[auth_code] = {
             "code_challenge": session["code_challenge"],
             "code_challenge_method": session["code_challenge_method"],
             "created_at": time.monotonic(),
+            "sub": session["sub"],
         }
 
         _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
@@ -264,8 +297,11 @@ def create_local_oauth_app(
             response_body["next_step"] = next_step
             # Nếu next_step yêu cầu input thêm (OTP hoặc 2FA password),
             # activate pending step session để /otp endpoint chấp nhận input.
+            # Capture the authorize-session sub so /otp can thread the correct
+            # SubjectContext into on_step_submitted — the browser POSTs step
+            # data without a sub, so this field is the only binding.
             if next_step.get("type") in ("otp_required", "password_required"):
-                _mark_pending_step()
+                _mark_pending_step(session["sub"])
 
         return JSONResponse(response_body)
 
@@ -318,8 +354,13 @@ def create_local_oauth_app(
         if not _s256_verify(code_verifier, entry["code_challenge"]):
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
 
-        # Issue JWT -- single-user local mode, sub is always "local-user"
-        access_token = jwt_issuer.issue_access_token(sub="local-user")
+        # Issue JWT with the subject bound to this authorize session. Previously
+        # this was the static string "local-user", which collapsed every browser
+        # session into one subject and defeated any per-user credential scoping
+        # attempted by remote-relay consumers. The new flow mints a fresh sub in
+        # authorize_get, carries it through on_credentials_saved via
+        # SubjectContext, and stamps it onto the JWT here.
+        access_token = jwt_issuer.issue_access_token(sub=entry["sub"])
 
         return JSONResponse(
             {
@@ -393,10 +434,16 @@ def create_local_oauth_app(
                 status_code=400,
             )
 
+        # Thread the sub captured when this step session was opened into the
+        # callback so consumers (telegram per-user Telethon) can route this
+        # OTP / 2FA input to the correct user's in-flight sign-in.
+        step_sub = str(_pending_step.get("sub", ""))
+        step_context: SubjectContext = {"sub": step_sub}
+
         next_step: dict | None = None
         if on_step_submitted is not None:
             try:
-                result = on_step_submitted(step_data)
+                result = on_step_submitted(step_data, step_context)
                 if inspect.iscoroutine(result):
                     result = await result
                 if isinstance(result, dict):
@@ -416,11 +463,13 @@ def create_local_oauth_app(
             return JSONResponse({"ok": False, "error": next_step.get("text", "Invalid input")})
 
         # Chain to next step: reset counters so the new step gets its own quota.
+        # Preserve the original sub so the whole multi-step chain stays under
+        # the same user.
         if next_step is not None and next_step.get("type") in (
             "otp_required",
             "password_required",
         ):
-            _mark_pending_step()
+            _mark_pending_step(step_sub)
             return JSONResponse({"ok": True, "next_step": next_step})
 
         # Completion (callback returned None or unknown dict type).

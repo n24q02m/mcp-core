@@ -40,15 +40,45 @@ import { authorizationServerMetadata, protectedResourceMetadata } from './well-k
 export type NextStep = Record<string, unknown>
 
 /**
+ * Context passed to credential / step callbacks so the consumer can scope
+ * stored credentials by subject (JWT ``sub``). Generated fresh per GET
+ * /authorize and reused for the subsequent POST /authorize + /token exchange,
+ * so the JWT issued after credential save carries the SAME ``sub`` the
+ * consumer used to persist the credentials. This is the primitive that
+ * enables multi-user isolation for `remote-relay` mode: without it consumers
+ * had to fall back to a single shared `config.enc`, leaking credentials
+ * across concurrent browser sessions.
+ */
+export interface SubjectContext {
+  /** Per-authorize-request UUID, also becomes the JWT ``sub`` after /token. */
+  sub: string
+}
+
+/**
  * Callback invoked when the user submits credentials via POST /authorize.
  *
- * Return ``null`` to finish the flow or a ``next_step`` dict to trigger a
- * follow-up (OAuth device code, OTP, 2FA password, etc). May be sync or async.
+ * Receives the submitted credential map + the authorize-session ``SubjectContext``
+ * so the consumer can persist credentials keyed by ``sub``. Return ``null`` to
+ * finish the flow or a ``next_step`` dict to trigger a follow-up (OAuth
+ * device code, OTP, 2FA password, etc). May be sync or async.
+ *
+ * Consumers that don't need multi-user isolation (stdio fallback, local-relay
+ * single-user mode) can ignore the ``context`` parameter.
  */
-export type CredentialsCallback = (creds: Record<string, string>) => NextStep | null | Promise<NextStep | null>
+export type CredentialsCallback = (
+  creds: Record<string, string>,
+  context: SubjectContext
+) => NextStep | null | Promise<NextStep | null>
 
 /**
  * Callback invoked when the user submits step input via POST /otp.
+ *
+ * Receives the submitted step data + the authorize-session ``SubjectContext``
+ * so multi-step flows (OTP, 2FA password) can route the input to the correct
+ * per-user state — e.g. the Telethon client that started the sign-in under
+ * this ``sub``. Without this, consumers would be forced to keep a single
+ * global "currently auth'ing user" and concurrent remote-relay users would
+ * corrupt each other's 2FA flow.
  *
  * Return ``null`` to complete the flow, a ``{type: "otp_required" |
  * "password_required", ...}`` dict to chain to another step, or
@@ -56,7 +86,10 @@ export type CredentialsCallback = (creds: Record<string, string>) => NextStep | 
  * retry. Callbacks comparing secrets MUST use a timing-safe comparison.
  * May be sync or async.
  */
-export type StepCallback = (data: Record<string, string>) => NextStep | null | Promise<NextStep | null>
+export type StepCallback = (
+  data: Record<string, string>,
+  context: SubjectContext
+) => NextStep | null | Promise<NextStep | null>
 
 export interface LocalOAuthAppOptions {
   /** Identifier for the MCP server (used for JWT iss / aud). */
@@ -111,18 +144,34 @@ interface PendingSession {
   codeChallenge: string
   codeChallengeMethod: string
   createdAt: number
+  /**
+   * Per-authorize-request subject. Generated fresh when GET /authorize renders
+   * the form; carried through POST /authorize (passed to onCredentialsSaved)
+   * and POST /token (used as JWT ``sub``) so credentials saved under this
+   * subject are reachable via the issued Bearer token.
+   */
+  sub: string
 }
 
 interface AuthCodeEntry {
   codeChallenge: string
   codeChallengeMethod: string
   createdAt: number
+  /** JWT subject to issue at /token. Copied from PendingSession.sub. */
+  sub: string
 }
 
 interface PendingStep {
   active: boolean
   createdAt: number
   attempts: number
+  /**
+   * Subject that opened this multi-step session (via onCredentialsSaved
+   * returning ``otp_required`` / ``password_required``). OTP submissions
+   * have no body sub, so the handler uses this field to thread the correct
+   * ``SubjectContext`` into ``onStepSubmitted``.
+   */
+  sub: string
 }
 
 /**
@@ -200,8 +249,8 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
   let pendingStep: PendingStep | null = null
   const setupStatus: Record<string, string> = { gdrive: 'idle' }
 
-  function markPendingStep(): void {
-    pendingStep = { active: true, createdAt: Date.now(), attempts: 0 }
+  function markPendingStep(sub: string): void {
+    pendingStep = { active: true, createdAt: Date.now(), attempts: 0, sub }
   }
 
   function clearPendingStep(): void {
@@ -230,13 +279,19 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     }
 
     const nonce = randomBytes(32).toString('base64url')
+    // Generate a per-authorize-request subject here (not at /token time) so the
+    // credential save callback and the eventual JWT share the same ``sub``. If
+    // this were derived at /token, concurrent authorize requests would collide
+    // on a static 'local-user' subject and leak credentials across users.
+    const sub = randomBytes(16).toString('base64url')
     pendingSessions.set(nonce, {
       clientId,
       redirectUri,
       state,
       codeChallenge,
       codeChallengeMethod,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      sub
     })
     pruneExpired(pendingSessions, SESSION_TTL_S * 1000)
 
@@ -284,10 +339,14 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
 
     // Save credentials via callback. Callback may return a dict with
     // next_step info (e.g. GDrive OAuth device code to show in the form).
+    // The per-authorize ``sub`` is threaded through so consumers persist
+    // credentials keyed by subject — subsequently the JWT issued at /token
+    // will carry this same sub, letting tool handlers load the correct
+    // credential set via AsyncLocalStorage.
     let nextStep: NextStep | null = null
     if (options.onCredentialsSaved !== undefined) {
       try {
-        const result = await options.onCredentialsSaved(credentials)
+        const result = await options.onCredentialsSaved(credentials, { sub: session.sub })
         if (result !== null && result !== undefined && typeof result === 'object') {
           nextStep = result
         }
@@ -300,12 +359,14 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       }
     }
 
-    // Generate auth code.
+    // Generate auth code. Carry ``sub`` so /token can issue JWT with the
+    // same subject the credentials were saved under.
     const authCode = randomBytes(32).toString('base64url')
     authCodes.set(authCode, {
       codeChallenge: session.codeChallenge,
       codeChallengeMethod: session.codeChallengeMethod,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      sub: session.sub
     })
     pruneExpired(authCodes, AUTH_CODE_TTL_S * 1000)
 
@@ -317,9 +378,12 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       body.next_step = nextStep
       // If next_step requires additional input (OTP or 2FA password),
       // activate pending step session so /otp endpoint accepts input.
+      // Capture the authorize-session sub so /otp can thread the correct
+      // SubjectContext into onStepSubmitted (the browser POSTs to /otp
+      // with step data only — no sub in body).
       const stepType = nextStep.type
       if (stepType === 'otp_required' || stepType === 'password_required') {
-        markPendingStep()
+        markPendingStep(session.sub)
       }
     }
     jsonResponse(res, 200, body)
@@ -383,7 +447,13 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       return
     }
 
-    const accessToken = await jwtIssuer.issueAccessToken('local-user')
+    // Issue JWT with the subject bound to this authorize session. Historically
+    // this was the static string 'local-user' — that collapsed every concurrent
+    // browser into one subject and made credential isolation impossible. The
+    // new flow mints a fresh UUID in authorizeGet (PendingSession.sub), carries
+    // it through onCredentialsSaved, and issues it here so the Bearer returned
+    // to the client scopes future /mcp calls to this user's credentials.
+    const accessToken = await jwtIssuer.issueAccessToken(entry.sub)
     jsonResponse(res, 200, {
       access_token: accessToken,
       token_type: 'Bearer',
@@ -437,11 +507,15 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       return
     }
 
-    // 6. Dispatch to step callback.
+    // 6. Dispatch to step callback with the authorize-session sub so
+    // consumers (telegram Telethon multi-user) can route to the correct
+    // per-user state.
+    const stepContext: SubjectContext = { sub: pendingStep.sub }
+    const stepSub = pendingStep.sub
     let nextStep: NextStep | null = null
     if (options.onStepSubmitted !== undefined) {
       try {
-        const result = await options.onStepSubmitted(stepData)
+        const result = await options.onStepSubmitted(stepData, stepContext)
         if (result !== null && result !== undefined && typeof result === 'object') {
           nextStep = result
         }
@@ -462,8 +536,10 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     }
 
     // Chain to next step: reset counters so the new step gets its own quota.
+    // Preserve the original sub so the whole multi-step chain belongs to the
+    // same user.
     if (nextStep !== null && (nextStep.type === 'otp_required' || nextStep.type === 'password_required')) {
-      markPendingStep()
+      markPendingStep(stepSub)
       jsonResponse(res, 200, { ok: true, next_step: nextStep })
       return
     }

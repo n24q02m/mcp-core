@@ -26,6 +26,7 @@ export {
   type LocalOAuthAppOptions,
   type LocalOAuthAppResult,
   type NextStep,
-  type StepCallback
+  type StepCallback,
+  type SubjectContext
 } from './local-oauth-app.js'
 export { authorizationServerMetadata, protectedResourceMetadata } from './well-known.js'

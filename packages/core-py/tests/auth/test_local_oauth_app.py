@@ -49,7 +49,7 @@ def app_and_issuer():
     """Create app with default settings and a credential callback."""
     saved = {}
 
-    def on_saved(creds: dict[str, str]) -> None:
+    def on_saved(creds: dict[str, str], _context: dict[str, str]) -> None:
         saved.update(creds)
 
     app, issuer = create_local_oauth_app(
@@ -199,6 +199,79 @@ class TestAuthorizeEndpoint:
         assert saved["API_KEY"] == "sk-test-123"
         assert saved["WORKSPACE"] == "my-workspace"
 
+    def test_authorize_isolates_subjects_across_sessions(self):
+        """Two authorize flows receive distinct subjects in on_credentials_saved.
+
+        This is the multi-user isolation primitive that remote-relay mode
+        requires. Without a per-session sub the callback would have no way to
+        route creds A to user A and creds B to user B, forcing consumers to
+        fall back to a single shared config.enc (the 2026-04-21 email+telegram
+        security incident). The test also confirms the JWT issued at /token
+        matches the sub passed to the callback for each flow.
+        """
+        import re
+
+        from starlette.testclient import TestClient
+
+        from mcp_core.auth.local_oauth_app import create_local_oauth_app
+
+        saved_contexts: list[dict[str, str]] = []
+
+        def on_saved(_creds: dict[str, str], context: dict[str, str]) -> None:
+            saved_contexts.append(dict(context))
+            return None
+
+        app, jwt_issuer = create_local_oauth_app(
+            server_name="test-server",
+            relay_schema=RELAY_SCHEMA,
+            on_credentials_saved=on_saved,
+        )
+        client = TestClient(app, base_url="http://localhost")
+
+        def run_flow(tag: str) -> str:
+            verifier, challenge = _pkce_pair()
+            get_resp = client.get(
+                "/authorize",
+                params={
+                    "client_id": f"client-{tag}",
+                    "redirect_uri": f"http://localhost/cb-{tag}",
+                    "state": f"st-{tag}",
+                    "code_challenge": challenge,
+                    "code_challenge_method": "S256",
+                },
+            )
+            assert get_resp.status_code == 200
+            nonce = re.search(r'nonce=([^"&]+)', get_resp.text).group(1)
+            post_resp = client.post(
+                f"/authorize?nonce={nonce}",
+                json={"API_KEY": f"sk-{tag}"},
+            )
+            assert post_resp.status_code == 200
+            redirect = post_resp.json()["redirect_url"]
+            code = re.search(r"code=([^&]+)", redirect).group(1)
+            tok_resp = client.post(
+                "/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "code_verifier": verifier,
+                },
+            )
+            assert tok_resp.status_code == 200
+            claims = jwt_issuer.verify_access_token(tok_resp.json()["access_token"])
+            return str(claims["sub"])
+
+        sub_a = run_flow("a")
+        sub_b = run_flow("b")
+
+        assert sub_a != sub_b
+        assert sub_a != "local-user"
+        assert sub_b != "local-user"
+        assert len(saved_contexts) == 2
+        saved_subs = {ctx["sub"] for ctx in saved_contexts}
+        assert sub_a in saved_subs
+        assert sub_b in saved_subs
+
     def test_authorize_post_invalid_nonce(self, client):
         """POST /authorize with invalid nonce returns 400."""
         resp = client.post(
@@ -270,9 +343,13 @@ class TestTokenExchange:
         assert token_data["token_type"] == "Bearer"
         assert token_data["expires_in"] > 0
 
-        # Verify the JWT is valid
+        # Verify the JWT is valid. Subject is now a per-authorize-request UUID
+        # (not the legacy static "local-user") so remote-relay mode can isolate
+        # credentials across concurrent browser sessions.
         claims = issuer.verify_access_token(token_data["access_token"])
-        assert claims["sub"] == "local-user"
+        assert isinstance(claims["sub"], str)
+        assert len(claims["sub"]) >= 20
+        assert claims["sub"] != "local-user"
 
     def test_token_invalid_code(self, client):
         """POST /token with a wrong/missing auth code returns 400."""
@@ -440,11 +517,11 @@ def client_with_otp():
     """TestClient where credential submit returns otp_required, and step completes (None)."""
     saved: dict[str, str] = {}
 
-    def on_saved(creds: dict[str, str]) -> dict:
+    def on_saved(creds: dict[str, str], _context: dict[str, str]) -> dict:
         saved.update(creds)
         return {"type": "otp_required", "prompt": "Enter the code sent to your phone"}
 
-    def on_step(step: dict[str, str]) -> None:
+    def on_step(step: dict[str, str], _context: dict[str, str]) -> None:
         # Completion: accept any code, return None
         saved.update(step)
         return None
@@ -464,11 +541,11 @@ def client_with_2fa():
     saved: dict[str, str] = {}
     state = {"step": 0}
 
-    def on_saved(creds: dict[str, str]) -> dict:
+    def on_saved(creds: dict[str, str], _context: dict[str, str]) -> dict:
         saved.update(creds)
         return {"type": "otp_required", "prompt": "Enter OTP"}
 
-    def on_step(step: dict[str, str]) -> dict | None:
+    def on_step(step: dict[str, str], _context: dict[str, str]) -> dict | None:
         saved.update(step)
         state["step"] += 1
         if state["step"] == 1:
@@ -491,11 +568,11 @@ def client_with_otp_error():
     """TestClient where on_step returns error dict, allowing retry."""
     saved: dict[str, str] = {}
 
-    def on_saved(creds: dict[str, str]) -> dict:
+    def on_saved(creds: dict[str, str], _context: dict[str, str]) -> dict:
         saved.update(creds)
         return {"type": "otp_required", "prompt": "Enter OTP"}
 
-    def on_step(_step: dict[str, str]) -> dict:
+    def on_step(_step: dict[str, str], _context: dict[str, str]) -> dict:
         return {"type": "error", "text": "Invalid OTP code"}
 
     app, _issuer = create_local_oauth_app(
@@ -623,7 +700,7 @@ def test_otp_endpoint_max_attempts_clears_session(client_with_otp_error):
 def client_with_async_otp():
     """Test fixture where callbacks are async. The handler must await them."""
 
-    async def on_save(creds: dict[str, str]) -> dict:
+    async def on_save(creds: dict[str, str], _context: dict[str, str]) -> dict:
         return {
             "type": "otp_required",
             "text": "Enter OTP",
@@ -631,7 +708,7 @@ def client_with_async_otp():
             "input_type": "text",
         }
 
-    async def on_step(_data: dict[str, str]) -> None:
+    async def on_step(_data: dict[str, str], _context: dict[str, str]) -> None:
         return None  # complete
 
     app, _issuer = create_local_oauth_app(

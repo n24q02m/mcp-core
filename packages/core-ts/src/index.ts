@@ -19,6 +19,7 @@ export {
   type RenderOptions,
   renderCredentialForm,
   type StepCallback,
+  type SubjectContext,
   type TokenCallback,
   type UpstreamOAuthConfig
 } from './auth/index.js'

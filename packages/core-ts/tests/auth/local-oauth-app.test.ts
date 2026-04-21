@@ -165,6 +165,64 @@ describe('POST /authorize', () => {
       await srv.close()
     }
   })
+
+  it('passes a unique per-session subject to onCredentialsSaved and the issued JWT', async () => {
+    // Multi-user isolation primitive: two concurrent browser sessions MUST
+    // receive distinct ``sub`` values in onCredentialsSaved AND the resulting
+    // /token JWT must carry the SAME sub that was used when credentials were
+    // saved. Otherwise remote-relay consumers cannot key their credential
+    // store by user, which is the bug that let email+telegram share a single
+    // config.enc across all public-URL visitors.
+    const savedSubjects: string[] = []
+    const srv = await startApp({
+      onCredentialsSaved: (_creds, context) => {
+        savedSubjects.push(context.sub)
+        return null
+      }
+    })
+    try {
+      async function runFlow(tag: string): Promise<string> {
+        const { verifier, challenge } = pkce()
+        const params = new URLSearchParams({
+          client_id: `client-${tag}`,
+          redirect_uri: `http://localhost:5555/cb-${tag}`,
+          state: `st-${tag}`,
+          code_challenge: challenge
+        })
+        const getResp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+        const nonce = extractNonce(await getResp.text())
+        const postResp = await fetch(`${srv.url}/authorize?nonce=${nonce}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: `key-${tag}` })
+        })
+        const code = new URL(((await postResp.json()) as { redirect_url: string }).redirect_url).searchParams.get(
+          'code'
+        ) as string
+        const tokenResp = await fetch(`${srv.url}/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: verifier }).toString()
+        })
+        const body = (await tokenResp.json()) as { access_token: string }
+        const payload = await srv.app.jwtIssuer.verifyAccessToken(body.access_token)
+        return payload.sub as string
+      }
+
+      const [subA, subB] = await Promise.all([runFlow('a'), runFlow('b')])
+      // 1. Two sessions → two distinct subjects (not collapsed to 'local-user')
+      expect(subA).not.toBe(subB)
+      expect(subA).not.toBe('local-user')
+      expect(subB).not.toBe('local-user')
+      // 2. The JWT subject matches what was passed to onCredentialsSaved
+      expect(savedSubjects).toContain(subA)
+      expect(savedSubjects).toContain(subB)
+      expect(savedSubjects.length).toBe(2)
+      expect(new Set(savedSubjects).size).toBe(2)
+    } finally {
+      await srv.close()
+    }
+  })
 })
 
 describe('POST /token', () => {
@@ -203,7 +261,12 @@ describe('POST /token', () => {
       expect(body.expires_in).toBe(3600)
       expect(typeof body.access_token).toBe('string')
       const payload = await srv.app.jwtIssuer.verifyAccessToken(body.access_token as string)
-      expect(payload.sub).toBe('local-user')
+      // Subject is a per-authorize-request UUID (22 base64url chars for 16 random bytes),
+      // NOT the legacy static 'local-user'. This enables multi-user credential
+      // isolation in remote-relay mode — each browser session gets its own sub.
+      expect(typeof payload.sub).toBe('string')
+      expect((payload.sub as string).length).toBeGreaterThanOrEqual(20)
+      expect(payload.sub).not.toBe('local-user')
     } finally {
       await srv.close()
     }

@@ -27,7 +27,15 @@ if TYPE_CHECKING:
 
 # Callback may be sync or async. Async lets callbacks perform I/O without
 # running-loop hacks. See mcp_core.auth.local_oauth_app for details.
-_Callback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
+#
+# Credential callback now receives a second arg ``context`` (``SubjectContext``)
+# carrying the per-authorize-request ``sub``. Consumers that want multi-user
+# isolation (remote-relay public URLs) key their credential store by
+# ``context["sub"]``; single-user consumers can simply ignore the arg.
+_CredentialsCallback = Callable[[dict[str, str], dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
+_StepCallback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
+# Legacy alias retained for existing annotations in this module.
+_Callback = _CredentialsCallback
 
 # Middleware invoked after JWT verification. Receives the decoded claims dict
 # and a ``next`` coroutine that forwards to the MCP transport.

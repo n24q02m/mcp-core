@@ -363,11 +363,11 @@ class TestBuildLocalAppForwardsOnStepSubmitted:
         mcp = FastMCP("test-step")
         step_calls: list[dict] = []
 
-        def on_step(data: dict) -> None:
+        def on_step(data: dict, _context: dict) -> None:
             step_calls.append(data)
             return None  # complete
 
-        def on_save(creds: dict) -> dict:
+        def on_save(creds: dict, _context: dict) -> dict:
             return {
                 "type": "otp_required",
                 "text": "Enter OTP",
