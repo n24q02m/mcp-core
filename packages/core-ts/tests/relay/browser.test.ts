@@ -36,12 +36,12 @@ describe('tryOpenBrowser', () => {
     })
 
     it('accepts valid http URLs', async () => {
-      const result = await tryOpenBrowser('http://localhost:3000/setup')
+      const result = await tryOpenBrowser('http://localhost:3000/authorize')
       expect(typeof result).toBe('boolean')
     })
 
     it('accepts valid https URLs', async () => {
-      const result = await tryOpenBrowser('https://example.com/setup?s=abc#k=def&p=ghi')
+      const result = await tryOpenBrowser('https://example.com/authorize?s=abc#k=def&p=ghi')
       expect(typeof result).toBe('boolean')
     })
 

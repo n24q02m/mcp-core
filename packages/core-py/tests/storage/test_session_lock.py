@@ -29,7 +29,7 @@ class TestAcquireSessionLock:
     async def test_returns_session_info_when_lock_is_fresh(self):
         info = SessionInfo(
             session_id="abc123",
-            relay_url="https://relay.example.com/setup?s=abc123#k=key&p=pass",
+            relay_url="https://relay.example.com/authorize?s=abc123#k=key&p=pass",
             created_at=time.time(),
         )
         await write_session_lock("test-server", info)
@@ -43,7 +43,7 @@ class TestAcquireSessionLock:
     async def test_returns_none_when_lock_is_expired(self, _temp_lock_dir):
         info = SessionInfo(
             session_id="old-session",
-            relay_url="https://relay.example.com/setup?s=old",
+            relay_url="https://relay.example.com/authorize?s=old",
             created_at=time.time() - 700,  # 700 seconds ago (> 600s default)
         )
         await write_session_lock("test-server", info)
@@ -58,7 +58,7 @@ class TestAcquireSessionLock:
     async def test_respects_custom_max_age(self):
         info = SessionInfo(
             session_id="short-lived",
-            relay_url="https://relay.example.com/setup?s=short",
+            relay_url="https://relay.example.com/authorize?s=short",
             created_at=time.time() - 5,  # 5 seconds ago
         )
         await write_session_lock("test-server", info)
@@ -70,7 +70,7 @@ class TestAcquireSessionLock:
         # Should be valid with 10s max age
         info2 = SessionInfo(
             session_id="short-lived-2",
-            relay_url="https://relay.example.com/setup?s=short2",
+            relay_url="https://relay.example.com/authorize?s=short2",
             created_at=time.time() - 5,
         )
         await write_session_lock("test-server", info2)
@@ -100,7 +100,7 @@ class TestWriteSessionLock:
     async def test_creates_lock_file(self, _temp_lock_dir):
         info = SessionInfo(
             session_id="new-session",
-            relay_url="https://relay.example.com/setup?s=new",
+            relay_url="https://relay.example.com/authorize?s=new",
             created_at=1234567890.0,
         )
         await write_session_lock("test-server", info)
@@ -111,7 +111,7 @@ class TestWriteSessionLock:
         data = json.loads(lock_file.read_text(encoding="utf-8"))
         assert data == {
             "session_id": "new-session",
-            "relay_url": "https://relay.example.com/setup?s=new",
+            "relay_url": "https://relay.example.com/authorize?s=new",
             "created_at": 1234567890.0,
         }
 

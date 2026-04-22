@@ -104,7 +104,7 @@ describe('createSession', () => {
 
     expect(session.sessionId).toHaveLength(64) // 32 bytes hex
     expect(session.passphrase).toMatch(/^[a-z-]+$/)
-    expect(session.relayUrl).toContain('https://relay.example.com/setup?s=')
+    expect(session.relayUrl).toContain('https://relay.example.com/authorize?s=')
     expect(session.relayUrl).toContain('#k=')
     expect(session.relayUrl).toContain('&p=')
     expect(session.keyPair.publicKey).toBeDefined()
@@ -159,7 +159,7 @@ describe('pollForResult', () => {
       sessionId: 'test-session-id',
       keyPair: cliKeyPair,
       passphrase,
-      relayUrl: 'https://relay.example.com/setup?s=test-session-id'
+      relayUrl: 'https://relay.example.com/authorize?s=test-session-id'
     }
 
     const result = await pollForResult('https://relay.example.com', session, 10, 5000)
@@ -189,7 +189,7 @@ describe('pollForResult', () => {
       sessionId: 'test-session-skipped',
       keyPair: cliKeyPair,
       passphrase: 'alpha-bravo-charlie-delta',
-      relayUrl: 'https://relay.example.com/setup?s=test-session-skipped'
+      relayUrl: 'https://relay.example.com/authorize?s=test-session-skipped'
     }
 
     await expect(pollForResult('https://relay.example.com', session, 10, 5000)).rejects.toThrow('RELAY_SKIPPED')
@@ -206,7 +206,7 @@ describe('pollForResult', () => {
       sessionId: 'expired-session',
       keyPair,
       passphrase: 'alpha-bravo-charlie-delta',
-      relayUrl: 'https://relay.example.com/setup?s=expired-session'
+      relayUrl: 'https://relay.example.com/authorize?s=expired-session'
     }
 
     await expect(pollForResult('https://relay.example.com', session, 10, 5000)).rejects.toThrow(
@@ -222,7 +222,7 @@ describe('pollForResult', () => {
       sessionId: 'error-session',
       keyPair,
       passphrase: 'alpha-bravo-charlie-delta',
-      relayUrl: 'https://relay.example.com/setup?s=error-session'
+      relayUrl: 'https://relay.example.com/authorize?s=error-session'
     }
 
     await expect(pollForResult('https://relay.example.com', session, 10, 5000)).rejects.toThrow(
@@ -238,7 +238,7 @@ describe('pollForResult', () => {
       sessionId: 'slow-session',
       keyPair,
       passphrase: 'alpha-bravo-charlie-delta',
-      relayUrl: 'https://relay.example.com/setup?s=slow-session'
+      relayUrl: 'https://relay.example.com/authorize?s=slow-session'
     }
 
     // Very short timeout + interval to test timeout path
@@ -277,7 +277,7 @@ describe('pollForResult', () => {
       sessionId: 'poll-session',
       keyPair: cliKeyPair,
       passphrase,
-      relayUrl: 'https://relay.example.com/setup?s=poll-session'
+      relayUrl: 'https://relay.example.com/authorize?s=poll-session'
     }
 
     const result = await pollForResult('https://relay.example.com', session, 10, 5000)
