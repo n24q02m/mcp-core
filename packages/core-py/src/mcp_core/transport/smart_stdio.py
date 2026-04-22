@@ -83,10 +83,12 @@ def _spawn_daemon(daemon_cmd: list[str]) -> None:
     """Spawn a daemon in a detached background process."""
     logger.debug(f"Spawning daemon: {daemon_cmd}")
     if sys.platform == "win32":
-        # DETACHED_PROCESS (0x8) | CREATE_NEW_PROCESS_GROUP (0x200)
+        # CREATE_NO_WINDOW (0x08000000) | CREATE_NEW_PROCESS_GROUP (0x200)
+        # We use CREATE_NO_WINDOW instead of DETACHED_PROCESS to prevent popping up terminals
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000200
         subprocess.Popen(
             daemon_cmd,
-            creationflags=0x00000208,
+            creationflags=creation_flags,
             close_fds=True,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
