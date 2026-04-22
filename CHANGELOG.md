@@ -2,6 +2,36 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-04-22)
+
+### Bug Fixes
+
+- Update non-major dependencies
+  ([`4c4dbd4`](https://github.com/n24q02m/mcp-core/commit/4c4dbd41c6914e0dcf6ff01d89ba22c38cf21b25))
+
+- Use /authorize path in relay client URL to match server endpoint
+  ([#72](https://github.com/n24q02m/mcp-core/pull/72),
+  [`4d19190`](https://github.com/n24q02m/mcp-core/commit/4d19190b822e2a00ea1eb06445605bc59334e667))
+
+### Chores
+
+- **deps**: Update dependency @types/node to v25
+  ([#58](https://github.com/n24q02m/mcp-core/pull/58),
+  [`ad7ce6c`](https://github.com/n24q02m/mcp-core/commit/ad7ce6ca7d31b1ac5a9df042abdf0487a8e2662c))
+
+- **deps**: Update dependency typescript to v6 ([#62](https://github.com/n24q02m/mcp-core/pull/62),
+  [`654c7eb`](https://github.com/n24q02m/mcp-core/commit/654c7eb418431a2ded1189ae30555b7035575134))
+
+### Features
+
+- Batch random generation in passphrase creation
+  ([#70](https://github.com/n24q02m/mcp-core/pull/70),
+  [`50b194b`](https://github.com/n24q02m/mcp-core/commit/50b194bf622382e2836513693db70bf9a0b233ef))
+
+- Improve credential form validation UX ([#71](https://github.com/n24q02m/mcp-core/pull/71),
+  [`d94d2f5`](https://github.com/n24q02m/mcp-core/commit/d94d2f5344770457e92594546653ddabe696c65c))
+
+
 ## v1.5.1 (2026-04-21)
 
 ### Bug Fixes
