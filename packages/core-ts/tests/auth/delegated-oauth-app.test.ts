@@ -63,7 +63,7 @@ async function startApp(options: {
     pollIntervalMs?: number
     callbackPath?: string
   }
-  onTokenReceived: (tokens: Record<string, unknown>) => void | Promise<void>
+  onTokenReceived: (tokens: Record<string, unknown>) => string | undefined | void | Promise<string | undefined | void>
   keysDir: string
 }): Promise<TestServer> {
   const jwtIssuer = new JWTIssuer('test-delegated', options.keysDir)
@@ -546,5 +546,108 @@ describe('configuration validation', () => {
         onTokenReceived: () => {}
       })
     ).rejects.toThrow(/deviceAuthUrl/)
+  })
+})
+
+describe('sub propagation + DCR', () => {
+  it('onTokenReceived returning a string becomes JWT sub', async () => {
+    const upstream = await startUpstream((req, res, _body) => {
+      if (req.url === '/token') {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ access_token: 'upstream-at', owner_user_id: 'notion-user-42' }))
+        return
+      }
+      res.writeHead(404)
+      res.end()
+    })
+    try {
+      const srv = await startApp({
+        flow: 'redirect',
+        upstream: {
+          tokenUrl: `${upstream.url}/token`,
+          clientId: 'up',
+          clientSecret: 's',
+          authorizeUrl: `${upstream.url}/authorize`
+        },
+        onTokenReceived: (t) => String((t as { owner_user_id?: string }).owner_user_id ?? 'default'),
+        keysDir: tempKeysDir
+      })
+      try {
+        const { verifier, challenge } = pkce()
+        const params = new URLSearchParams({
+          client_id: 'mcp',
+          redirect_uri: 'http://localhost/cb',
+          state: 'st',
+          code_challenge: challenge,
+          code_challenge_method: 'S256'
+        })
+        const redirect = await fetch(`${srv.url}/authorize?${params.toString()}`, { redirect: 'manual' })
+        const nonce = new URL(redirect.headers.get('location') as string).searchParams.get('state') as string
+        const cb = await fetch(`${srv.url}/callback?code=up-code&state=${encodeURIComponent(nonce)}`, {
+          redirect: 'manual'
+        })
+        const finalLoc = cb.headers.get('location') as string
+        const code = new URL(finalLoc).searchParams.get('code') as string
+        const tok = await fetch(`${srv.url}/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: verifier }).toString()
+        })
+        const body = (await tok.json()) as Record<string, unknown>
+        const payload = await srv.app.jwtIssuer.verifyAccessToken(body.access_token as string)
+        expect(payload.sub).toBe('notion-user-42')
+      } finally {
+        await srv.close()
+      }
+    } finally {
+      await upstream.close()
+    }
+  })
+
+  it('POST /register echoes client metadata with fixed client_id=local-browser', async () => {
+    const upstream = await startUpstream((_req, res) => {
+      res.writeHead(404)
+      res.end()
+    })
+    try {
+      const srv = await startApp({
+        flow: 'redirect',
+        upstream: {
+          tokenUrl: `${upstream.url}/token`,
+          clientId: 'up',
+          authorizeUrl: `${upstream.url}/authorize`
+        },
+        onTokenReceived: () => {},
+        keysDir: tempKeysDir
+      })
+      try {
+        const resp = await fetch(`${srv.url}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            redirect_uris: ['http://localhost:8765/callback'],
+            grant_types: ['authorization_code'],
+            response_types: ['code'],
+            client_name: 'python-sdk-test'
+          })
+        })
+        expect(resp.status).toBe(201)
+        const body = (await resp.json()) as Record<string, unknown>
+        expect(body.client_id).toBe('local-browser')
+        expect(body.redirect_uris).toEqual(['http://localhost:8765/callback'])
+        expect(body.client_name).toBe('python-sdk-test')
+        expect(body.token_endpoint_auth_method).toBe('none')
+
+        const meta = (await (await fetch(`${srv.url}/.well-known/oauth-authorization-server`)).json()) as Record<
+          string,
+          unknown
+        >
+        expect(meta.registration_endpoint).toBe(`${srv.url}/register`)
+      } finally {
+        await srv.close()
+      }
+    } finally {
+      await upstream.close()
+    }
   })
 })

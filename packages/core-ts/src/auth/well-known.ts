@@ -5,6 +5,7 @@ export function authorizationServerMetadata(issuerUrl: string): Record<string, u
     issuer: issuerUrl,
     authorization_endpoint: `${issuerUrl}/authorize`,
     token_endpoint: `${issuerUrl}/token`,
+    registration_endpoint: `${issuerUrl}/register`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code'],
     code_challenge_methods_supported: ['S256'],

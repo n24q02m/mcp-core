@@ -24,7 +24,14 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
-import { createRouter, htmlResponse, jsonResponse, parseFormBody, type RequestHandler } from './router.js'
+import {
+  createRouter,
+  htmlResponse,
+  jsonResponse,
+  parseFormBody,
+  parseJsonBody,
+  type RequestHandler
+} from './router.js'
 import { authorizationServerMetadata, protectedResourceMetadata } from './well-known.js'
 
 export type FlowType = 'device_code' | 'redirect'
@@ -54,7 +61,13 @@ export interface UpstreamOAuthConfig {
 
 export type OAuthTokens = Record<string, unknown>
 
-export type TokenCallback = (tokens: OAuthTokens) => void | Promise<void>
+/**
+ * Called after upstream token exchange completes. Return the subject
+ * identifier (e.g. provider user id) to use as JWT `sub` in the bearer
+ * token issued to the MCP client. Returning `void` / `undefined` falls
+ * back to `'local-user'` (single-user mode).
+ */
+export type TokenCallback = (tokens: OAuthTokens) => string | undefined | void | Promise<string | undefined | void>
 
 export interface DelegatedOAuthAppOptions {
   serverName: string
@@ -87,6 +100,7 @@ interface PendingSession {
 interface AuthCodeEntry {
   codeChallenge: string
   codeChallengeMethod: string
+  sub: string
   createdAt: number
 }
 
@@ -245,8 +259,9 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     setupStatus[key ?? options.serverName] = 'error'
   }
 
-  async function invokeTokenCallback(tokens: OAuthTokens): Promise<void> {
-    await options.onTokenReceived(tokens)
+  async function invokeTokenCallback(tokens: OAuthTokens): Promise<string> {
+    const result = await options.onTokenReceived(tokens)
+    return typeof result === 'string' && result.length > 0 ? result : 'local-user'
   }
 
   // ------------------------------------------------------------------
@@ -370,8 +385,9 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
       return
     }
 
+    let sub: string
     try {
-      await invokeTokenCallback(tokens)
+      sub = await invokeTokenCallback(tokens)
     } catch {
       jsonResponse(res, 500, {
         error: 'server_error',
@@ -384,6 +400,7 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     authCodes.set(authCode, {
       codeChallenge: session.codeChallenge,
       codeChallengeMethod: session.codeChallengeMethod,
+      sub,
       createdAt: Date.now()
     })
     pruneExpired(authCodes, AUTH_CODE_TTL_S * 1000)
@@ -401,7 +418,8 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
   async function pollDeviceToken(
     deviceCode: string,
     initialIntervalMs: number,
-    controller: AbortController
+    controller: AbortController,
+    authCode: string
   ): Promise<void> {
     let intervalMs = Math.max(initialIntervalMs, 0)
     const body = new URLSearchParams({
@@ -450,11 +468,17 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
           markSetupError()
           return
         }
+        let sub: string
         try {
-          await invokeTokenCallback(tokens)
+          sub = await invokeTokenCallback(tokens)
         } catch {
           markSetupError()
           return
+        }
+        // Update pre-allocated authCode entry with real subject.
+        const entry = authCodes.get(authCode)
+        if (entry) {
+          entry.sub = sub
         }
         markSetupComplete()
         return
@@ -558,10 +582,13 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     }
 
     // Pre-allocate auth code so /token can complete once polling succeeds.
+    // `sub` is a placeholder; pollDeviceToken updates it after
+    // invokeTokenCallback returns the real subject id.
     const authCode = randomBytes(32).toString('base64url')
     authCodes.set(authCode, {
       codeChallenge,
       codeChallengeMethod,
+      sub: 'local-user',
       createdAt: Date.now()
     })
     pruneExpired(authCodes, AUTH_CODE_TTL_S * 1000)
@@ -570,7 +597,7 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     const controller = new AbortController()
     pollControllers.add(controller)
     // Run in background; intentionally not awaited.
-    pollDeviceToken(deviceCode, intervalSecs * 1000, controller).finally(() => {
+    pollDeviceToken(deviceCode, intervalSecs * 1000, controller, authCode).finally(() => {
       pollControllers.delete(controller)
     })
 
@@ -646,7 +673,7 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
       return
     }
 
-    const accessToken = await jwtIssuer.issueAccessToken('local-user')
+    const accessToken = await jwtIssuer.issueAccessToken(entry.sub)
     jsonResponse(res, 200, {
       access_token: accessToken,
       token_type: 'Bearer',
@@ -660,6 +687,37 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
 
   async function wellKnownAs(req: IncomingMessage, res: ServerResponse): Promise<void> {
     jsonResponse(res, 200, authorizationServerMetadata(getBaseUrl(req)))
+  }
+
+  /**
+   * RFC 7591 Dynamic Client Registration.
+   *
+   * Since this server accepts a fixed public client id (`local-browser`)
+   * with no per-client credentials, DCR echoes back whatever
+   * ``redirect_uris`` / grant types the client submitted and returns
+   * the fixed id. This satisfies MCP clients that refuse to speak OAuth
+   * without DCR (e.g. Python SDK ``OAuthClientProvider``).
+   */
+  async function registerHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let body: Record<string, unknown> = {}
+    try {
+      const raw = await parseJsonBody(req)
+      body = raw as Record<string, unknown>
+    } catch {
+      // fall through with empty body; clients can still get defaults
+    }
+    const redirectUris = Array.isArray(body.redirect_uris) ? (body.redirect_uris as string[]) : []
+    const grantTypes = Array.isArray(body.grant_types) ? (body.grant_types as string[]) : ['authorization_code']
+    const responseTypes = Array.isArray(body.response_types) ? (body.response_types as string[]) : ['code']
+    const clientName = typeof body.client_name === 'string' ? body.client_name : 'mcp-client'
+    jsonResponse(res, 201, {
+      client_id: 'local-browser',
+      client_name: clientName,
+      redirect_uris: redirectUris,
+      grant_types: grantTypes,
+      response_types: responseTypes,
+      token_endpoint_auth_method: 'none'
+    })
   }
 
   async function wellKnownPr(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -722,6 +780,7 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     { method: 'GET', path: '/callback-done', handler: callbackDoneHandler },
     { method: 'GET', path: '/authorize', handler: authorize },
     { method: 'POST', path: '/token', handler: token },
+    { method: 'POST', path: '/register', handler: registerHandler },
     { method: 'GET', path: '/setup-status', handler: setupStatusHandler },
     { method: 'GET', path: '/.well-known/oauth-authorization-server', handler: wellKnownAs },
     { method: 'GET', path: '/.well-known/oauth-protected-resource', handler: wellKnownPr }
