@@ -1,3 +1,6 @@
+const encoder = new TextEncoder()
+const decoder = new TextDecoder()
+
 export interface EncryptResult {
   ciphertext: Uint8Array
   iv: Uint8Array
@@ -6,7 +9,7 @@ export interface EncryptResult {
 
 export async function encrypt(key: CryptoKey, plaintext: string): Promise<EncryptResult> {
   const iv = crypto.getRandomValues(new Uint8Array(12))
-  const encoded = new TextEncoder().encode(plaintext)
+  const encoded = encoder.encode(plaintext)
   const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded)
 
   // WebCrypto appends 16-byte GCM tag to ciphertext
@@ -33,5 +36,5 @@ export async function decrypt(
   }
   const ivCopy = new Uint8Array(iv)
   const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: ivCopy }, key, data)
-  return new TextDecoder().decode(decrypted)
+  return decoder.decode(decrypted)
 }
