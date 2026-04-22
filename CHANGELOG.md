@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.6.3 (2026-04-22)
+
+### Bug Fixes
+
+- Relay credential form must follow redirect_url on success
+  ([#75](https://github.com/n24q02m/mcp-core/pull/75),
+  [`6bc74e8`](https://github.com/n24q02m/mcp-core/commit/6bc74e88536ca232c9f4a524f0a77f0bac6f047c))
+
+
 ## v1.6.2 (2026-04-22)
 
 ### Bug Fixes
