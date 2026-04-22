@@ -560,6 +560,20 @@ def render_credential_form(
                                 if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {{
                                     // Chain: update in place with new prompt/field/type.
                                     showStepInput(data.next_step);
+                                }} else if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) {{
+                                    // Multi-step auth finished: follow the OAuth redirect so
+                                    // the originating client callback server receives the
+                                    // code. Without this the external client hangs forever.
+                                    var container = document.getElementById("step-container");
+                                    while (container.firstChild) {{
+                                        container.removeChild(container.firstChild);
+                                    }}
+                                    var done = document.createElement("div");
+                                    done.className = "status-box success";
+                                    done.style.display = "block";
+                                    done.textContent = "Setup complete! Redirecting...";
+                                    container.appendChild(done);
+                                    window.location.replace(data.redirect_url);
                                 }} else {{
                                     // Completed.
                                     var container = document.getElementById("step-container");
@@ -710,6 +724,16 @@ def render_credential_form(
                                     showStepInput(data.next_step);
                                 }} else if (data.next_step && data.next_step.type === "info") {{
                                     showStatus("success", data.next_step.message || "Setup saved. Additional steps may be required.");
+                                }} else if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) {{
+                                    // OAuth authorization-code flow: server returned the
+                                    // client's redirect_uri with ?code=...&state=... appended.
+                                    // The browser MUST navigate there so the client callback
+                                    // server (external tool, test harness, desktop app) can
+                                    // exchange the code for a JWT. Without this the handshake
+                                    // hangs forever and the form silently reports success
+                                    // while the client waits on a callback that never fires.
+                                    showStatus("success", "Credentials saved. Redirecting...");
+                                    window.location.replace(data.redirect_url);
                                 }} else {{
                                     var successMsg = data.message || "Connected successfully. You can close this window.";
                                     showStatus("success", successMsg);
