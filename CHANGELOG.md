@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.6.2 (2026-04-22)
+
+### Bug Fixes
+
+- Propagate sub in delegated OAuth + add DCR endpoint
+  ([#74](https://github.com/n24q02m/mcp-core/pull/74),
+  [`086a874`](https://github.com/n24q02m/mcp-core/commit/086a8744ba55ee0c580870d83e8c24d4485f4699))
+
+
 ## v1.6.1 (2026-04-22)
 
 ### Bug Fixes
