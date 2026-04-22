@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.6.1 (2026-04-22)
+
+### Bug Fixes
+
+- Relax pydantic floor to 2.12.5 for cohere compatibility
+  ([#73](https://github.com/n24q02m/mcp-core/pull/73),
+  [`9ce0024`](https://github.com/n24q02m/mcp-core/commit/9ce002471ce4379a5cc47f2c3744adc8265eeb65))
+
+- Relax pydantic to >=2.12.5 for cohere compatibility
+  ([#73](https://github.com/n24q02m/mcp-core/pull/73),
+  [`9ce0024`](https://github.com/n24q02m/mcp-core/commit/9ce002471ce4379a5cc47f2c3744adc8265eeb65))
+
+- Use /authorize path in relay client URL to match server endpoint
+  ([#73](https://github.com/n24q02m/mcp-core/pull/73),
+  [`9ce0024`](https://github.com/n24q02m/mcp-core/commit/9ce002471ce4379a5cc47f2c3744adc8265eeb65))
+
+
 ## v1.6.0 (2026-04-22)
 
 ### Bug Fixes
