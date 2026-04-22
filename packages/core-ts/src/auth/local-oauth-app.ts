@@ -563,6 +563,36 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     jsonResponse(res, 200, protectedResourceMetadata(base, [base]))
   }
 
+  /**
+   * RFC 7591 Dynamic Client Registration.
+   *
+   * Local OAuth server uses a fixed public client id (`local-browser`).
+   * DCR is echo-style — mirror the client's submitted metadata back with
+   * the fixed id so MCP clients (Python SDK OAuthClientProvider, etc.)
+   * can bootstrap OAuth without failing at the registration step.
+   */
+  async function registerHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let body: Record<string, unknown> = {}
+    try {
+      const raw = await parseJsonBody(req)
+      body = raw as Record<string, unknown>
+    } catch {
+      // fall through with empty body
+    }
+    const redirectUris = Array.isArray(body.redirect_uris) ? (body.redirect_uris as string[]) : []
+    const grantTypes = Array.isArray(body.grant_types) ? (body.grant_types as string[]) : ['authorization_code']
+    const responseTypes = Array.isArray(body.response_types) ? (body.response_types as string[]) : ['code']
+    const clientName = typeof body.client_name === 'string' ? body.client_name : 'mcp-client'
+    jsonResponse(res, 201, {
+      client_id: 'local-browser',
+      client_name: clientName,
+      redirect_uris: redirectUris,
+      grant_types: grantTypes,
+      response_types: responseTypes,
+      token_endpoint_auth_method: 'none'
+    })
+  }
+
   function markSetupComplete(key = 'gdrive'): void {
     setupStatus[key] = 'complete'
   }
@@ -635,6 +665,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     { method: 'GET', path: '/authorize', handler: authorize },
     { method: 'POST', path: '/authorize', handler: authorize },
     { method: 'POST', path: '/token', handler: token },
+    { method: 'POST', path: '/register', handler: registerHandler },
     { method: 'POST', path: '/otp', handler: otpHandler },
     { method: 'GET', path: '/setup-status', handler: setupStatusHandler },
     { method: 'GET', path: '/callback-done', handler: callbackDoneHandler },

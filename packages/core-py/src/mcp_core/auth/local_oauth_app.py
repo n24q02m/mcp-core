@@ -583,6 +583,35 @@ def create_local_oauth_app(
         )
         return HTMLResponse(html_content)
 
+    async def register_handler(request: Request) -> JSONResponse:
+        """RFC 7591 Dynamic Client Registration (echo-style).
+
+        Fixed public ``client_id`` (``local-browser``). Mirrors the
+        client's submitted metadata back with the fixed id so MCP clients
+        that require DCR can bootstrap OAuth without a registration error.
+        """
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        redirect_uris = body.get("redirect_uris") if isinstance(body.get("redirect_uris"), list) else []
+        grant_types = body.get("grant_types") if isinstance(body.get("grant_types"), list) else ["authorization_code"]
+        response_types = body.get("response_types") if isinstance(body.get("response_types"), list) else ["code"]
+        client_name = body.get("client_name") if isinstance(body.get("client_name"), str) else "mcp-client"
+        return JSONResponse(
+            {
+                "client_id": "local-browser",
+                "client_name": client_name,
+                "redirect_uris": redirect_uris,
+                "grant_types": grant_types,
+                "response_types": response_types,
+                "token_endpoint_auth_method": "none",
+            },
+            status_code=201,
+        )
+
     # ------------------------------------------------------------------
     # Build Starlette app
     # ------------------------------------------------------------------
@@ -592,6 +621,7 @@ def create_local_oauth_app(
         Route("/authorize", authorize, methods=["GET", "POST"]),
         Route("/otp", otp_handler, methods=["POST"]),
         Route("/token", token, methods=["POST"]),
+        Route("/register", register_handler, methods=["POST"]),
         Route("/setup-status", setup_status, methods=["GET"]),
         Route("/callback-done", callback_done, methods=["GET"]),
         Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),

@@ -9,6 +9,7 @@ def authorization_server_metadata(issuer_url: str) -> dict:
         "issuer": issuer_url,
         "authorization_endpoint": f"{issuer_url}/authorize",
         "token_endpoint": f"{issuer_url}/token",
+        "registration_endpoint": f"{issuer_url}/register",
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code"],
         "code_challenge_methods_supported": ["S256"],

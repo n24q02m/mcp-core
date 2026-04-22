@@ -64,7 +64,16 @@ FlowType = Literal["device_code", "redirect"]
 
 TokenEndpointAuthMethod = Literal["client_secret_basic", "client_secret_post"]
 
-TokenCallback = Callable[[dict[str, Any]], Union[None, Awaitable[None]]]
+TokenCallback = Callable[
+    [dict[str, Any]],
+    Union[None, str, Awaitable[Union[None, str]]],
+]
+"""Callback invoked after upstream token exchange.
+
+Return a string subject identifier (e.g. provider user id) to use as the
+JWT ``sub`` in the bearer token issued to the MCP client. Returning
+``None`` falls back to ``"local-user"`` (single-user mode).
+"""
 
 
 @dataclass
@@ -247,14 +256,17 @@ def create_delegated_oauth_app(
         k = key or server_name
         _setup_status[k] = "error"
 
-    async def _invoke_token_callback(tokens: dict[str, Any]) -> None:
+    async def _invoke_token_callback(tokens: dict[str, Any]) -> str:
         try:
             result = on_token_received(tokens)
             if inspect.isawaitable(result):
-                await result
+                result = await result
         except Exception:  # noqa: BLE001
             logger.exception("on_token_received callback failed")
             raise
+        if isinstance(result, str) and result:
+            return result
+        return "local-user"
 
     # ------------------------------------------------------------------
     # Redirect flow
@@ -362,7 +374,7 @@ def create_delegated_oauth_app(
         tokens = resp.json()
 
         try:
-            await _invoke_token_callback(tokens)
+            sub = await _invoke_token_callback(tokens)
         except Exception:
             return JSONResponse(
                 {"error": "server_error", "error_description": "Failed to persist tokens"},
@@ -373,6 +385,7 @@ def create_delegated_oauth_app(
         auth_codes[auth_code] = {
             "code_challenge": session["code_challenge"],
             "code_challenge_method": session["code_challenge_method"],
+            "sub": sub,
             "created_at": time.monotonic(),
         }
         _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
@@ -422,10 +435,14 @@ def create_delegated_oauth_app(
                     if resp.status_code == 200:
                         tokens = resp.json()
                         try:
-                            await _invoke_token_callback(tokens)
+                            sub = await _invoke_token_callback(tokens)
                         except Exception:
                             _mark_setup_error()
                             return
+                        # Update pre-allocated auth code entry with real subject
+                        # (was placeholder "local-user" during pre-allocation).
+                        if auth_code in auth_codes:
+                            auth_codes[auth_code]["sub"] = sub
                         # Stash the auth code so the later /token exchange works.
                         _device_pending["auth_code"] = auth_code
                         mark_setup_complete()
@@ -505,10 +522,13 @@ def create_delegated_oauth_app(
 
         # Pre-allocate the auth code now so the /token exchange can use it
         # as soon as polling completes (no race with the browser redirect).
+        # ``sub`` is a placeholder; the polling task updates it after
+        # ``_invoke_token_callback`` returns the real subject id.
         auth_code = secrets.token_urlsafe(32)
         auth_codes[auth_code] = {
             "code_challenge": code_challenge,
             "code_challenge_method": code_challenge_method,
+            "sub": "local-user",
             "created_at": time.monotonic(),
         }
         _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
@@ -582,7 +602,7 @@ def create_delegated_oauth_app(
         if not _s256_verify(code_verifier, entry["code_challenge"]):
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
 
-        access_token = jwt_issuer.issue_access_token(sub="local-user")
+        access_token = jwt_issuer.issue_access_token(sub=entry["sub"])
         return JSONResponse({"access_token": access_token, "token_type": "Bearer", "expires_in": 3600})
 
     async def setup_status(_request: Request) -> JSONResponse:
@@ -594,6 +614,36 @@ def create_delegated_oauth_app(
     async def well_known_pr(request: Request) -> JSONResponse:
         base = _base_url(request)
         return JSONResponse(protected_resource_metadata(resource=base, authorization_servers=[base]))
+
+    async def register_handler(request: Request) -> JSONResponse:
+        """RFC 7591 Dynamic Client Registration (echo-style).
+
+        Server uses a fixed public ``client_id`` (``local-browser``). DCR
+        mirrors the client's submitted metadata back with the fixed id so
+        MCP clients (Python SDK ``OAuthClientProvider``, etc.) can
+        bootstrap OAuth without failing at the registration step.
+        """
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        redirect_uris = body.get("redirect_uris") if isinstance(body.get("redirect_uris"), list) else []
+        grant_types = body.get("grant_types") if isinstance(body.get("grant_types"), list) else ["authorization_code"]
+        response_types = body.get("response_types") if isinstance(body.get("response_types"), list) else ["code"]
+        client_name = body.get("client_name") if isinstance(body.get("client_name"), str) else "mcp-client"
+        return JSONResponse(
+            {
+                "client_id": "local-browser",
+                "client_name": client_name,
+                "redirect_uris": redirect_uris,
+                "grant_types": grant_types,
+                "response_types": response_types,
+                "token_endpoint_auth_method": "none",
+            },
+            status_code=201,
+        )
 
     async def root(request: Request) -> RedirectResponse:
         """GET / -- auto-generate PKCE and redirect to /authorize.
@@ -646,6 +696,7 @@ def create_delegated_oauth_app(
         Route("/callback-done", callback_done, methods=["GET"]),
         Route("/authorize", authorize, methods=["GET"]),
         Route("/token", token, methods=["POST"]),
+        Route("/register", register_handler, methods=["POST"]),
         Route("/setup-status", setup_status, methods=["GET"]),
         Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", well_known_pr, methods=["GET"]),
