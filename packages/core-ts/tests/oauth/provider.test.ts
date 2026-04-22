@@ -164,7 +164,7 @@ describe('OAuthProvider', () => {
         sessionId: 'sess-123',
         keyPair,
         passphrase: 'test-passphrase',
-        relayUrl: 'https://relay.example.com/setup?s=sess-123'
+        relayUrl: 'https://relay.example.com/authorize?s=sess-123'
       }
 
       vi.mocked(relayClient.createSession).mockResolvedValue(mockSession)
@@ -177,7 +177,7 @@ describe('OAuthProvider', () => {
         'S256'
       )
 
-      expect(url).toBe('https://relay.example.com/setup?s=sess-123')
+      expect(url).toBe('https://relay.example.com/authorize?s=sess-123')
       expect(relayClient.createSession).toHaveBeenCalledWith('https://relay.example.com', 'test-server', relaySchema)
     })
   })

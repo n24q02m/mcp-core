@@ -32,7 +32,7 @@ describe('acquireSessionLock', () => {
   it('returns session info when lock is fresh', async () => {
     const info: SessionInfo = {
       sessionId: 'abc123',
-      relayUrl: 'https://relay.example.com/setup?s=abc123#k=key&p=pass',
+      relayUrl: 'https://relay.example.com/authorize?s=abc123#k=key&p=pass',
       createdAt: Date.now()
     }
     await writeSessionLock('test-server', info)
@@ -47,7 +47,7 @@ describe('acquireSessionLock', () => {
   it('returns null when lock is expired', async () => {
     const info: SessionInfo = {
       sessionId: 'old-session',
-      relayUrl: 'https://relay.example.com/setup?s=old',
+      relayUrl: 'https://relay.example.com/authorize?s=old',
       createdAt: Date.now() - 700_000 // 700s ago (> 600s default)
     }
     await writeSessionLock('test-server', info)
@@ -62,7 +62,7 @@ describe('acquireSessionLock', () => {
   it('respects custom max age', async () => {
     const info: SessionInfo = {
       sessionId: 'short-lived',
-      relayUrl: 'https://relay.example.com/setup?s=short',
+      relayUrl: 'https://relay.example.com/authorize?s=short',
       createdAt: Date.now() - 5000 // 5 seconds ago
     }
     await writeSessionLock('test-server', info)
@@ -73,7 +73,7 @@ describe('acquireSessionLock', () => {
     // Rewrite since it was cleaned up
     const info2: SessionInfo = {
       sessionId: 'short-lived-2',
-      relayUrl: 'https://relay.example.com/setup?s=short2',
+      relayUrl: 'https://relay.example.com/authorize?s=short2',
       createdAt: Date.now() - 5000
     }
     await writeSessionLock('test-server', info2)
@@ -108,7 +108,7 @@ describe('writeSessionLock', () => {
   it('creates lock file with correct format', async () => {
     const info: SessionInfo = {
       sessionId: 'new-session',
-      relayUrl: 'https://relay.example.com/setup?s=new',
+      relayUrl: 'https://relay.example.com/authorize?s=new',
       createdAt: 1234567890000
     }
     await writeSessionLock('test-server', info)
@@ -119,7 +119,7 @@ describe('writeSessionLock', () => {
     const data = JSON.parse(await readFile(lockFile, 'utf-8'))
     expect(data).toEqual({
       session_id: 'new-session',
-      relay_url: 'https://relay.example.com/setup?s=new',
+      relay_url: 'https://relay.example.com/authorize?s=new',
       created_at: 1234567890000
     })
   })

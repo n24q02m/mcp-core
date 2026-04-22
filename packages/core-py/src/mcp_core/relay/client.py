@@ -119,7 +119,7 @@ async def create_session(
             raise RuntimeError(msg)
 
     pub_key_b64 = export_public_key(public_key)
-    relay_url = f"{relay_base_url}/setup?s={session_id}#k={pub_key_b64}&p={quote(passphrase)}"
+    relay_url = f"{relay_base_url}/authorize?s={session_id}#k={pub_key_b64}&p={quote(passphrase)}"
 
     return RelaySession(
         session_id=session_id,

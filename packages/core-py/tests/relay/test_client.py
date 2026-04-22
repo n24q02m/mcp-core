@@ -114,7 +114,7 @@ class TestCreateSession:
             session = await create_session("https://relay.example.com", "test-server", mock_schema)
 
             assert len(session.session_id) == 64  # 32 bytes hex
-            assert "https://relay.example.com/setup?s=" in session.relay_url
+            assert "https://relay.example.com/authorize?s=" in session.relay_url
             assert "#k=" in session.relay_url
             assert "&p=" in session.relay_url
 
@@ -174,7 +174,7 @@ class TestPollForResult:
                 private_key=cli_priv,
                 public_key=cli_pub,
                 passphrase=passphrase,
-                relay_url="https://relay.example.com/setup?s=test-session-id",
+                relay_url="https://relay.example.com/authorize?s=test-session-id",
             )
 
             result = await poll_for_result("https://relay.example.com", session, interval_s=0.01, timeout_s=5.0)

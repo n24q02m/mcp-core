@@ -51,7 +51,7 @@ export async function createSession(
   if (!response.ok) throw new Error(`Relay session creation failed: ${response.status}`)
 
   const pubKeyBase64 = await exportPublicKey(keyPair.publicKey)
-  const relayUrl = `${relayBaseUrl}/setup?s=${sessionId}#k=${pubKeyBase64}&p=${encodeURIComponent(passphrase)}`
+  const relayUrl = `${relayBaseUrl}/authorize?s=${sessionId}#k=${pubKeyBase64}&p=${encodeURIComponent(passphrase)}`
 
   return { sessionId, keyPair, passphrase, relayUrl }
 }
