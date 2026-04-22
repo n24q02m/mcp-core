@@ -25,9 +25,10 @@ _WIN_LOCK_OFFSET = 1 << 20
 
 
 class LifecycleLock:
-    def __init__(self, name: str, port: int, root: Path | None = None) -> None:
+    def __init__(self, name: str, port: int, root: Path | None = None, token: str | None = None) -> None:
         self._name = name
         self._port = port
+        self._token = token
         self._root = root or Path.home() / ".config" / "mcp" / "locks"
         self._root.mkdir(parents=True, exist_ok=True)
         self._lock_file = self._root / f"{name}-{port}.lock"
@@ -69,8 +70,8 @@ class LifecycleLock:
         # fixed-size record and pad with spaces so any stale tail is
         # overwritten deterministically.
         self._fh.seek(0)
-        payload = f"{os.getpid()}\n{self._port}\n"
-        self._fh.write(payload.ljust(64, " "))
+        payload = f"{os.getpid()}\n{self._port}\n{self._token or ''}\n"
+        self._fh.write(payload.ljust(512, " "))
         self._fh.flush()
         return self
 

@@ -376,8 +376,16 @@ async def run_local_server(
         else:
             setup_complete_hook(mark_fn)  # type: ignore[call-arg]
 
-    # Acquire lifecycle lock
-    lock = LifecycleLock(name=server_name, port=actual_port)
+    # Issue a long-lived access token for the stdio proxy to use.
+    # The token is written into the lock file so the proxy can read it
+    # without needing to go through the browser OAuth flow.
+    proxy_token = _jwt_issuer.issue_access_token(
+        sub="stdio-proxy",
+        expires_in_seconds=365 * 24 * 3600,  # 1 year
+    )
+
+    # Acquire lifecycle lock (stores pid, port, and proxy token)
+    lock = LifecycleLock(name=server_name, port=actual_port, token=proxy_token)
 
     with lock:
         # Check if credentials already exist
