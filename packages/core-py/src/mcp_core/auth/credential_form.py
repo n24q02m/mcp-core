@@ -658,6 +658,7 @@ def render_credential_form(
                                 submitBtn.disabled = true;
                                 submitBtn.textContent = "Connected";
                                 submitBtn.removeAttribute("aria-busy");
+                                var pendingRedirectUrl = (typeof data.redirect_url === "string" && data.redirect_url.length > 0) ? data.redirect_url : null;
                                 if (data.next_step && data.next_step.type === "oauth_device_code") {{
                                     var ns = data.next_step;
                                     statusBox.textContent = "";
@@ -702,6 +703,10 @@ def render_credential_form(
                                             .then(function (s) {{
                                                 if (s.gdrive === "complete") {{
                                                     clearInterval(pollInterval);
+                                                    if (pendingRedirectUrl) {{
+                                                        window.location.replace(pendingRedirectUrl);
+                                                        return;
+                                                    }}
                                                     var w = document.getElementById("gdrive-waiting");
                                                     if (w) {{
                                                         w.style.color = "#34c759";

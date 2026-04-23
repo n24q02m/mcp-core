@@ -275,6 +275,11 @@ def create_local_oauth_app(
                     status_code=500,
                 )
 
+        if next_step and next_step.get("type") == "error":
+            return JSONResponse(
+                {"ok": False, "error": next_step.get("text", "Unknown error")},
+            )
+
         # Generate auth code. Copy ``sub`` so /token issues the JWT with the
         # same subject the credentials were saved under.
         auth_code = secrets.token_urlsafe(32)

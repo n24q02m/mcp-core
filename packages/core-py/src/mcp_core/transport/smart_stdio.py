@@ -92,7 +92,7 @@ def _spawn_daemon(daemon_cmd: list[str]) -> None:
             close_fds=True,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=open(Path.home() / "daemon_stderr.log", "a"),
         )
     else:
         subprocess.Popen(
@@ -155,15 +155,14 @@ def run_smart_stdio_proxy(
 
     # 2. Build auth headers
     headers: dict[str, str] = {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
+        "Accept": "text/event-stream",
     }
     # Prefer env-override, fall back to lock-file token
     effective_token = "" or token
     if effective_token:
         headers["Authorization"] = f"Bearer {effective_token}"
 
-    # 3. Forward stdin → HTTP POST → stdout
+    # 3. Forward stdin <-> HTTP SSE <-> stdout
     line_queue: queue.Queue[bytes | None] = queue.Queue()
 
     def _stdin_reader() -> None:
@@ -180,27 +179,74 @@ def run_smart_stdio_proxy(
     reader_thread = threading.Thread(target=_stdin_reader, daemon=True)
     reader_thread.start()
 
-    with httpx.Client(timeout=30.0) as client:
-        while True:
-            line = line_queue.get()
-            if line is None:
-                return 0
-            try:
-                resp = client.post(url, content=line, headers=headers)
-                sys.stdout.buffer.write(resp.content)
-                if not resp.text.endswith("\n"):
-                    sys.stdout.buffer.write(b"\n")
-                sys.stdout.buffer.flush()
-            except httpx.ConnectError:
-                # Daemon died. Try to reconnect once by re-probing lock files.
-                result = get_active_daemon(server_name)
-                if result is None:
-                    sys.stderr.write(f"[stdio-proxy] Daemon {server_name!r} died unexpectedly.\n")
+    import httpx_sse
+    from urllib.parse import urljoin
+
+    # The MCP SDK StreamableHTTPSessionManager requires the initial connection
+    # to be a POST containing the "initialize" JSON-RPC message. It will return
+    # the SSE stream directly in response to this POST.
+    first_line = line_queue.get()
+    if first_line is None:
+        return 0
+
+    with httpx.Client(timeout=httpx.Timeout(5.0, read=300.0)) as client:
+        try:
+            post_headers = headers.copy()
+            post_headers["Content-Type"] = "application/json"
+            post_headers["Accept"] = "application/json, text/event-stream"
+
+            with httpx_sse.connect_sse(client, "POST", url, headers=post_headers, content=first_line) as event_source:
+                endpoint_url = None
+                for sse in event_source.iter_sse():
+                    if sse.event == "endpoint":
+                        endpoint_url = urljoin(url, sse.data)
+                        from urllib.parse import urlparse, parse_qs
+
+                        parsed = urlparse(endpoint_url)
+                        qs = parse_qs(parsed.query)
+                        if "sessionId" in qs:
+                            post_headers["MCP-Session-ID"] = qs["sessionId"][0]
+                        break
+
+                if not endpoint_url:
+                    sys.stderr.write(f"[stdio-proxy] Did not receive endpoint URL from SSE at {url}\n")
                     return 2
-                port, token = result
-                url = f"http://127.0.0.1:{port}/mcp"
-                if token:
-                    headers["Authorization"] = f"Bearer {token}"
-            except httpx.HTTPError as e:
-                sys.stderr.write(f"[stdio-proxy] HTTP error: {e}\n")
-                return 2
+
+                def _stdout_writer() -> None:
+                    try:
+                        for sse in event_source.iter_sse():
+                            if sse.event == "message" and sse.data:
+                                sys.stdout.buffer.write(sse.data.encode("utf-8") + b"\n")
+                                sys.stdout.buffer.flush()
+                    except Exception as e:
+                        sys.stderr.write(f"[stdio-proxy] SSE error: {e}\n")
+                        import os
+
+                        os._exit(1)
+
+                writer_thread = threading.Thread(target=_stdout_writer, daemon=True)
+                writer_thread.start()
+
+                while True:
+                    line = line_queue.get()
+                    if line is None:
+                        return 0
+                    try:
+                        resp = client.post(endpoint_url, content=line, headers=post_headers)
+                        resp.raise_for_status()
+                    except httpx.ConnectError:
+                        sys.stderr.write(f"[stdio-proxy] Daemon {server_name!r} died unexpectedly.\n")
+                        return 2
+                    except httpx.HTTPError as e:
+                        sys.stderr.write(f"[stdio-proxy] HTTP error: {e}\n")
+                        return 2
+        except Exception as e:
+            sys.stderr.write(f"[stdio-proxy] Connection failed: {e}\n")
+            # For debugging, let's do a raw HTTP request to see the error body
+            try:
+                sys.stderr.write(f"[stdio-proxy] Debug first_line sent to server: {first_line!r}\n")
+                debug_resp = client.post(url, headers=post_headers, content=first_line)
+                sys.stderr.write(f"[stdio-proxy] Debug HTTP Response: {debug_resp.status_code} {debug_resp.text}\n")
+            except Exception as e2:
+                sys.stderr.write(f"[stdio-proxy] Debug HTTP request failed: {e2}\n")
+            return 2
