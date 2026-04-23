@@ -1,7 +1,9 @@
-const INFO = new TextEncoder().encode('mcp-relay')
+const encoder = new TextEncoder()
+
+const INFO = encoder.encode('mcp-relay')
 
 export async function deriveAesKey(sharedSecret: ArrayBuffer, passphrase: string): Promise<CryptoKey> {
-  const salt = new TextEncoder().encode(passphrase)
+  const salt = encoder.encode(passphrase)
   const keyMaterial = await crypto.subtle.importKey('raw', sharedSecret, 'HKDF', false, ['deriveKey'])
 
   return crypto.subtle.deriveKey(
