@@ -22,9 +22,9 @@ classifiers = [
 ]
 dependencies = [
     "fastapi>=0.136.0",
-    "uvicorn>=0.44.0",
-    "onnxruntime>=1.24.4",
-    "numpy>=1.26.4",
+    "uvicorn>=0.45.0",
+    "onnxruntime>=1.25.0",
+    "numpy>=2.4.4",
     "httpx>=0.28.1",
     "pydantic>=2.13.3",
 ]
@@ -37,7 +37,7 @@ dependencies = [
 # Re-add the dep (and gate `LlamaDiskCache` behind a JSON/msgpack alternative
 # or runtime opt-in) when the GGUF backend lands.
 gguf = []
-cuda = ["onnxruntime-gpu>=1.24.4"]
+cuda = ["onnxruntime-gpu>=1.25.0"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"

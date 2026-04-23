@@ -26,11 +26,11 @@ dependencies = [
     "httpx>=0.28.1",
     "cryptography>=46.0.7",
     "authlib>=1.7.0",
-    "starlette>=0.52.1",
+    "starlette>=1.0.0",
     # Cohere 6.1.x pins pydantic-core <2.44.0 which caps pydantic <2.13.3;
     # keep this floor aligned with web-core 1.3.3 so downstream (wet/mnemo/crg)
     # that include cohere can resolve the dependency tree.
-    "pydantic>=2.12.5",
+    "pydantic>=2.13.3",
     "loguru>=0.7.3",
     "platformdirs>=4.9.6",
     "tomli-w>=1.2.0",
