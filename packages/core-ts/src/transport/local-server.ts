@@ -14,8 +14,11 @@
  * Bearer enforcement, and lifecycle semantics are kept identical.
  */
 
+import * as fs from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import * as os from 'node:os'
+import * as path from 'node:path'
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
@@ -246,6 +249,12 @@ export async function runLocalServer(
   const addr = httpServer.address() as AddressInfo
   const actualPort = addr.port
 
+  const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
+  const lockDir = path.join(os.homedir(), '.config', 'mcp', 'locks')
+  fs.mkdirSync(lockDir, { recursive: true })
+  const lockFile = path.join(lockDir, `${options.serverName}-${actualPort}.lock`)
+  fs.writeFileSync(lockFile, `${process.pid}\n${actualPort}\n${proxyToken}\n`, { mode: 0o644 })
+
   // Invoke setup hook. Supports legacy 1-arg (success-only) and new 2-arg
   // (success + failure) signatures via Function.prototype.length so upstream
   // errors (invalid_grant / expired_token / access_denied) propagate to the
@@ -273,7 +282,12 @@ export async function runLocalServer(
         const delegatedShutdown = oauthApp && 'shutdown' in oauthApp ? oauthApp.shutdown() : Promise.resolve()
         delegatedShutdown
           .then(() => {
-            httpServer.close((err) => (err ? reject(err) : resolve()))
+            httpServer.close((err) => {
+              try {
+                fs.unlinkSync(lockFile)
+              } catch {}
+              err ? reject(err) : resolve()
+            })
           })
           .catch(reject)
       })

@@ -62,6 +62,10 @@
     "./auth": {
       "import": "./build/auth/index.js",
       "types": "./build/auth/index.d.ts"
+    },
+    "./transport": {
+      "import": "./build/transport/index.js",
+      "types": "./build/transport/index.d.ts"
     }
   },
   "scripts": {
