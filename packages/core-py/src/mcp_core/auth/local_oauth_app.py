@@ -258,6 +258,18 @@ def create_local_oauth_app(
                 status_code=400,
             )
 
+        # Reset stale completion markers from previous authorize submits.
+        # _setup_status is closure-scoped, so a key flipped to "complete"
+        # by a prior background poll (e.g. Outlook device code finished
+        # on the first attempt) would otherwise persist into the next
+        # form submit. The frontend renders a fresh oauth_device_code UI
+        # and starts polling /setup-status, which returns the stale
+        # "complete" within a few seconds and triggers a premature
+        # redirect. Reset all keys to "idle" so each submit starts from
+        # a clean state.
+        for _k in list(_setup_status.keys()):
+            _setup_status[_k] = "idle"
+
         # Save credentials via callback. Callback may return a dict with
         # next_step info (e.g., GDrive OAuth device code to show in the form).
         # The ``SubjectContext`` carries the per-authorize sub so the consumer

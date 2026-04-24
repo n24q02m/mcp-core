@@ -755,6 +755,46 @@ describe('GET /setup-status', () => {
       await srv.close()
     }
   })
+
+  // Regression: 2026-04-24 better-email-mcp bug. A prior submit's
+  // background poll flipped setupStatus["outlook"] to "complete", but the
+  // key lived in a module-scoped map and survived the next form submit.
+  // The second submit rendered a fresh oauth_device_code UI, started the
+  // 3-second /setup-status poll, and saw the stale "complete" on the
+  // first hit — the user saw the device code flash and then the app
+  // redirected before they ever approved the new code. Each POST
+  // /authorize must reset all existing keys back to "idle".
+  it('resets stale setupStatus entries on each POST /authorize submit', async () => {
+    const srv = await startApp({
+      onCredentialsSaved: () => null
+    })
+    try {
+      srv.app.markSetupComplete('outlook')
+      const stale = await fetch(`${srv.url}/setup-status`)
+      expect(await stale.json()).toEqual({ gdrive: 'idle', outlook: 'complete' })
+
+      const { challenge } = pkce()
+      const params = new URLSearchParams({
+        client_id: 'test-client',
+        redirect_uri: 'http://localhost:5555/callback',
+        state: 'xyz',
+        code_challenge: challenge,
+        code_challenge_method: 'S256'
+      })
+      const getResp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+      const nonce = extractNonce(await getResp.text())
+      await fetch(`${srv.url}/authorize?nonce=${nonce}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: 'sk-second-submit' })
+      })
+
+      const fresh = await fetch(`${srv.url}/setup-status`)
+      expect(await fresh.json()).toEqual({ gdrive: 'idle', outlook: 'idle' })
+    } finally {
+      await srv.close()
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------
