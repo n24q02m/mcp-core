@@ -2,6 +2,49 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-04-24)
+
+### Bug Fixes
+
+- Smart stdio proxy SSE session handling + Accept header + OAuth redirect
+  ([`09e05db`](https://github.com/n24q02m/mcp-core/commit/09e05dbb16a1e7b9b40f98e8e9b7e5cd7606b0f8))
+
+- Smart-stdio TS parity for SSE session + Accept header
+  ([`0b7127d`](https://github.com/n24q02m/mcp-core/commit/0b7127d117a12fb44f50df5b0c49a2b0eaaef9e8))
+
+- **deps**: Update non-major dependencies ([#77](https://github.com/n24q02m/mcp-core/pull/77),
+  [`ee35ceb`](https://github.com/n24q02m/mcp-core/commit/ee35ceb210495bf6a7c01f775b46052a6583d040))
+
+- **stdio**: Use CREATE_NO_WINDOW on Windows instead of DETACHED_PROCESS
+  ([`9adda23`](https://github.com/n24q02m/mcp-core/commit/9adda23990775f87c58c85bebed2defde4f14d8b))
+
+### Chores
+
+- **deps**: Update astral-sh/setup-uv action to v8
+  ([#78](https://github.com/n24q02m/mcp-core/pull/78),
+  [`a6b53ea`](https://github.com/n24q02m/mcp-core/commit/a6b53eaf721d8aed5f2ded3231e1ac8acaea0175))
+
+- **deps**: Update semgrep/semgrep docker digest to 7810f1d
+  ([#76](https://github.com/n24q02m/mcp-core/pull/76),
+  [`0ae11b3`](https://github.com/n24q02m/mcp-core/commit/0ae11b3d15c33960ae1ce36c9c2158e85a2b5aa4))
+
+### Features
+
+- Add focus-visible styles to TS credential form
+  ([#80](https://github.com/n24q02m/mcp-core/pull/80),
+  [`9664947`](https://github.com/n24q02m/mcp-core/commit/96649472d5f47a517671281e7722f249c950b820))
+
+- Cache TextEncoder and TextDecoder in crypto routines
+  ([#79](https://github.com/n24q02m/mcp-core/pull/79),
+  [`85cd02e`](https://github.com/n24q02m/mcp-core/commit/85cd02e668f42d52331a33d42518f40b9e3fc7ba))
+
+- Implement Smart Daemon Manager for stdio proxy
+  ([`3581ae5`](https://github.com/n24q02m/mcp-core/commit/3581ae57c20d54178087564a9656407398467a7c))
+
+- **core-ts**: Implement Smart Stdio Proxy (1-Daemon architecture)
+  ([`a5bb7bc`](https://github.com/n24q02m/mcp-core/commit/a5bb7bcb4eef146dc9c7dbe6323c4f5b23b64ef3))
+
+
 ## v1.6.3 (2026-04-22)
 
 ### Bug Fixes
