@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.7.3 (2026-04-24)
+
+### Bug Fixes
+
+- Narrow next_step type for downstream strict ty check
+  ([`6b8a8da`](https://github.com/n24q02m/mcp-core/commit/6b8a8dade8c956ee52bd2f71f45e6257998acf02))
+
+
 ## v1.7.2 (2026-04-24)
 
 ### Bug Fixes
