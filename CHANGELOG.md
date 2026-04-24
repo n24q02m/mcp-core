@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.7.4 (2026-04-24)
+
+### Bug Fixes
+
+- Re-loosen pydantic pin after Renovate revert
+  ([`1a1e3c5`](https://github.com/n24q02m/mcp-core/commit/1a1e3c51ec8e4b88b69f539d453f1200e33c04fa))
+
+
 ## v1.7.3 (2026-04-24)
 
 ### Bug Fixes
