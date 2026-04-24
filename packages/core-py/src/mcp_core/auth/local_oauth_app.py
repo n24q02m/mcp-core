@@ -27,7 +27,7 @@ import os
 import secrets
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any, Union
+from typing import Any, Union, cast
 
 from loguru import logger
 from starlette.applications import Starlette
@@ -67,13 +67,17 @@ _OTP_MAX_ATTEMPTS = 5
 # this primitive every browser session collapsed to a static ``local-user``
 # subject and leaked credentials across users.
 SubjectContext = dict[str, str]
-CredentialsCallback = Callable[[dict[str, str], SubjectContext], Union[dict | None, Awaitable[dict | None]]]
+CredentialsCallback = Callable[
+    [dict[str, str], SubjectContext], Union[dict[str, Any] | None, Awaitable[dict[str, Any] | None]]
+]
 # ``on_step_submitted`` also receives the ``SubjectContext`` carried through
 # from the original POST /authorize that opened the multi-step flow. /otp
 # clients have no sub in their body, so this primitive is the only way for
 # telegram-style servers to route OTP / 2FA input to the correct per-user
 # Telethon client when serving multi-tenant remote-relay.
-StepCallback = Callable[[dict[str, str], SubjectContext], Union[dict | None, Awaitable[dict | None]]]
+StepCallback = Callable[
+    [dict[str, str], SubjectContext], Union[dict[str, Any] | None, Awaitable[dict[str, Any] | None]]
+]
 
 
 def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
@@ -260,14 +264,14 @@ def create_local_oauth_app(
         # can persist credentials keyed by subject, matching the JWT that
         # /token will issue.
         context: SubjectContext = {"sub": session["sub"]}
-        next_step: dict | None = None
+        next_step: dict[str, Any] | None = None
         if on_credentials_saved is not None:
             try:
                 result = on_credentials_saved(credentials, context)
                 if inspect.iscoroutine(result):
                     result = await result
                 if isinstance(result, dict):
-                    next_step = result
+                    next_step = cast("dict[str, Any]", result)
             except Exception:
                 logger.exception("on_credentials_saved callback failed")
                 return JSONResponse(
@@ -445,14 +449,14 @@ def create_local_oauth_app(
         step_sub = str(_pending_step.get("sub", ""))
         step_context: SubjectContext = {"sub": step_sub}
 
-        next_step: dict | None = None
+        next_step: dict[str, Any] | None = None
         if on_step_submitted is not None:
             try:
                 result = on_step_submitted(step_data, step_context)
                 if inspect.iscoroutine(result):
                     result = await result
                 if isinstance(result, dict):
-                    next_step = result
+                    next_step = cast("dict[str, Any]", result)
             except Exception:
                 logger.exception("on_step_submitted callback failed")
                 return JSONResponse(
