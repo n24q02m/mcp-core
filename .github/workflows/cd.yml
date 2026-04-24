@@ -165,7 +165,8 @@ jobs:
           owner: n24q02m
           repositories: >-
             better-notion-mcp,better-email-mcp,better-telegram-mcp,
-            wet-mcp,mnemo-mcp,better-code-review-graph,better-godot-mcp
+            wet-mcp,mnemo-mcp,better-code-review-graph,better-godot-mcp,
+            imagine-mcp
 
       - name: Create issues in downstream repos
         env:
@@ -175,7 +176,7 @@ jobs:
         run: |
           set -euo pipefail
           TS_DOWNSTREAM="better-notion-mcp better-email-mcp better-godot-mcp"
-          PY_DOWNSTREAM="better-telegram-mcp wet-mcp mnemo-mcp better-code-review-graph"
+          PY_DOWNSTREAM="better-telegram-mcp wet-mcp mnemo-mcp better-code-review-graph imagine-mcp"
           CHANGELOG_URL="https://github.com/n24q02m/mcp-core/releases/tag/${TAG}"
 
           create_issue() {
