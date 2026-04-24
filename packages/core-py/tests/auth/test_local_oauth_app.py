@@ -951,3 +951,46 @@ class TestSetupStatus:
         app.state.mark_setup_failed("gdrive", "")
         resp = client.get("/setup-status")
         assert resp.json() == {"gdrive": "error:unknown error"}
+
+    def test_authorize_post_resets_stale_setup_status(self, app_and_issuer, client):
+        """Regression: 2026-04-24 better-email-mcp bug.
+
+        A prior submit's background poll flipped ``setup_status["outlook"]``
+        to ``"complete"`` but the key lived in a closure-scoped dict and
+        survived the next form submit. The second submit rendered a fresh
+        oauth_device_code UI, started the 3-second ``/setup-status`` poll,
+        and saw the stale ``"complete"`` on the first hit — the user saw
+        the device code flash and then the app redirected before they
+        ever approved the new code. Each POST /authorize must reset all
+        existing keys back to ``"idle"``.
+        """
+        import re
+
+        app, _issuer, _saved = app_and_issuer
+        app.state.mark_setup_complete("outlook")
+        stale = client.get("/setup-status")
+        assert stale.json() == {"gdrive": "idle", "outlook": "complete"}
+
+        _verifier, challenge = _pkce_pair()
+        resp = client.get(
+            "/authorize",
+            params={
+                "client_id": "test-client",
+                "redirect_uri": "http://localhost/callback",
+                "state": "test-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        )
+        assert resp.status_code == 200
+        nonce_match = re.search(r'nonce=([^"&]+)', resp.text)
+        assert nonce_match is not None
+        nonce = nonce_match.group(1)
+
+        client.post(
+            f"/authorize?nonce={nonce}",
+            json={"API_KEY": "sk-second-submit"},
+        )
+
+        fresh = client.get("/setup-status")
+        assert fresh.json() == {"gdrive": "idle", "outlook": "idle"}

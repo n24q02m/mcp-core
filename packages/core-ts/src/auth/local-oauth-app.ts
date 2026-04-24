@@ -337,6 +337,20 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       return
     }
 
+    // Reset stale completion markers from previous authorize submits.
+    // setupStatus is module-scoped, so a key flipped to "complete" by a
+    // prior background poll (e.g. Outlook device code finished on the
+    // first attempt) would otherwise persist into the next form submit.
+    // The frontend renders a fresh oauth_device_code UI and starts
+    // polling /setup-status, which returns the stale "complete" within
+    // a few seconds and triggers a premature redirect — the user sees
+    // the device code flash on screen and then the "setup complete"
+    // banner before they ever open microsoft.com/link. Reset all keys
+    // back to "idle" here so each submit starts from a clean state.
+    for (const key of Object.keys(setupStatus)) {
+      setupStatus[key] = 'idle'
+    }
+
     // Save credentials via callback. Callback may return a dict with
     // next_step info (e.g. GDrive OAuth device code to show in the form).
     // The per-authorize ``sub`` is threaded through so consumers persist
