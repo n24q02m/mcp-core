@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.7.5 (2026-04-24)
+
+### Bug Fixes
+
+- Narrow relay_schema to non-None before create_local_oauth_app
+  ([`c2cb2ab`](https://github.com/n24q02m/mcp-core/commit/c2cb2ab0849046cd9718d8f78be596f34b9bb67d))
+
+
 ## v1.7.4 (2026-04-24)
 
 ### Bug Fixes
