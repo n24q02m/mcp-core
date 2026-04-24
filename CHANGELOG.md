@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.7.2 (2026-04-24)
+
+### Bug Fixes
+
+- **deps**: Update non-major dependencies ([#81](https://github.com/n24q02m/mcp-core/pull/81),
+  [`57fceaf`](https://github.com/n24q02m/mcp-core/commit/57fceafe013fa9f12c87835c591f4c9e65d177a2))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#82](https://github.com/n24q02m/mcp-core/pull/82),
+  [`eaae873`](https://github.com/n24q02m/mcp-core/commit/eaae873947107fe9264b2f23cc812cf85f725f3b))
+
+
 ## v1.7.1 (2026-04-24)
 
 ### Bug Fixes
