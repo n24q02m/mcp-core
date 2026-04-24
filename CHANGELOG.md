@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.7.1 (2026-04-24)
+
+### Bug Fixes
+
+- Loosen pydantic pin to accommodate cohere 6.1.x
+  ([`e9fe4df`](https://github.com/n24q02m/mcp-core/commit/e9fe4df59214a3f86b97e3ac6a11e6ccf45572a7))
+
+
 ## v1.7.0 (2026-04-24)
 
 ### Bug Fixes
