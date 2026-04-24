@@ -2,6 +2,18 @@
 
 <!-- version list -->
 
+## v1.7.6 (2026-04-24)
+
+### Bug Fixes
+
+- Replace httpx_sse with local SSE parser to preserve Accept header
+  ([`1b9908d`](https://github.com/n24q02m/mcp-core/commit/1b9908d580f91571a6f2ccfdd02ac5ffc1224e44))
+
+- Reset stale setupStatus entries on every POST /authorize submit
+  ([#83](https://github.com/n24q02m/mcp-core/pull/83),
+  [`a159f2f`](https://github.com/n24q02m/mcp-core/commit/a159f2fb3f162217949419d7ce4348f2b0086349))
+
+
 ## v1.7.5 (2026-04-24)
 
 ### Bug Fixes

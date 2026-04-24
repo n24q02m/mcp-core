@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "n24q02m-mcp-core"
-version = "1.7.5"
+version = "1.7.6"
 description = "Unified MCP Streamable HTTP 2025-11-25 transport, OAuth 2.1 AS, lifecycle, install"
 readme = "README.md"
 requires-python = "==3.13.*"
