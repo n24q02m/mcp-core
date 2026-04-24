@@ -222,7 +222,7 @@ def build_local_app(
     else:
         from mcp_core.auth.local_oauth_app import create_local_oauth_app
 
-        # Create OAuth app to extract its routes
+        assert relay_schema is not None  # guaranteed by validation above
         oauth_app, _ = create_local_oauth_app(
             server_name=server_name,
             relay_schema=relay_schema,
