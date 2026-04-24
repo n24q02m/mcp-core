@@ -592,7 +592,7 @@ wheels = [
 
 [[package]]
 name = "n24q02m-mcp-core"
-version = "1.6.3"
+version = "1.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "authlib" },
@@ -624,7 +624,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "platformdirs", specifier = ">=4.9.6" },
-    { name = "pydantic", specifier = ">=2.13.3" },
+    { name = "pydantic", specifier = ">=2.13.3,<2.14" },
     { name = "starlette", specifier = ">=1.0.0" },
     { name = "tomli-w", specifier = ">=1.2.0" },
 ]

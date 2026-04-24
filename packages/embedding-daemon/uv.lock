@@ -182,7 +182,7 @@ wheels = [
 
 [[package]]
 name = "mcp-embedding-daemon"
-version = "1.6.3"
+version = "1.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -209,13 +209,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", specifier = ">=0.136.0" },
+    { name = "fastapi", specifier = ">=0.136.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "onnxruntime", specifier = ">=1.25.0" },
     { name = "onnxruntime-gpu", marker = "extra == 'cuda'", specifier = ">=1.25.0" },
     { name = "pydantic", specifier = ">=2.13.3" },
-    { name = "uvicorn", specifier = ">=0.45.0" },
+    { name = "uvicorn", specifier = ">=0.46.0" },
 ]
 provides-extras = ["gguf", "cuda"]
 
