@@ -18,11 +18,66 @@ from __future__ import annotations
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 from loguru import logger
 
 from mcp_core.lifecycle.lock import LifecycleLock
+
+
+@dataclass
+class _SseEvent:
+    event: str
+    data: str
+
+
+def _iter_sse(response: httpx.Response) -> Iterator[_SseEvent]:
+    """Yield parsed SSE events from an already-opened ``httpx.Response`` stream.
+
+    Replaces ``httpx_sse.connect_sse`` which unconditionally overwrites the
+    ``Accept`` header to ``text/event-stream`` — that breaks MCP Streamable
+    HTTP servers (FastMCP 3.2+) which require
+    ``Accept: application/json, text/event-stream`` and return 406 otherwise.
+
+    SSE format per the WHATWG spec: events are separated by blank lines; each
+    event is a sequence of ``field: value`` lines. We track only ``event``
+    and ``data`` since the MCP transport doesn't use ``id``/``retry``.
+    """
+    event_name = "message"
+    data_parts: list[str] = []
+
+    def _flush() -> Iterator[_SseEvent]:
+        nonlocal event_name, data_parts
+        if data_parts:
+            yield _SseEvent(event=event_name, data="\n".join(data_parts))
+        event_name = "message"
+        data_parts = []
+
+    for raw in response.iter_lines():
+        # ``iter_lines`` strips the newline but returns "" for blank separator lines.
+        line = raw if isinstance(raw, str) else raw.decode("utf-8", "replace")
+        if line == "":
+            yield from _flush()
+            continue
+        if line.startswith(":"):
+            # Comment line — ignore.
+            continue
+        if ":" in line:
+            field, _, value = line.partition(":")
+            value = value[1:] if value.startswith(" ") else value
+        else:
+            field, value = line, ""
+        if field == "event":
+            event_name = value
+        elif field == "data":
+            data_parts.append(value)
+        # Other fields (id, retry) intentionally ignored.
+
+    # Final flush if stream ended without trailing blank line.
+    yield from _flush()
 
 
 def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
@@ -179,7 +234,6 @@ def run_smart_stdio_proxy(
     reader_thread = threading.Thread(target=_stdin_reader, daemon=True)
     reader_thread.start()
 
-    import httpx_sse
     from urllib.parse import urljoin
 
     # The MCP SDK StreamableHTTPSessionManager requires the initial connection
@@ -195,17 +249,30 @@ def run_smart_stdio_proxy(
             post_headers["Content-Type"] = "application/json"
             post_headers["Accept"] = "application/json, text/event-stream"
 
-            with httpx_sse.connect_sse(client, "POST", url, headers=post_headers, content=first_line) as event_source:
+            with client.stream("POST", url, headers=post_headers, content=first_line) as response:
+                if response.status_code != 200:
+                    body = b"".join(response.iter_bytes()).decode("utf-8", "replace")
+                    sys.stderr.write(f"[stdio-proxy] Initial POST {url} returned {response.status_code}: {body}\n")
+                    return 2
+                event_iter = _iter_sse(response)
+
                 endpoint_url = None
-                for sse in event_source.iter_sse():
+                for sse in event_iter:
                     if sse.event == "endpoint":
                         endpoint_url = urljoin(url, sse.data)
-                        from urllib.parse import urlparse, parse_qs
+                        from urllib.parse import parse_qs, urlparse
 
                         parsed = urlparse(endpoint_url)
                         qs = parse_qs(parsed.query)
                         if "sessionId" in qs:
                             post_headers["MCP-Session-ID"] = qs["sessionId"][0]
+                        break
+                    if sse.event == "message" and sse.data:
+                        # Stateless mode: server emits "message" directly
+                        # (FastMCP streamable HTTP with no endpoint event).
+                        endpoint_url = url
+                        sys.stdout.buffer.write(sse.data.encode("utf-8") + b"\n")
+                        sys.stdout.buffer.flush()
                         break
 
                 if not endpoint_url:
@@ -214,7 +281,7 @@ def run_smart_stdio_proxy(
 
                 def _stdout_writer() -> None:
                     try:
-                        for sse in event_source.iter_sse():
+                        for sse in event_iter:
                             if sse.event == "message" and sse.data:
                                 sys.stdout.buffer.write(sse.data.encode("utf-8") + b"\n")
                                 sys.stdout.buffer.flush()
