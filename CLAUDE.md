@@ -55,9 +55,11 @@ mise run setup                 # Install tools + deps + pre-commit hooks
 - Publishing: PyPI trusted publishers (pending publisher đã config cho 3 packages) + npm trusted publisher (sau lần publish đầu với NPM OIDC).
 - Docker: chưa có (v0.1.0 library-only). Sẽ thêm sau khi embedding-daemon production-ready.
 
-## Infisical
+## Secrets (skret + AWS SSM)
 
-- Project: TBD (sẽ tạo mới sau)
+- skret SSM namespace: `/mcp-core/prod` (region `ap-southeast-1`)
+- CI: `skret env -e prod --path=/mcp-core/prod --format=dotenv >> $GITHUB_ENV`
+- Local dev: `skret run -e prod -- <cmd>` (uses AWS credential chain)
 
 ## Security
 
