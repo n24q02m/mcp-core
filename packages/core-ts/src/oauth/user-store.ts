@@ -26,8 +26,10 @@ export class SqliteUserStore implements IUserCredentialStore {
     if (masterKey.length !== 32) throw new Error('masterKey must be 32 bytes')
     this.masterKey = masterKey
 
-    // Ensure directory exists
-    mkdirSync(dirname(dbPath), { recursive: true })
+    // Ensure directory exists with strict permissions (owner-only access).
+    // 0o700 = owner read+write+exec only; group/other denied. This is the
+    // secure default for a credential store directory.
+    mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 })
 
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
