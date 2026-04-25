@@ -280,6 +280,12 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
             box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2);
         }
 
+        .field-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #0f0f0f;
+        }
+
         .help-text {
             font-size: 0.8125rem;
             color: #9ca3af;
