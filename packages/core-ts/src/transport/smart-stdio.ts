@@ -309,13 +309,18 @@ export async function runSmartStdioProxy(
           modeDetermined = true
           process.stderr.write(`[stdio-proxy] Stateless mode detected (SSE message event)\n`)
 
-          try {
-            await readSsePromise
-          } catch {}
+          // Cancel the SSE body BEFORE awaiting the reader promise. Otherwise,
+          // a daemon that keeps the SSE connection open (typical for stateless
+          // streamable HTTP) will cause `readSsePromise` to never resolve,
+          // hanging the readline loop and starving the stdio client. Cancelling
+          // first signals `done=true` to the reader so the promise resolves.
           if (activeSseBody) {
             await activeSseBody.cancel().catch(() => {})
             activeSseBody = null
           }
+          try {
+            await readSsePromise
+          } catch {}
           continue
         }
       }
