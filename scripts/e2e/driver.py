@@ -78,12 +78,33 @@ EXPECTED_TOOLS: dict[str, list[str]] = {
 # - web-core is uv-managed Python despite the name (pyproject.toml; no package.json).
 # - claude-plugins ships a Python validator script for marketplace.json.
 # - better-godot-mcp is TypeScript-first under bun.
-T0_COMMANDS: dict[str, list[str]] = {
-    "mcp-core": ["bun", "test"],
-    "qwen3-embed": ["uv", "run", "pytest"],
-    "web-core": ["uv", "run", "pytest"],
-    "claude-plugins": ["python3", "scripts/validate_marketplace.py"],
-    "better-godot-mcp": ["bun", "test"],
+# Each entry is a list of (relative_cwd, argv) pairs run sequentially.
+# Empty string for ``relative_cwd`` means "repo root". A failure in any step
+# fails the whole config.
+#
+# Notes per repo:
+# - mcp-core is a monorepo: TS in packages/core-ts (vitest via ``bun run
+#   test`` — NOT ``bun test`` which is Bun's built-in runner with broken
+#   vitest-compat), Python in packages/core-py (pytest).
+# - qwen3-embed / web-core: uv-managed Python.
+# - claude-plugins: Python validator script for marketplace.json.
+# - better-godot-mcp: TypeScript-first under bun (vitest).
+T0_COMMANDS: dict[str, list[tuple[str, list[str]]]] = {
+    "mcp-core": [
+        ("packages/core-ts", ["bun", "run", "test"]),
+        ("packages/core-py", ["uv", "run", "pytest", "--tb=short", "-q"]),
+    ],
+    # qwen3-embed: integration tests need ~1.2GB GGUF download — CLAUDE.md
+    # spec is "CI chỉ chạy unit tests", so the driver mirrors that.
+    "qwen3-embed": [("", ["uv", "run", "pytest", "-m", "not integration"])],
+    # web-core: launch the venv python DIRECTLY (skip ``uv run`` wrapper).
+    # When the driver itself is under ``uv run``, a nested ``uv run`` in
+    # web-core triggers a Python 3.13 GC access violation on Windows during
+    # cpython ast.parse / getstatementrange_ast. The venv is pre-synced via
+    # the repo's own pre-commit / mise tasks.
+    "web-core": [("", [".venv/Scripts/python.exe", "-m", "pytest"])],
+    "claude-plugins": [("", ["python3", "scripts/validate_marketplace.py"])],
+    "better-godot-mcp": [("", ["bun", "run", "test"])],
 }
 
 
@@ -93,27 +114,42 @@ def load_matrix() -> list[dict]:
 
 def run_t0_config(config: dict) -> None:
     repo = config["repo"]
-    cmd = T0_COMMANDS.get(repo)
-    if cmd is None:
+    steps = T0_COMMANDS.get(repo)
+    if steps is None:
         raise ValueError(f"No T0 command registered for repo: {repo}")
     repo_root = Path(__file__).parent.parent.parent.parent / repo
     if not repo_root.exists():
         raise FileNotFoundError(f"Repo not found at {repo_root}")
-    print(
-        f"[driver] {config['id']}: {' '.join(cmd)} (cwd={repo_root})", file=sys.stderr
-    )
-    # Strip UV_*/VIRTUAL_ENV so the child uv invocation resolves its own venv
-    # cleanly without inheriting the driver's. Hygiene; does not by itself
-    # cure the web-core curl-cffi nested-subprocess crash on Windows (still
-    # under investigation).
+
+    # Strip UV_*/VIRTUAL_ENV/PYTHONHOME/PYTHONPATH so the child Python
+    # process resolves its own venv + stdlib cleanly. PYTHONHOME inherited
+    # from a parent ``uv run`` (which runs Python 3.14 under uv's managed
+    # interpreter) made web-core's 3.13 venv crash with 0xC0000005 in
+    # cpython ast.parse during pytest GC on Windows. Removing the parent's
+    # interpreter env vars cures it.
     import os as _os
 
     child_env = {
         k: v
         for k, v in _os.environ.items()
-        if not k.startswith("UV_") and k != "VIRTUAL_ENV"
+        if not k.startswith("UV")
+        and k not in {"VIRTUAL_ENV", "PYTHONHOME", "PYTHONPATH"}
     }
-    subprocess.run(cmd, cwd=repo_root, check=True, env=child_env)
+
+    for rel_cwd, cmd in steps:
+        cwd = repo_root / rel_cwd if rel_cwd else repo_root
+        # If the first arg looks like a repo-relative venv path
+        # (``.venv/Scripts/python.exe``), resolve it absolute relative to
+        # cwd. ``subprocess.run`` does not honour cwd for argv[0] PATH lookup
+        # on Windows, so a bare relative path triggers ENOENT.
+        resolved = list(cmd)
+        if resolved and resolved[0].startswith(".venv/"):
+            resolved[0] = str((cwd / resolved[0]).resolve())
+        print(
+            f"[driver] {config['id']}: {' '.join(cmd)} (cwd={cwd})",
+            file=sys.stderr,
+        )
+        subprocess.run(resolved, cwd=cwd, check=True, env=child_env)
 
 
 def run_t2_config(config: dict, deployment: str) -> None:
