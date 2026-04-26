@@ -1,0 +1,151 @@
+# E2E test matrix — single source of truth for the 16-config 3-axis taxonomy.
+#
+# Axes:
+#   - auth: none / oauth / relay
+#   - interaction: non-interaction / interaction (encoded via tier)
+#   - tier: t0-only / t2-non-interaction / t2-interaction
+#
+# Multi-user is a deployment property of remote mode (PUBLIC_URL env), not a
+# config — single isolation test runs at mcp-core fixture level.
+#
+# Schema validated by tests/test_matrix.py.
+
+version: 1
+configs:
+  # ============================================================
+  # T0-only (CI/precommit, no upstream identity, 5 configs)
+  # ============================================================
+
+  - id: mcp-core-ci
+    repo: mcp-core
+    tier: t0-only
+    auth: none
+    test: "unit + integration"
+
+  - id: qwen3-embed-ci
+    repo: qwen3-embed
+    tier: t0-only
+    auth: none
+    test: "tests (Modal worker stubs)"
+
+  - id: web-core-ci
+    repo: web-core
+    tier: t0-only
+    auth: none
+    test: "build + lint"
+
+  - id: claude-plugins-ci
+    repo: claude-plugins
+    tier: t0-only
+    auth: none
+    test: "skill validation"
+
+  - id: godot-stub
+    repo: better-godot-mcp
+    tier: t0-only
+    auth: none
+    test: "stub mode (no exe required)"
+
+  # ============================================================
+  # T2 non-interaction (driver pre-fills relay form, 6 configs)
+  # ============================================================
+
+  - id: notion-paste-token
+    repo: better-notion-mcp
+    tier: t2-non-interaction
+    auth: relay
+    deployment: [local]
+    skret_namespace: /better-notion-mcp/prod
+    skret_keys: [NOTION_INTEGRATION_TOKEN]
+
+  - id: email-gmail
+    repo: better-email-mcp
+    tier: t2-non-interaction
+    auth: relay
+    deployment: [local, remote]
+    skret_namespace: /better-email-mcp/prod
+    skret_keys: [GMAIL_EMAIL, GMAIL_APP_PASSWORD, MCP_DCR_SERVER_SECRET]
+
+  - id: telegram-bot
+    repo: better-telegram-mcp
+    tier: t2-non-interaction
+    auth: relay
+    deployment: [local, remote]
+    skret_namespace: /better-telegram-mcp/prod
+    skret_keys: [TELEGRAM_BOT_TOKEN, MCP_DCR_SERVER_SECRET]
+
+  - id: crg
+    repo: better-code-review-graph
+    tier: t2-non-interaction
+    auth: relay
+    deployment: [local, remote]
+    skret_namespace: /better-code-review-graph/prod
+    skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
+    skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
+
+  - id: imagine
+    repo: imagine-mcp
+    tier: t2-non-interaction
+    auth: relay
+    deployment: [local, remote]
+    skret_namespace: /imagine-mcp/prod
+    skret_keys: [GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY, MCP_DCR_SERVER_SECRET]
+    skret_optional: [GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY]
+
+  - id: godot-with-exe
+    repo: better-godot-mcp
+    tier: t2-non-interaction
+    auth: none
+    deployment: [local]
+    requires_local_resource: "godot binary on PATH or GODOT_PATH env"
+
+  # ============================================================
+  # T2 interaction (driver fills, user clicks at upstream gate, 5 configs)
+  # ============================================================
+
+  - id: notion-oauth
+    repo: better-notion-mcp
+    tier: t2-interaction
+    auth: oauth
+    deployment: [remote]
+    skret_namespace: /better-notion-mcp/prod
+    skret_keys: [NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, MCP_DCR_SERVER_SECRET]
+    user_gate: "Click Notion consent in browser"
+
+  - id: email-outlook
+    repo: better-email-mcp
+    tier: t2-interaction
+    auth: relay
+    deployment: [local, remote]
+    skret_namespace: /better-email-mcp/prod
+    skret_keys: [OUTLOOK_EMAIL, MCP_DCR_SERVER_SECRET]
+    user_gate: "Click Microsoft device-code link"
+
+  - id: telegram-user
+    repo: better-telegram-mcp
+    tier: t2-interaction
+    auth: relay
+    deployment: [local, remote]
+    skret_namespace: /better-telegram-mcp/prod
+    skret_keys: [TELEGRAM_PHONE, MCP_DCR_SERVER_SECRET]
+    user_gate: "Type OTP + 2FA password in browser"
+
+  - id: wet-full
+    repo: wet-mcp
+    tier: t2-interaction
+    auth: relay
+    deployment: [local, remote]
+    skret_namespace: /wet-mcp/prod
+    skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
+    skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
+    user_gate: "Click GDrive device-code link"
+
+  - id: mnemo-full
+    repo: mnemo-mcp
+    tier: t2-interaction
+    auth: relay
+    deployment: [local, remote]
+    skret_namespace: /mnemo-mcp/prod
+    skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
+    skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
+    user_gate: "Click GDrive device-code link"
