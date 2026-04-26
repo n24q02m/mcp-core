@@ -214,16 +214,36 @@ def main() -> None:
     args = parser.parse_args()
 
     matrix = load_matrix()
-    if args.target == "t0":
-        targets = [c for c in matrix if c["tier"] == "t0-only"]
-    elif args.target == "all":
-        targets = matrix
-    else:
-        targets = [c for c in matrix if c["id"] == args.target]
-        if not targets:
-            sys.exit(f"Unknown config: {args.target}")
 
-    failed: list[str] = []
+    # Aggregate targets ('t0', 'all') re-invoke ourselves per config so each
+    # subprocess runs in a clean environment. Otherwise nested-uv state from
+    # the previous config leaks into the next (vitest 2-test flake on Windows
+    # observed 2026-04-26 when chaining mcp-core-ci into the t0 sweep).
+    if args.target in {"t0", "all"}:
+        if args.target == "t0":
+            ids = [c["id"] for c in matrix if c["tier"] == "t0-only"]
+        else:
+            ids = [c["id"] for c in matrix]
+        failed: list[str] = []
+        for cid in ids:
+            print(
+                f"\n[driver] >>> spawning fresh subprocess for {cid}", file=sys.stderr
+            )
+            r = subprocess.run(
+                [sys.executable, "-m", "e2e.driver", cid],
+                cwd=Path(__file__).parent,
+            )
+            if r.returncode != 0:
+                failed.append(cid)
+        if failed:
+            sys.exit(f"E2E failures: {failed}")
+        return
+
+    targets = [c for c in matrix if c["id"] == args.target]
+    if not targets:
+        sys.exit(f"Unknown config: {args.target}")
+
+    failed = []
     for c in targets:
         try:
             for dep in c.get("deployment", [args.deployment]):
