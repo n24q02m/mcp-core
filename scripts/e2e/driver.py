@@ -102,7 +102,18 @@ def run_t0_config(config: dict) -> None:
     print(
         f"[driver] {config['id']}: {' '.join(cmd)} (cwd={repo_root})", file=sys.stderr
     )
-    subprocess.run(cmd, cwd=repo_root, check=True)
+    # Strip UV_*/VIRTUAL_ENV so the child uv invocation resolves its own venv
+    # cleanly without inheriting the driver's. Hygiene; does not by itself
+    # cure the web-core curl-cffi nested-subprocess crash on Windows (still
+    # under investigation).
+    import os as _os
+
+    child_env = {
+        k: v
+        for k, v in _os.environ.items()
+        if not k.startswith("UV_") and k != "VIRTUAL_ENV"
+    }
+    subprocess.run(cmd, cwd=repo_root, check=True, env=child_env)
 
 
 def run_t2_config(config: dict, deployment: str) -> None:
