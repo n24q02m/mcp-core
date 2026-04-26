@@ -126,14 +126,26 @@ export async function pollForResponses(
   timeoutMs = 300_000
 ): Promise<string> {
   const deadline = Date.now() + timeoutMs
+  let lastSeenCount = 0
 
   while (Date.now() < deadline) {
     const response = await fetch(`${relayBaseUrl}/api/sessions/${sessionId}/responses`)
     if (!response.ok) throw new Error(`Failed to poll responses: ${response.status}`)
 
     const body = await response.json()
-    const match = body.responses?.find((r: { messageId: string; value: string }) => r.messageId === messageId)
-    if (match) return match.value
+    const responses = body.responses
+
+    // Optimization: The responses array is append-only.
+    // Instead of doing O(N) array.find() scanning from the beginning,
+    // manually loop backwards stopping at the last seen count.
+    if (responses) {
+      for (let i = responses.length - 1; i >= lastSeenCount; i--) {
+        if (responses[i].messageId === messageId) {
+          return responses[i].value
+        }
+      }
+      lastSeenCount = responses.length
+    }
 
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
