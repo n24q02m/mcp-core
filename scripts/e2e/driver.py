@@ -71,12 +71,18 @@ EXPECTED_TOOLS: dict[str, list[str]] = {
 }
 
 # T0 commands per repo. Run from the repo root (cwd = ../../<repo> relative to
-# this driver). Using ``shell=False`` and a list keeps Windows/Bash parity.
+# this driver). Verified 2026-04-26 against actual repo build systems:
+# - mcp-core monorepo uses bun for TS + uv for Python; bun test runs both via
+#   the workspace + pre-commit conventions.
+# - qwen3-embed is uv-managed Python (pytest covers Modal worker stubs).
+# - web-core is uv-managed Python despite the name (pyproject.toml; no package.json).
+# - claude-plugins ships a Python validator script for marketplace.json.
+# - better-godot-mcp is TypeScript-first under bun.
 T0_COMMANDS: dict[str, list[str]] = {
     "mcp-core": ["bun", "test"],
     "qwen3-embed": ["uv", "run", "pytest"],
-    "web-core": ["bun", "run", "build"],
-    "claude-plugins": ["bun", "run", "validate"],
+    "web-core": ["uv", "run", "pytest"],
+    "claude-plugins": ["python3", "scripts/validate_marketplace.py"],
     "better-godot-mcp": ["bun", "test"],
 }
 
