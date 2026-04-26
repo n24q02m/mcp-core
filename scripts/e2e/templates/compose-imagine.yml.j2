@@ -1,0 +1,26 @@
+services:
+  imagine-mcp-test:
+    image: ghcr.io/n24q02m/imagine-mcp:{{ image_tag | default('beta') }}
+    ports:
+      - "127.0.0.1:{{ host_port }}:8080"
+    environment:
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8080"
+      {% if deployment == 'remote' -%}
+      PUBLIC_URL: "http://127.0.0.1:{{ host_port }}"
+      MCP_DCR_SERVER_SECRET: "{{ mcp_dcr_server_secret }}"
+      {%- endif %}
+      {% if gemini_api_key is defined and gemini_api_key -%}
+      GEMINI_API_KEY: "{{ gemini_api_key }}"
+      {%- endif %}
+      {% if openai_api_key is defined and openai_api_key -%}
+      OPENAI_API_KEY: "{{ openai_api_key }}"
+      {%- endif %}
+      {% if xai_api_key is defined and xai_api_key -%}
+      XAI_API_KEY: "{{ xai_api_key }}"
+      {%- endif %}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/.well-known/oauth-authorization-server || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
