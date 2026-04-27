@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     "fastmcp>=3.2.4",
     "httpx>=0.28.1",
-    "cryptography>=46.0.7",
+    "cryptography>=47.0.0",
     "authlib>=1.7.0",
     "starlette>=1.0.0",
     # Cohere 6.1.x pins pydantic-core <2.44.0 which caps pydantic <2.13;
