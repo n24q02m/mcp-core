@@ -10,6 +10,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Restrict the default GITHUB_TOKEN — this workflow only checks out source
+# and runs tests, so read-only contents access is sufficient.
+permissions:
+  contents: read
+
 jobs:
   e2e-t0:
     runs-on: ubuntu-latest
