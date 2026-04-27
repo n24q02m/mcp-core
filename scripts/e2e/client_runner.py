@@ -31,7 +31,7 @@ class _BearerAuth(httpx.Auth):
 
     def auth_flow(
         self, request: httpx.Request
-    ) -> Generator[httpx.Request, httpx.Response, None]:
+    ) -> Generator[httpx.Request, httpx.Response]:
         request.headers["Authorization"] = f"Bearer {self._token}"
         yield request
 
