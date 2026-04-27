@@ -72,13 +72,28 @@ async def _register_client(client: httpx.AsyncClient, base_url: str) -> str:
 
 
 async def acquire_jwt(
-    base_url: str, creds: dict[str, str], timeout: float = 60.0
+    base_url: str,
+    creds: dict[str, str],
+    timeout: float = 60.0,
+    on_next_step: Callable[[dict], Awaitable[None]] | Callable[[dict], None] | None = None,
+    poll_completion_url: str | None = None,
+    poll_timeout: float = 600.0,
 ) -> str:
     """Drive the full PKCE + form-fill + token-exchange flow.
 
     Returns the JWT access token. Raises ``RuntimeError`` with the server's
     error body if the credential save fails or the token endpoint rejects
     the auth code.
+
+    When the credential save returns ``next_step`` (e.g. email-outlook's
+    ``oauth_device_code`` response containing ``verification_url`` +
+    ``user_code``), ``on_next_step`` is invoked with that dict so the
+    caller can announce the upstream URL to the user. The driver then
+    polls ``poll_completion_url`` (typically ``{base}/setup-status``)
+    until it reports ``complete`` before exchanging the auth code at
+    ``/token``. The auth code itself is issued inline at /authorize but
+    is only useful once the upstream device-code flow finishes — exchanging
+    it earlier yields a JWT whose tools fail because Outlook isn't auth'd.
     """
     verifier, challenge = _pkce_pair()
     state = secrets.token_urlsafe(16)
@@ -132,6 +147,25 @@ async def acquire_jwt(
         if not body.get("ok"):
             raise RuntimeError(f"Credential save failed: {body}")
 
+        # email-outlook returns ``next_step.type == "oauth_device_code"``
+        # alongside the redirect_url. The browser displays the device-code
+        # banner, the user signs in upstream, and the server's background
+        # poller marks setup-status complete. We mirror that by announcing
+        # the next_step and polling /setup-status until complete before
+        # exchanging the code.
+        next_step = body.get("next_step")
+        if next_step:
+            if on_next_step is not None:
+                result = on_next_step(next_step)
+                if asyncio.iscoroutine(result):
+                    await result
+            if poll_completion_url is None:
+                raise RuntimeError(
+                    f"Server returned next_step={next_step['type']} but no "
+                    "poll_completion_url provided"
+                )
+            await _poll_until_complete(client, poll_completion_url, poll_timeout)
+
         redirect_url = body["redirect_url"]
         qs = parse_qs(urlparse(redirect_url).query)
         code = qs.get("code", [None])[0]
@@ -154,6 +188,35 @@ async def acquire_jwt(
         if not access_token:
             raise RuntimeError(f"No access_token in /token response: {token_body}")
         return str(access_token)
+
+
+async def _poll_until_complete(
+    client: httpx.AsyncClient, poll_url: str, timeout: float
+) -> None:
+    """Poll ``poll_url`` (typically ``/setup-status``) until ``state=complete``.
+
+    Mirrors :func:`e2e.user_gate.announce_and_wait` but reuses the OAuth
+    client's httpx session so we don't open a parallel connection. Raises
+    ``TimeoutError`` if completion doesn't land in time, ``RuntimeError``
+    on explicit error states reported by the server.
+    """
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            r = await client.get(poll_url, timeout=5.0)
+            if r.status_code == 200:
+                data = r.json()
+                state = data.get("state") or next(iter(data.values()), None)
+                if state == "complete":
+                    return
+                if state == "error":
+                    raise RuntimeError(f"Setup failed: {data}")
+        except httpx.HTTPError:
+            pass
+        await asyncio.sleep(3)
+    raise TimeoutError(f"Setup-status not complete within {timeout}s ({poll_url})")
 
 
 async def _start_callback_listener(

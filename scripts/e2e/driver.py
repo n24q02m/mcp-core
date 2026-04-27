@@ -28,7 +28,6 @@ from e2e.compose_renderer import render_compose
 from e2e.oauth_client import acquire_jwt, acquire_jwt_via_upstream_consent
 from e2e.ports import allocate_port
 from e2e.skret_loader import load_namespace_required
-from e2e.user_gate import announce_and_wait
 
 MATRIX_PATH = Path(__file__).parent / "matrix.yaml"
 
@@ -184,6 +183,23 @@ def run_t0_config(config: dict) -> None:
         subprocess.run(resolved, cwd=cwd, check=True, env=child_env)
 
 
+def _shape_creds_for_form(config: dict, creds: dict[str, str]) -> dict[str, str]:
+    """Map skret values into the field names the relay form actually accepts.
+
+    Most servers store the relay form's field name verbatim in skret
+    (NOTION_TOKEN, EMAIL_CREDENTIALS, JINA_AI_API_KEY, ...). email-outlook
+    is the exception: skret tracks ``OUTLOOK_EMAIL`` semantically but the
+    server's relay form expects the same ``EMAIL_CREDENTIALS=email:pass``
+    field as gmail. For Outlook the password is empty (server triggers
+    Microsoft Device Code OAuth2) so we synthesize ``email:`` here.
+    """
+    if config.get("id") == "email-outlook" and "OUTLOOK_EMAIL" in creds:
+        shaped = {k: v for k, v in creds.items() if k != "OUTLOOK_EMAIL"}
+        shaped["EMAIL_CREDENTIALS"] = f"{creds['OUTLOOK_EMAIL']}:"
+        return shaped
+    return creds
+
+
 def run_t2_config(config: dict, deployment: str) -> None:
     print(f"\n[driver] === {config['id']} ({deployment}) ===", file=sys.stderr)
 
@@ -195,8 +211,13 @@ def run_t2_config(config: dict, deployment: str) -> None:
         if skret_keys
         else {}
     )
+    creds = _shape_creds_for_form(config, creds)
 
-    port = allocate_port()
+    # Some configs (notion-oauth) need a stable host port so the upstream
+    # OAuth provider's pre-registered redirect URI matches what the local
+    # mcp container exposes. ``host_port`` in matrix.yaml pins the port;
+    # everything else uses an ephemeral allocation.
+    port = config.get("host_port") or allocate_port()
     compose_yaml = render_compose(
         config, deployment=deployment, creds=creds, host_port=port
     )
@@ -237,14 +258,41 @@ def run_t2_config(config: dict, deployment: str) -> None:
             elif config["auth"] != "none":
                 # Drive the OAuth 2.1 PKCE flow: GET /authorize form, POST
                 # creds, /token-exchange auth code → JWT for /mcp Bearer.
-                access_token = asyncio.run(acquire_jwt(base_url, creds=creds))
-
+                # For t2-interaction relay configs (email-outlook,
+                # telegram-user) the credential POST returns ``next_step``
+                # with verification_url + user_code; the driver announces it
+                # and polls /setup-status until complete before exchanging
+                # the auth code at /token.
                 if config["tier"] == "t2-interaction":
-                    announce_and_wait(
-                        config["user_gate"],
-                        relay_url=f"{base_url}/authorize",
-                        poll_url=f"{base_url}/setup-status",
+                    def _announce_next_step(next_step: dict) -> None:
+                        bar = "=" * 60
+                        print(f"\n{bar}", file=sys.stderr)
+                        print(
+                            f"[USER ACTION REQUIRED] {config['user_gate']}",
+                            file=sys.stderr,
+                        )
+                        if next_step.get("verification_url"):
+                            print(
+                                f"  Open: {next_step['verification_url']}",
+                                file=sys.stderr,
+                            )
+                        if next_step.get("user_code"):
+                            print(
+                                f"  User code: {next_step['user_code']}",
+                                file=sys.stderr,
+                            )
+                        print(f"{bar}\n", file=sys.stderr)
+
+                    access_token = asyncio.run(
+                        acquire_jwt(
+                            base_url,
+                            creds=creds,
+                            on_next_step=_announce_next_step,
+                            poll_completion_url=f"{base_url}/setup-status",
+                        )
                     )
+                else:
+                    access_token = asyncio.run(acquire_jwt(base_url, creds=creds))
 
             asyncio.run(
                 run_e2e_http(

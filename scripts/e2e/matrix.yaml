@@ -119,12 +119,24 @@ configs:
     skret_namespace: /better-notion-mcp/prod
     skret_keys: [NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, MCP_DCR_SERVER_SECRET]
     user_gate: "Click Notion consent in browser"
+    # Notion OAuth app accepts only pre-registered redirect URIs. Using a
+    # stable host port lets the test pass once
+    # ``http://127.0.0.1:38765/callback`` is added to the app's allowed
+    # redirect URIs in Notion's developer dashboard. Random ports would
+    # require a fresh registration per run.
+    host_port: 38765
 
   - id: email-outlook
     repo: better-email-mcp
     tier: t2-interaction
     auth: relay
-    deployment: [local, remote]
+    # local-relay mode rejects outlook.com / hotmail.com / live.com paste-
+    # token submits with a "switch to remote-relay" message
+    # (better-email-mcp/CLAUDE.md). Outlook is only testable in remote-
+    # relay where the server initiates Microsoft Device Code OAuth2 itself.
+    # OUTLOOK_CLIENT_ID falls back to the bundled public Azure client at
+    # ``oauth2.ts:88`` (d56f8c71-...) so no skret entry is required.
+    deployment: [remote]
     skret_namespace: /better-email-mcp/prod
     skret_keys: [OUTLOOK_EMAIL, MCP_DCR_SERVER_SECRET]
     user_gate: "Click Microsoft device-code link"
