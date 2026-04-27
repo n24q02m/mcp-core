@@ -94,7 +94,7 @@ def create_local_oauth_app(
     on_credentials_saved: CredentialsCallback | None = None,
     on_step_submitted: StepCallback | None = None,
     jwt_issuer: JWTIssuer | None = None,
-    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
+    custom_credential_form_html: Callable[..., str] | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create OAuth 2.1 Authorization Server Starlette app.
 
@@ -115,13 +115,19 @@ def create_local_oauth_app(
             timing-safe comparison to prevent timing attacks.
         jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
             automatically using ``server_name``.
-        custom_credential_form_html: Optional callable ``(schema, submit_url)
-            -> html_string`` used to render GET /authorize. When provided,
-            replaces the default ``render_credential_form`` output. Consumers
-            (email, telegram) use this to inject rich UX (multi-account cards,
-            tabs, domain detection) while reusing core OAuth plumbing. The
-            returned HTML MUST include a form/fetch that POSTs JSON to
-            ``submit_url`` (which embeds the PKCE nonce).
+        custom_credential_form_html: Optional callable
+            ``(schema, submit_url, *, prefill=None) -> html_string`` used to
+            render GET /authorize. When provided, replaces the default
+            ``render_credential_form`` output. Consumers (email, telegram)
+            use this to inject rich UX (multi-account cards, tabs, domain
+            detection) while reusing core OAuth plumbing. The returned HTML
+            MUST include a form/fetch that POSTs JSON to ``submit_url``
+            (which embeds the PKCE nonce). The optional ``prefill`` mapping
+            carries values extracted from ``?prefill_<KEY>=<value>`` query
+            params on the GET so consumers can render ``<input value="...">``
+            for skret-derived fields the driver knows up front (e.g.
+            telegram-user TELEGRAM_PHONE), letting the user click Connect
+            instead of retyping them. Renderers may safely ignore prefill.
 
     Returns:
         ``(app, jwt_issuer)`` tuple. The ``jwt_issuer`` is needed by the
@@ -204,6 +210,16 @@ def create_local_oauth_app(
                 status_code=400,
             )
 
+        # Extract prefill values from query: ``?prefill_<KEY>=<VALUE>``. The
+        # driver builds these from skret so the user only types what skret
+        # cannot supply (OTP / 2FA password). Renderers receive a flat
+        # ``{KEY: VALUE}`` dict; values land as HTML-escaped ``value`` attrs
+        # on matching inputs in the form.
+        prefill: dict[str, str] = {}
+        for k in params.keys():
+            if k.startswith("prefill_"):
+                prefill[k.removeprefix("prefill_")] = params[k]
+
         # Create a session nonce that ties the form submission to this PKCE flow
         # and a fresh per-authorize ``sub`` that will be passed to the credential
         # save callback and stamped onto the JWT at /token. Generating the sub
@@ -227,9 +243,9 @@ def create_local_oauth_app(
         base = _base_url(request)
         submit_url = f"{base}/authorize?nonce={nonce}"
         if custom_credential_form_html is not None:
-            html_content = custom_credential_form_html(relay_schema, submit_url)
+            html_content = custom_credential_form_html(relay_schema, submit_url, prefill=prefill)
         else:
-            html_content = render_credential_form(relay_schema, submit_url=submit_url)
+            html_content = render_credential_form(relay_schema, submit_url=submit_url, prefill=prefill)
         return HTMLResponse(html_content)
 
     async def authorize_post(request: Request) -> JSONResponse:

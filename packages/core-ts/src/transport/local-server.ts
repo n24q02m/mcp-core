@@ -82,7 +82,10 @@ export interface RunLocalServerOptions {
    * Optional renderer used in place of the default credential form on GET
    * /authorize. Passed through to ``createLocalOAuthApp``.
    */
-  customCredentialFormHtml?: (schema: RelayConfigSchema, options: { submitUrl: string }) => string
+  customCredentialFormHtml?: (
+    schema: RelayConfigSchema,
+    options: { submitUrl: string; prefill?: Record<string, string> }
+  ) => string
   /**
    * Optional middleware invoked after JWT verification and before the MCP
    * transport handles the request. Called with verified claims and a ``next``

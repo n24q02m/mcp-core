@@ -132,7 +132,7 @@ def build_local_app(
     on_credentials_saved: _Callback | None = None,
     on_step_submitted: _Callback | None = None,
     jwt_keys_dir: Path | None = None,
-    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
+    custom_credential_form_html: Callable[..., str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
@@ -280,7 +280,7 @@ async def run_local_server(
     on_step_submitted: _Callback | None = None,
     setup_complete_hook: Callable[..., None] | None = None,
     jwt_keys_dir: Path | None = None,
-    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
+    custom_credential_form_html: Callable[..., str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
 ) -> None:
@@ -457,7 +457,7 @@ async def start_local_server_background(
     on_step_submitted: _Callback | None = None,
     setup_complete_hook: Callable[..., None] | None = None,
     jwt_keys_dir: Path | None = None,
-    custom_credential_form_html: Callable[[dict[str, Any], str], str] | None = None,
+    custom_credential_form_html: Callable[..., str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
     startup_timeout: float = 5.0,

@@ -783,7 +783,7 @@ class TestJWTIssuerReuse:
 def test_authorize_uses_custom_html_when_provided():
     """GET /authorize should render custom HTML when custom_credential_form_html is set."""
 
-    def custom_renderer(schema, submit_url):
+    def custom_renderer(schema, submit_url, **_kwargs):
         return f"<!DOCTYPE html><html><body><h1>Custom</h1><form action='{submit_url}'></form></body></html>"
 
     app, _ = create_local_oauth_app(
@@ -815,7 +815,7 @@ def test_authorize_uses_default_html_when_custom_not_provided():
 
 
 def test_custom_renderer_receives_schema_and_submit_url():
-    """custom_credential_form_html should be called with (relay_schema, submit_url)."""
+    """custom_credential_form_html should be called with (relay_schema, submit_url, prefill=...)."""
     captured: dict = {}
     schema = {
         "server": "test",
@@ -823,9 +823,10 @@ def test_custom_renderer_receives_schema_and_submit_url():
         "fields": [{"key": "X", "label": "X", "type": "text", "required": True}],
     }
 
-    def custom_renderer(s, submit_url):
+    def custom_renderer(s, submit_url, *, prefill=None):
         captured["schema"] = s
         captured["submit_url"] = submit_url
+        captured["prefill"] = prefill
         return "<html></html>"
 
     app, _ = create_local_oauth_app(
@@ -994,3 +995,94 @@ class TestSetupStatus:
 
         fresh = client.get("/setup-status")
         assert fresh.json() == {"gdrive": "idle", "outlook": "idle"}
+
+
+# ---------------------------------------------------------------------------
+# Prefill query parameter -> form prefill dict
+#
+# GET ``/authorize?...&prefill_<KEY>=<VALUE>`` extracts the prefill mapping
+# from the query string and forwards it to the form renderer (default and
+# custom). The driver builds these from skret so users only type what skret
+# cannot supply (OTP / 2FA / one-time codes).
+# ---------------------------------------------------------------------------
+
+
+def test_prefill_query_param_passed_to_default_renderer():
+    """``?prefill_API_KEY=secret`` lands as ``value="secret"`` in the form."""
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema={
+            "server": "t",
+            "displayName": "t",
+            "fields": [{"key": "API_KEY", "label": "API", "type": "password"}],
+        },
+    )
+    client = TestClient(app)
+    params = _authorize_params()
+    params["prefill_API_KEY"] = "sk-abc"
+    resp = client.get("/authorize", params=params)
+    assert resp.status_code == 200
+    assert 'value="sk-abc"' in resp.text
+
+
+def test_prefill_query_param_passed_to_custom_renderer():
+    """Custom renderers receive ``prefill={...}`` as kwarg, not positional."""
+    captured: dict = {}
+
+    def custom_renderer(_schema, submit_url, *, prefill=None):
+        captured["prefill"] = prefill
+        return "<html></html>"
+
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema={"server": "t", "displayName": "t", "fields": []},
+        custom_credential_form_html=custom_renderer,
+    )
+    client = TestClient(app)
+    params = _authorize_params()
+    params["prefill_TELEGRAM_PHONE"] = "+84123"
+    params["prefill_TELEGRAM_BOT_TOKEN"] = "123:abc"
+    resp = client.get("/authorize", params=params)
+    assert resp.status_code == 200
+    assert captured["prefill"] == {
+        "TELEGRAM_PHONE": "+84123",
+        "TELEGRAM_BOT_TOKEN": "123:abc",
+    }
+
+
+def test_prefill_absent_yields_empty_dict():
+    """Without any ``prefill_*`` params, prefill kwarg is an empty dict (not None)."""
+    captured: dict = {}
+
+    def custom_renderer(_schema, _submit_url, *, prefill=None):
+        captured["prefill"] = prefill
+        return "<html></html>"
+
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema={"server": "t", "displayName": "t", "fields": []},
+        custom_credential_form_html=custom_renderer,
+    )
+    client = TestClient(app)
+    resp = client.get("/authorize", params=_authorize_params())
+    assert resp.status_code == 200
+    assert captured["prefill"] == {}
+
+
+def test_prefill_does_not_affect_oauth_params():
+    """``prefill_*`` keys must NOT collide with OAuth parameter parsing."""
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema={
+            "server": "t",
+            "displayName": "t",
+            "fields": [{"key": "X", "label": "X", "type": "text"}],
+        },
+    )
+    client = TestClient(app)
+    params = _authorize_params()
+    # If prefill consumed real OAuth params, the form would 400 missing
+    # required parameters. Verify by adding prefill and asserting 200.
+    params["prefill_X"] = "v"
+    resp = client.get("/authorize", params=params)
+    assert resp.status_code == 200

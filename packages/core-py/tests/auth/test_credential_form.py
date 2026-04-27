@@ -194,3 +194,69 @@ class TestRenderCredentialForm:
         assert "textContent" in html
         # createElement must be used for dynamic elements
         assert "createElement" in html
+
+
+# ---------------------------------------------------------------------------
+# Prefill rendering — driver passes ``?prefill_<KEY>=<VALUE>`` so users see
+# fields filled and only have to click Connect (then handle OTP/2FA in-form).
+# ---------------------------------------------------------------------------
+
+
+def test_prefill_renders_value_attr_on_matching_field():
+    """Prefill value lands as an HTML-escaped ``value="..."`` on the input."""
+    schema = {
+        "server": "t",
+        "displayName": "T",
+        "fields": [{"key": "API_KEY", "label": "API Key", "type": "password"}],
+    }
+    html = render_credential_form(schema, submit_url="/auth", prefill={"API_KEY": "sk-abc123"})
+    assert 'value="sk-abc123"' in html
+
+
+def test_prefill_skipped_for_unknown_keys():
+    """Prefill keys that don't match any field must be silently ignored."""
+    schema = {
+        "server": "t",
+        "displayName": "T",
+        "fields": [{"key": "API_KEY", "label": "API Key", "type": "password"}],
+    }
+    html = render_credential_form(schema, submit_url="/auth", prefill={"OTHER_KEY": "ignored"})
+    assert "ignored" not in html
+
+
+def test_prefill_value_xss_escaped():
+    """Prefill values are HTML-escaped so they cannot break out of value=``."""
+    schema = {
+        "server": "t",
+        "displayName": "T",
+        "fields": [{"key": "X", "label": "X", "type": "text"}],
+    }
+    html = render_credential_form(schema, submit_url="/auth", prefill={"X": '"><script>alert(1)</script>'})
+    assert "<script>alert(1)</script>" not in html
+    # Quote escape collapses to ``&quot;`` in the value attribute.
+    assert "&quot;" in html
+
+
+def test_prefill_none_renders_no_value_attr():
+    """Without prefill, no ``value=`` attr is emitted."""
+    schema = {
+        "server": "t",
+        "displayName": "T",
+        "fields": [{"key": "X", "label": "X", "type": "text"}],
+    }
+    html = render_credential_form(schema, submit_url="/auth")
+    # Locate the X input block and check absence of value=.
+    block = html.split('name="X"')[1].split("/>")[0]
+    assert "value=" not in block
+
+
+def test_prefill_empty_string_renders_no_value_attr():
+    """Empty prefill string is treated as absent (no ``value=""`` clutter)."""
+    schema = {
+        "server": "t",
+        "displayName": "T",
+        "fields": [{"key": "X", "label": "X", "type": "text"}],
+    }
+    html = render_credential_form(schema, submit_url="/auth", prefill={"X": ""})
+    block = html.split('name="X"')[1].split("/>")[0]
+    assert "value=" not in block
