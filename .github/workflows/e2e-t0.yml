@@ -26,6 +26,15 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install workspace dependencies (TS)
+        run: bun install --frozen-lockfile
+
+      - name: Install core-py dev deps
+        run: cd packages/core-py && uv sync --group dev
+
       - name: Install driver dependencies
         run: |
           cd scripts/e2e

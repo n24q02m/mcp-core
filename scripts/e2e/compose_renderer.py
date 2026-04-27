@@ -23,6 +23,9 @@ REPO_TO_TEMPLATE: dict[str, str] = {
     "better-godot-mcp": "compose-godot.yml.j2",
 }
 
+# nosemgrep: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
+# Generates docker-compose YAML for ephemeral test deployments, not HTML.
+# No XSS surface: output is consumed only by ``docker compose -f``.
 _env = jinja2.Environment(
     loader=jinja2.FileSystemLoader(Path(__file__).parent / "templates"),
     autoescape=False,
@@ -50,4 +53,5 @@ def render_compose(
         "mcp_dcr_server_secret": creds.get("MCP_DCR_SERVER_SECRET", ""),
         **{k.lower(): v for k, v in creds.items()},
     }
+    # nosemgrep: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
     return tmpl.render(**ctx)
