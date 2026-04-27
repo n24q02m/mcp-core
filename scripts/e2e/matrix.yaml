@@ -126,13 +126,17 @@ configs:
     tier: t2-interaction
     auth: relay
     flow: device-code
-    # local-relay mode rejects outlook.com / hotmail.com / live.com paste-
-    # token submits with a "switch to remote-relay" message
-    # (better-email-mcp/CLAUDE.md). Outlook is only testable in remote-
-    # relay where the server initiates Microsoft Device Code OAuth2 itself.
+    # ``spawn-setup.ts:182`` routes outlook.com / hotmail.com / live.com
+    # accounts through ``initiateOutlookDeviceCode`` regardless of mode —
+    # the server reads the email from the relay form, identifies the
+    # Outlook domain via ``isOutlookDomain``, and initiates Microsoft
+    # Device Code OAuth2. The difference between local-relay and remote-
+    # relay is only WHERE the refresh token is stored: local writes
+    # ``config.enc`` (single user), remote writes
+    # ``~/.better-email-mcp/tokens/<sub>.json`` (per JWT sub).
     # OUTLOOK_CLIENT_ID falls back to the bundled public Azure client at
     # ``oauth2.ts:88`` (d56f8c71-...) so no skret entry is required.
-    deployment: [remote]
+    deployment: [local, remote]
     skret_namespace: /better-email-mcp/prod
     skret_keys: [OUTLOOK_EMAIL, MCP_DCR_SERVER_SECRET]
     user_gate: "Click Microsoft device-code link"
