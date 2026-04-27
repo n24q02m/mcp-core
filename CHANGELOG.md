@@ -2,6 +2,102 @@
 
 <!-- version list -->
 
+## v1.8.0-beta.1 (2026-04-27)
+
+### Bug Fixes
+
+- Correct T0 commands for web-core (uv pytest) and claude-plugins (validate script)
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- E2e .skret.yaml + bootstrap with explicit provider/region overrides
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- E2e bootstrap uses aws ssm directly + botocore[crt]
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- E2e driver T0 robustness across monorepo + Windows nested-uv envs
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- E2e driver t0/all sweeps spawn fresh subprocess per config
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- E2e-t0 CI workflow needs PYTHONPATH=.. for e2e package resolution
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- E2e-t0 workflow setup + semgrep nosemgrep on jinja2 yaml renderer
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Include imagine-mcp in downstream auto-issue cascade
+  ([#84](https://github.com/n24q02m/mcp-core/pull/84),
+  [`72af2a2`](https://github.com/n24q02m/mcp-core/commit/72af2a2b16b68ac6b7dc79ed649133d082e695f0))
+
+- Place semgrep nosemgrep on same line as jinja2.Environment call
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Route /mcp through per-session transport map (TS parity with Python)
+  ([`77419e7`](https://github.com/n24q02m/mcp-core/commit/77419e7c5ac4301bca6cafc4574dc1e5f641c710))
+
+- Strip UV_/VIRTUAL_ENV when spawning T0 subprocess
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Sweep doppler/infisical refs to skret SSM
+  ([`ce8facd`](https://github.com/n24q02m/mcp-core/commit/ce8facd43b31b559f908c7dbde1d3813adfba99f))
+
+### Features
+
+- Add compose renderer for e2e driver ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Add docker-compose Jinja templates for 8 MCP servers
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Add e2e bootstrap script + Makefile + T0 CI workflow + driver precommit hook
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Add e2e driver orchestrator CLI ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Add e2e matrix yaml with 16 configs (3-axis taxonomy)
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Add ephemeral port allocator for e2e driver ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Add MCP client runner and user gate for e2e driver
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Add relay form filler via httpx for e2e driver
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Add skret SSM loader for e2e driver ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Bootstrap mcp-core e2e driver skeleton ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- E2e framework driver (T0+T2 2-tier, 16-config matrix)
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+- Lock in per-authorize sub uniqueness contract for local_oauth_app
+  ([#94](https://github.com/n24q02m/mcp-core/pull/94),
+  [`df0f582`](https://github.com/n24q02m/mcp-core/commit/df0f582952eabaca76ec5311b728c585743444af))
+
+
 ## v1.7.6 (2026-04-24)
 
 ### Bug Fixes
