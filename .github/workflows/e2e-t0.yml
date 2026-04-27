@@ -34,4 +34,4 @@ jobs:
       - name: Run T0 config ${{ matrix.config }}
         run: |
           cd scripts/e2e
-          uv run python -m e2e.driver ${{ matrix.config }}
+          PYTHONPATH=.. uv run python -m e2e.driver ${{ matrix.config }}
