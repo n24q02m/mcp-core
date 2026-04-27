@@ -160,29 +160,31 @@ configs:
     skret_keys: [TELEGRAM_PHONE, MCP_DCR_SERVER_SECRET]
     user_gate: "Type OTP + 2FA password in browser"
 
-  # wet-full / mnemo-full: relay form posts API keys (all optional). GDrive
-  # device-code is a per-user post-setup tool action, not gated at /authorize
-  # time. In multi-user remote mode (PUBLIC_URL set, which both deployments
-  # use here per compose template) ``save_credentials`` returns after
-  # storing per-sub credentials WITHOUT triggering the device-code flow:
-  # see ``wet-mcp/src/wet_mcp/credential_state.py:378-385`` and the
-  # mirroring branch in mnemo-mcp. The matrix therefore tests the relay
-  # form auto-fill + tools/list path; per-sub GDrive trigger is tracked
-  # separately as a security follow-up (cross-user token isolation).
+  # wet-full / mnemo-full: relay form posts API keys (optional) + triggers
+  # GDrive Device Code OAuth. Both single-user and multi-user remote mode
+  # (PUBLIC_URL set) start the device-code flow on credential save and
+  # respond with ``next_step.type == "oauth_device_code"``. Per-sub token
+  # storage at ``~/.<server>-mcp/subs/<sub>/tokens/google_drive.json``
+  # (wet-mcp commit 52ec8da, mnemo-mcp commit b0b66e4 — closes the
+  # cross-user GDrive token leak gap from spec 2026-04-25 #134/#187).
   - id: wet-full
     repo: wet-mcp
-    tier: t2-non-interaction
+    tier: t2-interaction
     auth: relay
+    flow: device-code
     deployment: [local, remote]
     skret_namespace: /wet-mcp/prod
     skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
+    user_gate: "Click GDrive device-code link"
 
   - id: mnemo-full
     repo: mnemo-mcp
-    tier: t2-non-interaction
+    tier: t2-interaction
     auth: relay
+    flow: device-code
     deployment: [local, remote]
     skret_namespace: /mnemo-mcp/prod
     skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
+    user_gate: "Click GDrive device-code link"
