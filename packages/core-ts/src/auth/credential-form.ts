@@ -353,6 +353,28 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
             color: #f87171;
         }
 
+        .status-box.info {
+            background-color: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #e8e8e8;
+        }
+
+        .status-box a {
+            color: #60a5fa;
+            font-weight: 500;
+            text-decoration: none;
+        }
+
+        .status-box a:hover {
+            text-decoration: underline;
+        }
+
+        .status-box a:focus-visible {
+            outline: 2px solid #60a5fa;
+            outline-offset: 2px;
+            border-radius: 2px;
+        }
+
         .capabilities-section {
             margin-top: 0;
         }
@@ -704,7 +726,6 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                     link.href = ns.verification_url;
                                     link.target = "_blank";
                                     link.rel = "noopener";
-                                    link.style.cssText = "color:#60a5fa;font-weight:bold";
                                     link.textContent = ns.verification_url;
                                     statusBox.appendChild(link);
                                     statusBox.appendChild(document.createElement("br"));
