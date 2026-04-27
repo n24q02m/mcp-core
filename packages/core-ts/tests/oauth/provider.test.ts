@@ -10,10 +10,18 @@ vi.mock('../../src/relay/client.js', () => ({
   pollForResult: vi.fn()
 }))
 
+// Bun's vitest shim hoists ``vi.mock`` calls beyond the current file. The
+// mock here used to omit ``init()``, which broke ``tests/transport/oauth-
+// middleware.test.ts`` (suite #2026-04-26 audit). Mirror the real surface
+// so cross-file leakage is harmless: ``init()`` resolves, ``issueAccessToken``
+// is the mock surface that this file actually inspects.
 vi.mock('../../src/oauth/jwt-issuer.js', () => {
   return {
     JWTIssuer: vi.fn().mockImplementation(function (this: any) {
+      this.init = vi.fn().mockResolvedValue(undefined)
       this.issueAccessToken = vi.fn()
+      this.getJwks = vi.fn().mockResolvedValue({ keys: [] })
+      this.verifyAccessToken = vi.fn()
     })
   }
 })

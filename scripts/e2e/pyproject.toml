@@ -1,0 +1,29 @@
+[project]
+name = "mcp-e2e-driver"
+version = "0.1.0"
+requires-python = "==3.13.*"
+description = "E2E test driver for the MCP server stack (mcp-core + 8 MCPs)"
+dependencies = [
+    "httpx>=0.27",
+    # botocore[crt] required so boto3 can use the ``aws login`` credential
+    # provider on hosts authenticated via SSO/identity center. Without crt
+    # SSM client raises MissingDependencyException at first call.
+    "boto3>=1.35",
+    "botocore[crt]>=1.35",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "mcp>=1.0",
+    "starlette>=0.40",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-v"
+pythonpath = [".."]

@@ -1,0 +1,11 @@
+version: "1"
+default_env: prod
+project: mcp-e2e-driver
+environments:
+  prod:
+    provider: aws
+    region: ap-southeast-1
+    # Path is overridden per server by bootstrap_skret.sh + skret_loader.py;
+    # this top-level path is just a placeholder so skret CLI accepts the
+    # file. boto3-based skret_loader bypasses CLI entirely.
+    path: /mcp-core/prod

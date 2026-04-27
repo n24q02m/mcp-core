@@ -43,6 +43,13 @@ repos:
         types: [python]
         pass_filenames: false
 
+      - id: test-e2e-driver
+        name: test (e2e driver)
+        entry: bash -c 'cd scripts/e2e && uv run pytest --tb=short -q'
+        language: system
+        files: ^scripts/e2e/.*\.(py|yaml|yml|j2)$
+        pass_filenames: false
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b # v5.0.0
     hooks:

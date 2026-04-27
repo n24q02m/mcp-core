@@ -11,7 +11,9 @@ import { OAuthMiddleware } from '../../src/transport/oauth-middleware.js'
 
 function makeRequest(headers: Record<string, string> = {}): IncomingMessage {
   const req = new IncomingMessage(new Socket())
-  Object.assign(req.headers, headers)
+  // Bun's IncomingMessage does not initialise ``headers`` to ``{}`` like
+  // Node does, so assign instead of merge to avoid TypeError on undefined.
+  req.headers = { ...headers }
   return req
 }
 
