@@ -6,10 +6,14 @@ services:
     environment:
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "8080"
-      {% if deployment == 'remote' -%}
+      # Docker E2E: always set PUBLIC_URL so the daemon binds 0.0.0.0:8080
+      # (vs 127.0.0.1:<random> in single-user local mode, which the container
+      # network can't reach from outside). Both ``deployment: local`` and
+      # ``deployment: remote`` tests run through the multi-user remote
+      # codepath here -- the user-facing distinction (config.enc vs subs/<sub>)
+      # only affects per-isolation tests, not basic protocol smoke.
       PUBLIC_URL: "http://127.0.0.1:{{ host_port }}"
       MCP_DCR_SERVER_SECRET: "{{ mcp_dcr_server_secret }}"
-      {%- endif %}
       {% if gemini_api_key is defined and gemini_api_key -%}
       GEMINI_API_KEY: "{{ gemini_api_key }}"
       {%- endif %}

@@ -1,15 +1,42 @@
 services:
   telegram-mcp-test:
-    image: ghcr.io/n24q02m/better-telegram-mcp:{{ image_tag | default('beta') }}
+    # Docker Hub instead of ghcr.io: telegram's GHCR package is private and
+    # the script's gh PAT cannot flip visibility, but the CD pipeline pushes
+    # to both registries so docker.io works without auth.
+    image: docker.io/n24q02m/better-telegram-mcp:{{ image_tag | default('beta') }}
     ports:
       - "127.0.0.1:{{ host_port }}:8080"
     environment:
-      MCP_HOST: "0.0.0.0"
-      MCP_PORT: "8080"
-      {% if deployment == 'remote' -%}
+      # Telegram's _start_single_user_http reads PORT and HOST (not MCP_PORT
+      # / MCP_HOST) from env -- using the lowercase pair so run_local_server
+      # binds the container's exposed 8080 instead of an OS-picked random
+      # port that the host port mapping can't reach.
+      HOST: "0.0.0.0"
+      PORT: "8080"
+      # The shipped Dockerfile bakes in TRANSPORT_MODE=stdio for ``uvx``
+      # users. Override here so the daemon takes the HTTP branch.
+      TRANSPORT_MODE: "http"
+      # Docker E2E: always set PUBLIC_URL so the daemon binds 0.0.0.0:8080
+      # (single-user local mode binds 127.0.0.1:<random>, unreachable from
+      # outside the container). Both deployments test the multi-user remote
+      # codepath; the per-isolation distinction is covered separately.
       PUBLIC_URL: "http://127.0.0.1:{{ host_port }}"
+      # Telegram historically used DCR_SERVER_SECRET (no MCP_ prefix); the
+      # remaining 6 servers standardized on MCP_DCR_SERVER_SECRET. Set both
+      # so the same skret value works regardless of which env-var name the
+      # runtime reads.
       MCP_DCR_SERVER_SECRET: "{{ mcp_dcr_server_secret }}"
-      {%- endif %}
+      # Telegram is single-user by design: a Telethon session is bound to
+      # one physical phone number. The legacy "multi-user OAuth via remote
+      # relay" path (oauth_server.py + mcp_core.relay.client.create_session)
+      # is being phased out and 500s without an external relay reachable.
+      # Skip the multi-user trigger by NOT setting DCR_SERVER_SECRET (the
+      # ``_is_multi_user_mode`` gate). That falls through to start_http's
+      # refuse-or-single-user branch; ``TELEGRAM_ACCEPT_SHARED_SINGLE_USER=1``
+      # bypasses the refuse-on-PUBLIC_URL guard so the container takes
+      # ``_start_single_user_http`` (run_local_server with port=PORT,
+      # host=HOST, same flow imagine/wet/mnemo/crg use).
+      TELEGRAM_ACCEPT_SHARED_SINGLE_USER: "1"
       {% if telegram_bot_token is defined and telegram_bot_token -%}
       TELEGRAM_BOT_TOKEN: "{{ telegram_bot_token }}"
       {%- endif %}

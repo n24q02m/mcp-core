@@ -56,7 +56,10 @@ configs:
     auth: relay
     deployment: [local]
     skret_namespace: /better-notion-mcp/prod
-    skret_keys: [NOTION_INTEGRATION_TOKEN]
+    # Driver POSTs the form field name from RELAY_SCHEMA (NOTION_TOKEN);
+    # skret carries both NOTION_TOKEN + legacy NOTION_INTEGRATION_TOKEN
+    # with the same value so older docs/tools keep working.
+    skret_keys: [NOTION_TOKEN]
 
   - id: email-gmail
     repo: better-email-mcp
@@ -64,7 +67,12 @@ configs:
     auth: relay
     deployment: [local, remote]
     skret_namespace: /better-email-mcp/prod
-    skret_keys: [GMAIL_EMAIL, GMAIL_APP_PASSWORD, MCP_DCR_SERVER_SECRET]
+    # Email's relay form is JS-rendered (no static <input>) and POSTs a
+    # single ``EMAIL_CREDENTIALS`` field with format
+    # ``email1:pass1,email2:pass2``. skret stores the assembled string +
+    # the legacy GMAIL_EMAIL/GMAIL_APP_PASSWORD pair under the same
+    # namespace so older docs keep working.
+    skret_keys: [EMAIL_CREDENTIALS, MCP_DCR_SERVER_SECRET]
 
   - id: telegram-bot
     repo: better-telegram-mcp
@@ -130,22 +138,29 @@ configs:
     skret_keys: [TELEGRAM_PHONE, MCP_DCR_SERVER_SECRET]
     user_gate: "Type OTP + 2FA password in browser"
 
+  # wet-full / mnemo-full: relay form posts API keys (all optional). GDrive
+  # device-code is a per-user post-setup tool action, not gated at /authorize
+  # time. In multi-user remote mode (PUBLIC_URL set, which both deployments
+  # use here per compose template) ``save_credentials`` returns after
+  # storing per-sub credentials WITHOUT triggering the device-code flow:
+  # see ``wet-mcp/src/wet_mcp/credential_state.py:378-385`` and the
+  # mirroring branch in mnemo-mcp. The matrix therefore tests the relay
+  # form auto-fill + tools/list path; per-sub GDrive trigger is tracked
+  # separately as a security follow-up (cross-user token isolation).
   - id: wet-full
     repo: wet-mcp
-    tier: t2-interaction
+    tier: t2-non-interaction
     auth: relay
     deployment: [local, remote]
     skret_namespace: /wet-mcp/prod
     skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
-    user_gate: "Click GDrive device-code link"
 
   - id: mnemo-full
     repo: mnemo-mcp
-    tier: t2-interaction
+    tier: t2-non-interaction
     auth: relay
     deployment: [local, remote]
     skret_namespace: /mnemo-mcp/prod
     skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
-    user_gate: "Click GDrive device-code link"

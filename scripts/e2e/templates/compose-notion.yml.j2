@@ -4,15 +4,19 @@ services:
     ports:
       - "127.0.0.1:{{ host_port }}:8080"
     environment:
-      MCP_HOST: "0.0.0.0"
-      MCP_PORT: "8080"
+      HOST: "0.0.0.0"
+      PORT: "8080"
+      TRANSPORT_MODE: "http"
       {% if deployment == 'remote' -%}
+      MCP_MODE: "remote-oauth"
       PUBLIC_URL: "http://127.0.0.1:{{ host_port }}"
       MCP_DCR_SERVER_SECRET: "{{ mcp_dcr_server_secret }}"
       {% if notion_oauth_client_id is defined and notion_oauth_client_id -%}
       NOTION_OAUTH_CLIENT_ID: "{{ notion_oauth_client_id }}"
       NOTION_OAUTH_CLIENT_SECRET: "{{ notion_oauth_client_secret }}"
       {%- endif %}
+      {% else -%}
+      MCP_MODE: "local-relay"
       {%- endif %}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health || curl -fsS http://127.0.0.1:8080/.well-known/oauth-authorization-server || exit 1"]

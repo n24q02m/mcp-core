@@ -6,10 +6,13 @@ services:
     environment:
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "8080"
-      {% if deployment == 'remote' -%}
+      # Docker E2E: always set PUBLIC_URL so the daemon binds 0.0.0.0:8080
+      # (single-user local mode binds 127.0.0.1:<random>, unreachable from
+      # outside the container). Both deployments test the multi-user remote
+      # codepath; the per-isolation distinction (config.enc vs subs/<sub>)
+      # is covered separately in tests/integration/test_multi_user_remote.py.
       PUBLIC_URL: "http://127.0.0.1:{{ host_port }}"
       MCP_DCR_SERVER_SECRET: "{{ mcp_dcr_server_secret }}"
-      {%- endif %}
       {% if jina_ai_api_key is defined and jina_ai_api_key -%}
       JINA_AI_API_KEY: "{{ jina_ai_api_key }}"
       {%- endif %}

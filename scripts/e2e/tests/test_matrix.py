@@ -21,9 +21,14 @@ def test_matrix_tier_distribution() -> None:
     t0_only = [c for c in data["configs"] if c["tier"] == "t0-only"]
     t2_non = [c for c in data["configs"] if c["tier"] == "t2-non-interaction"]
     t2_int = [c for c in data["configs"] if c["tier"] == "t2-interaction"]
+    # 2026-04-27: wet-full + mnemo-full moved from t2-interaction to
+    # t2-non-interaction. Multi-user remote mode (PUBLIC_URL set, both
+    # deployments) skips the GDrive device-code trigger that the gate
+    # depended on; the relay form auto-fill + tools/list path is what's
+    # actually exercised. Per-sub GDrive trigger tracked separately.
     assert len(t0_only) == 5
-    assert len(t2_non) == 6
-    assert len(t2_int) == 5
+    assert len(t2_non) == 8
+    assert len(t2_int) == 3
 
 
 def test_matrix_auth_modes_only_three() -> None:

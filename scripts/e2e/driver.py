@@ -25,8 +25,8 @@ import yaml
 
 from e2e.client_runner import run_e2e_http, wait_for_health
 from e2e.compose_renderer import render_compose
+from e2e.oauth_client import acquire_jwt
 from e2e.ports import allocate_port
-from e2e.relay_filler import fill_relay_form
 from e2e.skret_loader import load_namespace_required
 from e2e.user_gate import announce_and_wait
 
@@ -36,35 +36,67 @@ MATRIX_PATH = Path(__file__).parent / "matrix.yaml"
 # (domain tools + config + help). Tools added beyond this list are tolerated;
 # missing tools fail the E2E with a clear AssertionError.
 EXPECTED_TOOLS: dict[str, list[str]] = {
+    # Verified 2026-04-27 against tools/list: 10 composite tools per
+    # CLAUDE.md (pages, databases, blocks, users, workspace, comments,
+    # content_convert, file_uploads + config + help). Earlier matrix used
+    # singular forms ("page", "block", "user") which never matched.
     "better-notion-mcp": [
-        "search",
-        "page",
-        "database",
-        "block",
-        "comment",
-        "user",
+        "pages",
+        "databases",
+        "blocks",
+        "users",
+        "workspace",
+        "comments",
+        "content_convert",
+        "file_uploads",
         "config",
         "help",
     ],
-    "better-email-mcp": ["message", "thread", "draft", "search", "config", "help"],
+    # Verified 2026-04-27: actual tools are attachments, config, folders,
+    # help, messages, send (6 tools). Earlier "message/thread/draft/search"
+    # set was speculative.
+    "better-email-mcp": [
+        "attachments",
+        "folders",
+        "messages",
+        "send",
+        "config",
+        "help",
+    ],
     "better-telegram-mcp": ["message", "chat", "media", "contact", "config", "help"],
-    "wet-mcp": ["search", "extract", "media", "library", "config", "help"],
+    # Verified 2026-04-27: actual tools are config, extract, help, media,
+    # search (5 tools). "library" was in the original matrix but never
+    # registered by the server.
+    "wet-mcp": ["search", "extract", "media", "config", "help"],
     "mnemo-mcp": ["memory", "config", "help"],
     "better-code-review-graph": [
         "graph",
         "query",
         "review",
         "config",
-        "setup",
         "help",
     ],
     "imagine-mcp": ["generate", "config", "help"],
+    # Godot ships 17 composite mega-tools (per CLAUDE.md). Verified against
+    # tools/list 2026-04-26: animation, audio, config, editor, help, input_map,
+    # navigation, nodes, physics, project, resources, scenes, scripts, shader,
+    # signals, tilemap, ui. The N+2 (config + help + N domain) standard holds.
     "better-godot-mcp": [
-        "scene",
-        "node",
-        "script",
-        "asset",
-        "run",
+        "animation",
+        "audio",
+        "editor",
+        "input_map",
+        "navigation",
+        "nodes",
+        "physics",
+        "project",
+        "resources",
+        "scenes",
+        "scripts",
+        "shader",
+        "signals",
+        "tilemap",
+        "ui",
         "config",
         "help",
     ],
@@ -181,8 +213,11 @@ def run_t2_config(config: dict, deployment: str) -> None:
             base_url = f"http://127.0.0.1:{port}"
             wait_for_health(base_url)
 
+            access_token: str | None = None
             if config["auth"] != "none":
-                fill_relay_form(base_url, creds=creds)
+                # Drive the OAuth 2.1 PKCE flow: GET /authorize form, POST
+                # creds, /token-exchange auth code → JWT for /mcp Bearer.
+                access_token = asyncio.run(acquire_jwt(base_url, creds=creds))
 
             if config["tier"] == "t2-interaction":
                 announce_and_wait(
@@ -191,7 +226,13 @@ def run_t2_config(config: dict, deployment: str) -> None:
                     poll_url=f"{base_url}/setup-status",
                 )
 
-            asyncio.run(run_e2e_http(base_url, EXPECTED_TOOLS[config["repo"]]))
+            asyncio.run(
+                run_e2e_http(
+                    base_url,
+                    EXPECTED_TOOLS[config["repo"]],
+                    access_token=access_token,
+                )
+            )
             print(f"[driver] PASS {config['id']} ({deployment})", file=sys.stderr)
         finally:
             subprocess.run(
@@ -249,7 +290,10 @@ def main() -> None:
             for dep in c.get("deployment", [args.deployment]):
                 run_config(c, deployment=dep)
         except Exception as e:
+            import traceback
+
             print(f"[driver] FAIL {c['id']}: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
             failed.append(c["id"])
 
     if failed:
