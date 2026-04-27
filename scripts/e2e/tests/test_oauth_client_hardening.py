@@ -8,7 +8,7 @@ regress what the matrix run depends on.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -69,7 +69,7 @@ async def test_health_probe_succeeds_when_both_endpoints_200():
             ),
         }
     )
-    await oauth_client._health_probe(fake, base)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+    await oauth_client._health_probe(cast(httpx.AsyncClient, fake), base)
     assert fake.calls == [
         f"{base}/setup-status",
         f"{base}/.well-known/oauth-authorization-server",
@@ -85,7 +85,7 @@ async def test_health_probe_fails_on_non_200():
         }
     )
     with pytest.raises(RuntimeError, match="Health probe FAIL"):
-        await oauth_client._health_probe(fake, base)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+        await oauth_client._health_probe(cast(httpx.AsyncClient, fake), base)
 
 
 @pytest.mark.asyncio
@@ -97,7 +97,7 @@ async def test_health_probe_fails_on_http_error():
         }
     )
     with pytest.raises(RuntimeError, match="Health probe FAIL"):
-        await oauth_client._health_probe(fake, base)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+        await oauth_client._health_probe(cast(httpx.AsyncClient, fake), base)
 
 
 # ----- _poll_until_complete progress logging -----
@@ -127,7 +127,9 @@ async def test_poll_until_complete_returns_on_complete_value():
             (200, {"gdrive": "complete"}),
         ]
     )
-    await oauth_client._poll_until_complete(fake, "http://x/setup-status", timeout=10.0)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+    await oauth_client._poll_until_complete(
+        cast(httpx.AsyncClient, fake), "http://x/setup-status", timeout=10.0
+    )
     assert fake.calls == 2
 
 
@@ -140,8 +142,8 @@ async def test_poll_until_complete_raises_on_error_value():
     )
     with pytest.raises(RuntimeError, match="Setup failed"):
         await oauth_client._poll_until_complete(
-            fake, "http://x/setup-status", timeout=10.0
-        )  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+            cast(httpx.AsyncClient, fake), "http://x/setup-status", timeout=10.0
+        )
 
 
 @pytest.mark.asyncio
@@ -163,7 +165,9 @@ async def test_poll_until_complete_emits_progress_to_stderr(capsys, monkeypatch)
 
     monkeypatch.setattr(oauth_client.asyncio, "sleep", fast_sleep)
 
-    await oauth_client._poll_until_complete(fake, "http://x/setup-status", timeout=10.0)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+    await oauth_client._poll_until_complete(
+        cast(httpx.AsyncClient, fake), "http://x/setup-status", timeout=10.0
+    )
     captured = capsys.readouterr()
     assert "[poll]" in captured.err
     assert "elapsed=" in captured.err
@@ -184,8 +188,8 @@ async def test_poll_until_complete_timeout_raises(monkeypatch):
     # Keep timeout very short; the loop body advances time via real time.time().
     with pytest.raises(TimeoutError):
         await oauth_client._poll_until_complete(
-            fake, "http://x/setup-status", timeout=0.05
-        )  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+            cast(httpx.AsyncClient, fake), "http://x/setup-status", timeout=0.05
+        )
 
 
 # ----- _live_progress_logger cancellation behavior -----
