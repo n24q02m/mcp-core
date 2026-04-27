@@ -594,9 +594,13 @@ def render_credential_form(
                 var errorEl = document.getElementById("step-error");
                 var fieldName = inputEl.dataset.field || "value";
                 var value = inputEl.value;
+
+                inputEl.removeAttribute("aria-invalid");
+
                 if (value.trim() === "") {{
                     errorEl.textContent = "Please enter a value.";
                     errorEl.style.display = "block";
+                    inputEl.setAttribute("aria-invalid", "true");
                     return;
                 }}
                 errorEl.style.display = "none";
