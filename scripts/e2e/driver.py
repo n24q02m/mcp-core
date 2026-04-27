@@ -25,7 +25,7 @@ import yaml
 
 from e2e.client_runner import run_e2e_http, wait_for_health
 from e2e.compose_renderer import render_compose
-from e2e.oauth_client import acquire_jwt
+from e2e.oauth_client import acquire_jwt, acquire_jwt_via_upstream_consent
 from e2e.ports import allocate_port
 from e2e.skret_loader import load_namespace_required
 from e2e.user_gate import announce_and_wait
@@ -214,17 +214,37 @@ def run_t2_config(config: dict, deployment: str) -> None:
             wait_for_health(base_url)
 
             access_token: str | None = None
-            if config["auth"] != "none":
+            if config["auth"] == "oauth" and config["tier"] == "t2-interaction":
+                # Delegated OAuth (notion-oauth): /authorize 302 redirects
+                # browser to the upstream provider for consent. The driver
+                # binds a local callback listener, hands the upstream URL
+                # to the user via announce_and_wait-style banner, and
+                # exchanges the captured code for a JWT.
+                def _announce(upstream_url: str) -> None:
+                    bar = "=" * 60
+                    print(f"\n{bar}", file=sys.stderr)
+                    print(
+                        f"[USER ACTION REQUIRED] {config['user_gate']}",
+                        file=sys.stderr,
+                    )
+                    print("Open this URL in your browser:", file=sys.stderr)
+                    print(f"  {upstream_url}", file=sys.stderr)
+                    print(f"{bar}\n", file=sys.stderr)
+
+                access_token = asyncio.run(
+                    acquire_jwt_via_upstream_consent(base_url, _announce)
+                )
+            elif config["auth"] != "none":
                 # Drive the OAuth 2.1 PKCE flow: GET /authorize form, POST
                 # creds, /token-exchange auth code → JWT for /mcp Bearer.
                 access_token = asyncio.run(acquire_jwt(base_url, creds=creds))
 
-            if config["tier"] == "t2-interaction":
-                announce_and_wait(
-                    config["user_gate"],
-                    relay_url=f"{base_url}/authorize",
-                    poll_url=f"{base_url}/setup-status",
-                )
+                if config["tier"] == "t2-interaction":
+                    announce_and_wait(
+                        config["user_gate"],
+                        relay_url=f"{base_url}/authorize",
+                        poll_url=f"{base_url}/setup-status",
+                    )
 
             asyncio.run(
                 run_e2e_http(

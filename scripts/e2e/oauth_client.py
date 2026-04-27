@@ -8,14 +8,26 @@ Used by :mod:`e2e.client_runner` so the MCP Streamable HTTP transport can
 reach ``/mcp`` with a valid Bearer token. Replaces the older
 ``relay_filler.fill_relay_form`` which only filled the form and never
 collected the JWT.
+
+Two flows are supported:
+
+* :func:`acquire_jwt` — local-relay form fill (paste-token / API-keys form).
+  The driver POSTs creds to ``/authorize``, gets ``{ok: true, redirect_url}``
+  inline, parses the auth code, and exchanges it.
+* :func:`acquire_jwt_via_upstream_consent` — delegated-OAuth flow (notion's
+  ``MCP_MODE=remote-oauth``). The driver runs a local callback listener,
+  passes its URL as ``redirect_uri``, hands the upstream consent URL back to
+  the caller for the user-gate, and waits for the callback to land.
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import re
 import secrets
+from collections.abc import Awaitable, Callable
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -142,3 +154,147 @@ async def acquire_jwt(
         if not access_token:
             raise RuntimeError(f"No access_token in /token response: {token_body}")
         return str(access_token)
+
+
+async def _start_callback_listener(
+    code_future: asyncio.Future[tuple[str, str]],
+) -> tuple[asyncio.AbstractServer, int]:
+    """Bind 127.0.0.1:<random> and resolve ``code_future`` on first GET.
+
+    Returns the started server and the port it listened on. The handler
+    accepts any path, parses ``code`` + ``state`` from the query string,
+    and replies with a small HTML page so the user's browser shows
+    something other than ``Connection refused``.
+    """
+
+    async def handler(
+        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        try:
+            request_line = await reader.readline()
+            try:
+                _method, path, _proto = request_line.decode("ascii").split(" ", 2)
+            except ValueError:
+                writer.close()
+                return
+
+            # Drain headers — ignore content; OAuth callback is GET-only.
+            while True:
+                line = await reader.readline()
+                if line in (b"\r\n", b"", b"\n"):
+                    break
+
+            qs = parse_qs(urlparse(path).query)
+            code = qs.get("code", [""])[0]
+            state = qs.get("state", [""])[0]
+            if code and not code_future.done():
+                code_future.set_result((code, state))
+
+            body = (
+                b"<!doctype html><html><body>"
+                b"<h2>OAuth callback received</h2>"
+                b"<p>You can close this tab and return to the terminal.</p>"
+                b"</body></html>"
+            )
+            writer.write(b"HTTP/1.1 200 OK\r\n")
+            writer.write(b"Content-Type: text/html; charset=utf-8\r\n")
+            writer.write(f"Content-Length: {len(body)}\r\n".encode("ascii"))
+            writer.write(b"Connection: close\r\n\r\n")
+            writer.write(body)
+            await writer.drain()
+        finally:
+            writer.close()
+
+    server = await asyncio.start_server(handler, host="127.0.0.1", port=0)
+    sock = server.sockets[0]
+    port = sock.getsockname()[1]
+    return server, port
+
+
+async def acquire_jwt_via_upstream_consent(
+    base_url: str,
+    announce: Callable[[str], Awaitable[None]] | Callable[[str], None],
+    timeout: float = 600.0,
+) -> str:
+    """Drive a delegated-OAuth flow that requires upstream user consent.
+
+    Notion remote-oauth, Microsoft device-code (when surfaced as a redirect
+    flow), and any future provider that hands the browser off to a third
+    party fit this shape. The local mcp server's ``/authorize`` returns
+    ``302 Location: <upstream consent URL>`` with the upstream's
+    ``redirect_uri`` set to its own ``/callback``. After consent, the local
+    server exchanges with the upstream, then redirects the browser to OUR
+    ``redirect_uri`` (the listener bound by this function) with a fresh
+    auth code we can swap for a JWT at ``/token``.
+
+    ``announce`` receives the upstream consent URL and is expected to
+    surface it to the user (e.g. via :func:`e2e.user_gate.announce_and_wait`
+    or a plain ``print``). It may be a sync or async callable.
+    """
+    verifier, challenge = _pkce_pair()
+    state = secrets.token_urlsafe(16)
+
+    code_future: asyncio.Future[tuple[str, str]] = (
+        asyncio.get_event_loop().create_future()
+    )
+    server, port = await _start_callback_listener(code_future)
+    try:
+        redirect_uri = f"http://127.0.0.1:{port}/callback"
+
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            client_id = await _register_client(client, base_url)
+            params = {
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "state": state,
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+                "response_type": "code",
+            }
+            resp = await client.get(f"{base_url}/authorize", params=params)
+            if resp.status_code not in (302, 303, 307):
+                raise RuntimeError(
+                    f"Expected /authorize 302 to upstream, got "
+                    f"{resp.status_code}: {resp.text[:200]}"
+                )
+            upstream_url = resp.headers.get("Location")
+            if not upstream_url:
+                raise RuntimeError("/authorize 302 missing Location header")
+
+            result = announce(upstream_url)
+            if asyncio.iscoroutine(result):
+                await result
+
+            try:
+                code, returned_state = await asyncio.wait_for(
+                    code_future, timeout=timeout
+                )
+            except asyncio.TimeoutError as e:
+                raise TimeoutError(
+                    f"OAuth callback not received within {timeout}s — "
+                    f"user consent not completed"
+                ) from e
+            if returned_state != state:
+                raise RuntimeError(
+                    f"OAuth state mismatch: expected {state}, got {returned_state}"
+                )
+
+            token_resp = await client.post(
+                f"{base_url}/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                    "client_id": client_id,
+                    "code_verifier": verifier,
+                },
+            )
+            token_resp.raise_for_status()
+            token_body = token_resp.json()
+            access_token = token_body.get("access_token")
+            if not access_token:
+                raise RuntimeError(f"No access_token in /token response: {token_body}")
+            return str(access_token)
+    finally:
+        server.close()
+        await server.wait_closed()
