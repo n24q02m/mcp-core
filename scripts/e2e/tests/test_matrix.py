@@ -1,4 +1,12 @@
-"""Schema validation for matrix.yaml. Locks the 16-config 3-axis taxonomy."""
+"""Schema validation for matrix.yaml. Locks the 15-config 3-axis taxonomy.
+
+Reduced from 16 → 15 on 2026-04-27 by reclassifying notion-oauth out of T2:
+the upstream Notion OAuth app accepts only pre-registered redirect URIs and
+does not support DCR or loopback wildcards, which would force E2E to bake in
+out-of-band dashboard registration per ``feedback_no_out_of_band_test_setup``.
+notion-oauth is verified post-deploy via manual smoke against the production
+instance instead of the local Docker matrix.
+"""
 
 from pathlib import Path
 
@@ -11,9 +19,9 @@ def _load() -> dict:
     return yaml.safe_load(MATRIX_PATH.read_text(encoding="utf-8"))
 
 
-def test_matrix_has_16_configs() -> None:
+def test_matrix_has_15_configs() -> None:
     data = _load()
-    assert len(data["configs"]) == 16
+    assert len(data["configs"]) == 15
 
 
 def test_matrix_tier_distribution() -> None:
@@ -21,23 +29,34 @@ def test_matrix_tier_distribution() -> None:
     t0_only = [c for c in data["configs"] if c["tier"] == "t0-only"]
     t2_non = [c for c in data["configs"] if c["tier"] == "t2-non-interaction"]
     t2_int = [c for c in data["configs"] if c["tier"] == "t2-interaction"]
-    # 2026-04-27 evolution:
-    # * Initially wet-full + mnemo-full were tagged t2-interaction with a
-    #   "Click GDrive device-code link" user gate.
-    # * Brief reclassification to t2-non-interaction when multi-user mode
-    #   was found to skip the GDrive trigger entirely.
-    # * Now restored to t2-interaction after wet-mcp 52ec8da + mnemo-mcp
-    #   b0b66e4 added per-sub GDrive triggers in the multi-user branch.
-    # Final: 5 t0-only, 6 t2-non-interaction, 5 t2-interaction.
+    # 2026-04-27 final: 5 t0-only + 6 t2-non-interaction + 4 t2-interaction.
+    # notion-oauth removed (out-of-band setup, see module docstring).
     assert len(t0_only) == 5
     assert len(t2_non) == 6
-    assert len(t2_int) == 5
+    assert len(t2_int) == 4
 
 
-def test_matrix_auth_modes_only_three() -> None:
+def test_matrix_auth_modes_only_relay_and_none_after_reclassification() -> None:
+    """``oauth`` drops out of the matrix once notion-oauth is reclassified.
+
+    Kept the original ``{none, oauth, relay}`` superset valid in the
+    matrix.yaml comment (legal axis values), but the actual configs in
+    use post-reclassification only span ``none`` + ``relay``. Test asserts
+    no surprise re-introduction of ``oauth`` in matrix.yaml.
+    """
     data = _load()
     auths = {c["auth"] for c in data["configs"]}
-    assert auths.issubset({"none", "oauth", "relay"}), f"unexpected auth modes: {auths}"
+    assert auths == {"none", "relay"}, (
+        f"unexpected auth modes after reclassification: {auths}"
+    )
+
+
+def test_matrix_does_not_include_notion_oauth() -> None:
+    data = _load()
+    ids = [c["id"] for c in data["configs"]]
+    assert "notion-oauth" not in ids, (
+        "notion-oauth must stay reclassified out of T2 — see module docstring"
+    )
 
 
 def test_matrix_ids_unique() -> None:

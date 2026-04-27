@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as _dt
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+import httpx
 import yaml
 
 from e2e.client_runner import run_e2e_http, wait_for_health
@@ -34,6 +36,72 @@ from e2e.ports import allocate_port
 from e2e.skret_loader import load_namespace_required
 
 MATRIX_PATH = Path(__file__).parent / "matrix.yaml"
+DIAG_DIR = Path(tempfile.gettempdir()) / "e2e-diag"
+
+
+def _print_t2_interaction_checklist() -> None:
+    """One-time upstream registration banner before t2-interaction batch.
+
+    Saves the user from discovering each missing precondition mid-flow. Each
+    line names the upstream identity surface and what state it must be in
+    BEFORE the run starts. Printed once at the start of any run that
+    includes a t2-interaction config; suppressed if no such config in the
+    target list (T0 sweep + non-interaction-only batches stay quiet).
+    """
+    bar = "=" * 60
+    lines = [
+        bar,
+        "[driver] One-time upstream readiness checklist (t2-interaction):",
+        "  - Microsoft (Outlook): account ready to sign in at",
+        "      https://microsoft.com/devicelogin (driver prints user_code)",
+        "  - Google Drive (wet/mnemo): account consented prior or revoke at",
+        "      https://myaccount.google.com if testing fresh-grant isolation",
+        "  - Telegram (telegram-user): app open on the registered phone to",
+        "      receive the OTP push; 2FA password ready to type",
+        "  - Notion (notion-oauth): RECLASSIFIED out of T2 matrix —",
+        "      Notion app does not accept dynamic localhost callback;",
+        "      production smoke runs against notion-mcp.n24q02m.com only.",
+        bar,
+    ]
+    for line in lines:
+        print(line, file=sys.stderr)
+
+
+def _capture_diagnostics(config_id: str, compose_file: Path, base_url: str) -> Path:
+    """Save container logs + last setup-status BEFORE ``docker compose down``.
+
+    Mid-test ``TimeoutError`` used to cascade into immediate teardown, which
+    erased the only state useful for diagnosis. This writes both artifacts
+    to ``<tmp>/e2e-diag/<config>-<ts>.diag`` so the user can inspect what
+    the upstream surface returned without re-running the whole config.
+    """
+    DIAG_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    diag_file = DIAG_DIR / f"{config_id}-{ts}.diag"
+    parts: list[str] = []
+    try:
+        logs = subprocess.run(
+            ["docker", "compose", "-f", str(compose_file), "logs", "--no-color"],
+            capture_output=True,
+            text=True,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+        )
+        parts.append(
+            "=== container logs ===\n" + (logs.stdout or "") + (logs.stderr or "")
+        )
+    except Exception as e:
+        parts.append(f"=== container logs FAILED ===\n{e}")
+    try:
+        r = httpx.get(f"{base_url}/setup-status", timeout=2.0)
+        parts.append(f"\n\n=== last setup-status ({r.status_code}) ===\n{r.text}")
+    except Exception as e:
+        parts.append(f"\n\n=== setup-status FAILED ===\n{e}")
+    diag_file.write_text("\n".join(parts), encoding="utf-8")
+    print(f"[driver] Diagnostics saved: {diag_file}", file=sys.stderr)
+    return diag_file
+
 
 # Top-level tool names per repo. Verified against the N+2 standard tool layout
 # (domain tools + config + help). Tools added beyond this list are tolerated;
@@ -234,89 +302,105 @@ def run_t2_config(config: dict, deployment: str) -> None:
             ["docker", "compose", "-f", str(compose_file), "up", "-d"],
             check=True,
         )
+        base_url = f"http://127.0.0.1:{port}"
         try:
-            base_url = f"http://127.0.0.1:{port}"
             wait_for_health(base_url)
 
             access_token: str | None = None
             flow = config.get("flow")
-            if config["auth"] == "none":
-                pass  # godot
-            elif flow == "oauth-redirect" or (
-                config["auth"] == "oauth" and config["tier"] == "t2-interaction"
-            ):
-                # notion-oauth: /authorize 302 redirects to the upstream
-                # provider for consent. Driver binds a local callback
-                # listener, announces the upstream URL, captures the code
-                # the local mcp redirects back with, exchanges for JWT.
-                def _announce_upstream(upstream_url: str) -> None:
-                    bar = "=" * 60
-                    print(f"\n{bar}", file=sys.stderr)
-                    print(
-                        f"[USER ACTION REQUIRED] {config['user_gate']}",
-                        file=sys.stderr,
-                    )
-                    print("Open this URL in your browser:", file=sys.stderr)
-                    print(f"  {upstream_url}", file=sys.stderr)
-                    print(f"{bar}\n", file=sys.stderr)
-
-                access_token = asyncio.run(
-                    acquire_jwt_via_upstream_consent(base_url, _announce_upstream)
-                )
-            elif flow == "browser-form":
-                # telegram-user: form is multi-step (phone -> OTP -> 2FA).
-                # Driver cannot fill OTP server-to-server (it comes from
-                # the user's phone), so it announces /authorize and waits
-                # for the form to navigate browser into the local listener.
-                def _announce_form(form_url: str) -> None:
-                    bar = "=" * 60
-                    print(f"\n{bar}", file=sys.stderr)
-                    print(
-                        f"[USER ACTION REQUIRED] {config['user_gate']}",
-                        file=sys.stderr,
-                    )
-                    print("Open this URL in your browser:", file=sys.stderr)
-                    print(f"  {form_url}", file=sys.stderr)
-                    print(f"{bar}\n", file=sys.stderr)
-
-                access_token = asyncio.run(
-                    acquire_jwt_via_browser_form(base_url, _announce_form)
-                )
-            elif config["tier"] == "t2-interaction":
-                # email-outlook (flow=device-code): server-to-server POST
-                # returns next_step with verification_url + user_code; the
-                # user signs in upstream while the server polls; driver
-                # polls /setup-status until complete before /token.
-                def _announce_next_step(next_step: dict) -> None:
-                    bar = "=" * 60
-                    print(f"\n{bar}", file=sys.stderr)
-                    print(
-                        f"[USER ACTION REQUIRED] {config['user_gate']}",
-                        file=sys.stderr,
-                    )
-                    if next_step.get("verification_url"):
+            try:
+                if config["auth"] == "none":
+                    pass  # godot
+                elif flow == "oauth-redirect" or (
+                    config["auth"] == "oauth" and config["tier"] == "t2-interaction"
+                ):
+                    # notion-oauth: /authorize 302 redirects to the upstream
+                    # provider for consent. Driver binds a local callback
+                    # listener, announces the upstream URL, captures the code
+                    # the local mcp redirects back with, exchanges for JWT.
+                    def _announce_upstream(upstream_url: str) -> None:
+                        bar = "=" * 60
+                        print(f"\n{bar}", file=sys.stderr)
                         print(
-                            f"  Open: {next_step['verification_url']}",
+                            f"[USER ACTION REQUIRED] {config['user_gate']}",
                             file=sys.stderr,
                         )
-                    if next_step.get("user_code"):
+                        print("Open this URL in your browser:", file=sys.stderr)
+                        print(f"  {upstream_url}", file=sys.stderr)
+                        print(f"{bar}\n", file=sys.stderr)
+
+                    access_token = asyncio.run(
+                        acquire_jwt_via_upstream_consent(
+                            base_url,
+                            _announce_upstream,
+                            flow_label="oauth-redirect",
+                        )
+                    )
+                elif flow == "browser-form":
+                    # telegram-user: form is multi-step (phone -> OTP -> 2FA).
+                    # Driver cannot fill OTP server-to-server (it comes from
+                    # the user's phone), so it announces /authorize and waits
+                    # for the form to navigate browser into the local listener.
+                    def _announce_form(form_url: str) -> None:
+                        bar = "=" * 60
+                        print(f"\n{bar}", file=sys.stderr)
                         print(
-                            f"  User code: {next_step['user_code']}",
+                            f"[USER ACTION REQUIRED] {config['user_gate']}",
                             file=sys.stderr,
                         )
-                    print(f"{bar}\n", file=sys.stderr)
+                        print("Open this URL in your browser:", file=sys.stderr)
+                        print(f"  {form_url}", file=sys.stderr)
+                        print(f"{bar}\n", file=sys.stderr)
 
-                access_token = asyncio.run(
-                    acquire_jwt(
-                        base_url,
-                        creds=creds,
-                        on_next_step=_announce_next_step,
-                        poll_completion_url=f"{base_url}/setup-status",
+                    access_token = asyncio.run(
+                        acquire_jwt_via_browser_form(
+                            base_url,
+                            _announce_form,
+                            flow_label="browser-form",
+                        )
                     )
-                )
-            else:
-                # t2-non-interaction relay: server-to-server POST is enough.
-                access_token = asyncio.run(acquire_jwt(base_url, creds=creds))
+                elif config["tier"] == "t2-interaction":
+                    # email-outlook (flow=device-code): server-to-server POST
+                    # returns next_step with verification_url + user_code; the
+                    # user signs in upstream while the server polls; driver
+                    # polls /setup-status until complete before /token.
+                    def _announce_next_step(next_step: dict) -> None:
+                        bar = "=" * 60
+                        print(f"\n{bar}", file=sys.stderr)
+                        print(
+                            f"[USER ACTION REQUIRED] {config['user_gate']}",
+                            file=sys.stderr,
+                        )
+                        if next_step.get("verification_url"):
+                            print(
+                                f"  Open: {next_step['verification_url']}",
+                                file=sys.stderr,
+                            )
+                        if next_step.get("user_code"):
+                            print(
+                                f"  User code: {next_step['user_code']}",
+                                file=sys.stderr,
+                            )
+                        print(f"{bar}\n", file=sys.stderr)
+
+                    access_token = asyncio.run(
+                        acquire_jwt(
+                            base_url,
+                            creds=creds,
+                            on_next_step=_announce_next_step,
+                            poll_completion_url=f"{base_url}/setup-status",
+                            flow_label="device-code",
+                        )
+                    )
+                else:
+                    # t2-non-interaction relay: server-to-server POST is enough.
+                    access_token = asyncio.run(acquire_jwt(base_url, creds=creds))
+            except (TimeoutError, RuntimeError):
+                # Snapshot diagnostics BEFORE the finally block tears down
+                # the container — that's the only window where logs +
+                # setup-status still reflect the failure state.
+                _capture_diagnostics(config["id"], compose_file, base_url)
+                raise
 
             asyncio.run(
                 run_e2e_http(
@@ -347,6 +431,20 @@ def main() -> None:
     args = parser.parse_args()
 
     matrix = load_matrix()
+
+    # Surface upstream-readiness expectations once per batch instead of
+    # discovering them mid-run via failures (Outlook account state, GDrive
+    # consent state, Telegram phone availability). Suppressed when no
+    # t2-interaction target is in scope.
+    target_configs = (
+        matrix
+        if args.target == "all"
+        else [c for c in matrix if c["tier"] == "t0-only"]
+        if args.target == "t0"
+        else [c for c in matrix if c["id"] == args.target]
+    )
+    if any(c["tier"] == "t2-interaction" for c in target_configs):
+        _print_t2_interaction_checklist()
 
     # Aggregate targets ('t0', 'all') re-invoke ourselves per config so each
     # subprocess runs in a clean environment. Otherwise nested-uv state from

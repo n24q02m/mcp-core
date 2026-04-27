@@ -25,8 +25,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import json
 import re
 import secrets
+import sys
+import time
 from collections.abc import Awaitable, Callable
 from urllib.parse import parse_qs, urlparse
 
@@ -39,6 +42,80 @@ _INPUT_NAME_RE = re.compile(r'<input[^>]*name="([^"]+)"', re.IGNORECASE)
 # The driver tries the HTML attribute first, then falls back to the JS string.
 _JS_SUBMIT_URL_RE = re.compile(r'submitUrl\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
 _LOCALHOST_REDIRECT = "http://localhost/callback"
+
+# Per-flow gate timeouts derived from upstream provider code lifetimes.
+# Microsoft device-code = 15min (900s), Google device-code = 30min but Google
+# Drive's UX nudges users to <15min so 900s matches both.
+# OAuth redirect (Notion / future provider consent) = single click, <5min.
+# Browser-form (Telegram OTP + 2FA) = multi-step typing, <10min.
+# A driver waiting longer than the upstream code TTL is wasting time on a
+# code that already expired server-side.
+FLOW_TIMEOUTS: dict[str, float] = {
+    "device-code": 900.0,
+    "oauth-redirect": 300.0,
+    "browser-form": 600.0,
+}
+_FALLBACK_FLOW_TIMEOUT = 600.0
+_PROGRESS_LOG_INTERVAL = 30.0
+
+
+def get_flow_timeout(flow: str | None) -> float:
+    """Return the user-gate timeout matching upstream code TTL for ``flow``.
+
+    Unknown / None flows fall back to 600s (matches the legacy default so
+    callers that don't pass ``flow_label`` keep working unchanged).
+    """
+    if flow is None:
+        return _FALLBACK_FLOW_TIMEOUT
+    return FLOW_TIMEOUTS.get(flow, _FALLBACK_FLOW_TIMEOUT)
+
+
+async def _health_probe(client: httpx.AsyncClient, base_url: str) -> None:
+    """Confirm the local mcp container is alive + OAuth metadata reachable.
+
+    Run BEFORE announcing a user-gate URL so the driver does not prompt the
+    user to click a link that points at a dead/half-started server. Both
+    endpoints must return 200; anything else raises ``RuntimeError`` with
+    enough detail to diagnose without docker logs.
+    """
+    for url in (
+        f"{base_url}/setup-status",
+        f"{base_url}/.well-known/oauth-authorization-server",
+    ):
+        try:
+            r = await client.get(url, timeout=5.0)
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"Health probe FAIL {url}: {e}") from e
+        if r.status_code != 200:
+            raise RuntimeError(
+                f"Health probe FAIL {url}: status={r.status_code} body={r.text[:200]}"
+            )
+
+
+async def _live_progress_logger(
+    deadline: float, label: str, interval: float = _PROGRESS_LOG_INTERVAL
+) -> None:
+    """Print ``[gate] elapsed/remaining`` to stderr every ``interval`` seconds.
+
+    Used by callback-listener flows (browser-form, oauth-redirect) where the
+    actual completion signal is an HTTP request to the local listener — the
+    driver can't poll a status endpoint, so it just keeps the user informed
+    that the wait is intentional, not a hang. Cancel the returned task when
+    the callback lands.
+    """
+    start = time.time()
+    while True:
+        await asyncio.sleep(interval)
+        now = time.time()
+        if now >= deadline:
+            return
+        elapsed = int(now - start)
+        remaining = int(deadline - now)
+        print(
+            f"[gate] {label} elapsed={elapsed}s remaining={remaining}s "
+            "(waiting for browser callback)",
+            file=sys.stderr,
+        )
 
 
 def _pkce_pair() -> tuple[str, str]:
@@ -75,9 +152,12 @@ async def acquire_jwt(
     base_url: str,
     creds: dict[str, str],
     timeout: float = 60.0,
-    on_next_step: Callable[[dict], Awaitable[None]] | Callable[[dict], None] | None = None,
+    on_next_step: Callable[[dict], Awaitable[None]]
+    | Callable[[dict], None]
+    | None = None,
     poll_completion_url: str | None = None,
-    poll_timeout: float = 600.0,
+    poll_timeout: float | None = None,
+    flow_label: str | None = None,
 ) -> str:
     """Drive the full PKCE + form-fill + token-exchange flow.
 
@@ -94,7 +174,15 @@ async def acquire_jwt(
     ``/token``. The auth code itself is issued inline at /authorize but
     is only useful once the upstream device-code flow finishes — exchanging
     it earlier yields a JWT whose tools fail because Outlook isn't auth'd.
+
+    ``flow_label`` selects the upstream-matched poll timeout (device-code =
+    900s, oauth-redirect = 300s, browser-form = 600s). When ``poll_timeout``
+    is explicit it overrides the lookup; when both are omitted the legacy
+    600s default applies.
     """
+    if poll_timeout is None:
+        poll_timeout = get_flow_timeout(flow_label)
+
     verifier, challenge = _pkce_pair()
     state = secrets.token_urlsafe(16)
 
@@ -155,6 +243,10 @@ async def acquire_jwt(
         # exchanging the code.
         next_step = body.get("next_step")
         if next_step:
+            # Verify server alive + OAuth metadata reachable BEFORE prompting
+            # the user. A dead container with cached auth code = user clicks
+            # link, sees error, doesn't realize the test framework is at fault.
+            await _health_probe(client, base_url)
             if on_next_step is not None:
                 result = on_next_step(next_step)
                 if asyncio.iscoroutine(result):
@@ -199,15 +291,29 @@ async def _poll_until_complete(
     client's httpx session so we don't open a parallel connection. Raises
     ``TimeoutError`` if completion doesn't land in time, ``RuntimeError``
     on explicit error states reported by the server.
-    """
-    import time
 
-    deadline = time.time() + timeout
+    Logs an ``[poll] elapsed=Xs remaining=Ys status=<setupStatus>`` line to
+    stderr every :data:`_PROGRESS_LOG_INTERVAL` seconds (30s) so a stuck
+    upstream consent surface stops looking like a hung driver.
+    """
+    start = time.time()
+    deadline = start + timeout
+    last_log = 0.0
     while time.time() < deadline:
         try:
             r = await client.get(poll_url, timeout=5.0)
             if r.status_code == 200:
                 data = r.json()
+                now = time.time()
+                if (now - last_log) >= _PROGRESS_LOG_INTERVAL:
+                    elapsed = int(now - start)
+                    remaining = int(deadline - now)
+                    print(
+                        f"[poll] elapsed={elapsed}s remaining={remaining}s "
+                        f"status={json.dumps(data)}",
+                        file=sys.stderr,
+                    )
+                    last_log = now
                 # ``setupStatus`` is multi-key: mcp-core seeds it with
                 # ``{gdrive: idle}``; servers like better-email-mcp add
                 # provider-specific keys (``outlook``) when their
@@ -285,8 +391,9 @@ async def _start_callback_listener(
 async def acquire_jwt_via_browser_form(
     base_url: str,
     announce: Callable[[str], Awaitable[None]] | Callable[[str], None],
-    timeout: float = 600.0,
+    timeout: float | None = None,
     creds: dict[str, str] | None = None,
+    flow_label: str | None = "browser-form",
 ) -> str:
     """Drive a relay-form flow that requires user input INSIDE the form.
 
@@ -307,6 +414,9 @@ async def acquire_jwt_via_browser_form(
     would be wasted.
     """
     del creds  # browser-only flow; user types everything
+    if timeout is None:
+        timeout = get_flow_timeout(flow_label)
+
     verifier, challenge = _pkce_pair()
     state = secrets.token_urlsafe(16)
 
@@ -314,11 +424,15 @@ async def acquire_jwt_via_browser_form(
         asyncio.get_event_loop().create_future()
     )
     server, port = await _start_callback_listener(code_future)
+    progress_task: asyncio.Task[None] | None = None
     try:
         redirect_uri = f"http://127.0.0.1:{port}/callback"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             client_id = await _register_client(client, base_url)
+            # Probe BEFORE printing the URL; user clicking a link to a dead
+            # server is the worst failure mode (silent, looks like driver bug).
+            await _health_probe(client, base_url)
             authorize_url = (
                 f"{base_url}/authorize?"
                 f"client_id={client_id}&"
@@ -332,6 +446,11 @@ async def acquire_jwt_via_browser_form(
             result = announce(authorize_url)
             if asyncio.iscoroutine(result):
                 await result
+
+            deadline = time.time() + timeout
+            progress_task = asyncio.create_task(
+                _live_progress_logger(deadline, flow_label or "browser-form")
+            )
 
             try:
                 code, returned_state = await asyncio.wait_for(
@@ -361,11 +480,11 @@ async def acquire_jwt_via_browser_form(
             token_body = token_resp.json()
             access_token = token_body.get("access_token")
             if not access_token:
-                raise RuntimeError(
-                    f"No access_token in /token response: {token_body}"
-                )
+                raise RuntimeError(f"No access_token in /token response: {token_body}")
             return str(access_token)
     finally:
+        if progress_task is not None and not progress_task.done():
+            progress_task.cancel()
         server.close()
         await server.wait_closed()
 
@@ -373,7 +492,8 @@ async def acquire_jwt_via_browser_form(
 async def acquire_jwt_via_upstream_consent(
     base_url: str,
     announce: Callable[[str], Awaitable[None]] | Callable[[str], None],
-    timeout: float = 600.0,
+    timeout: float | None = None,
+    flow_label: str | None = "oauth-redirect",
 ) -> str:
     """Drive a delegated-OAuth flow that requires upstream user consent.
 
@@ -390,6 +510,9 @@ async def acquire_jwt_via_upstream_consent(
     surface it to the user (e.g. via :func:`e2e.user_gate.announce_and_wait`
     or a plain ``print``). It may be a sync or async callable.
     """
+    if timeout is None:
+        timeout = get_flow_timeout(flow_label)
+
     verifier, challenge = _pkce_pair()
     state = secrets.token_urlsafe(16)
 
@@ -397,11 +520,13 @@ async def acquire_jwt_via_upstream_consent(
         asyncio.get_event_loop().create_future()
     )
     server, port = await _start_callback_listener(code_future)
+    progress_task: asyncio.Task[None] | None = None
     try:
         redirect_uri = f"http://127.0.0.1:{port}/callback"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             client_id = await _register_client(client, base_url)
+            await _health_probe(client, base_url)
             params = {
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
@@ -423,6 +548,11 @@ async def acquire_jwt_via_upstream_consent(
             result = announce(upstream_url)
             if asyncio.iscoroutine(result):
                 await result
+
+            deadline = time.time() + timeout
+            progress_task = asyncio.create_task(
+                _live_progress_logger(deadline, flow_label or "oauth-redirect")
+            )
 
             try:
                 code, returned_state = await asyncio.wait_for(
@@ -455,5 +585,7 @@ async def acquire_jwt_via_upstream_consent(
                 raise RuntimeError(f"No access_token in /token response: {token_body}")
             return str(access_token)
     finally:
+        if progress_task is not None and not progress_task.done():
+            progress_task.cancel()
         server.close()
         await server.wait_closed()
