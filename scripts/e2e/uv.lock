@@ -369,20 +369,20 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "boto3", specifier = ">=1.35" },
-    { name = "botocore", extras = ["crt"], specifier = ">=1.35" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "jinja2", specifier = ">=3.1" },
-    { name = "mcp", specifier = ">=1.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "starlette", specifier = ">=0.40" },
+    { name = "boto3", specifier = ">=1.42.96" },
+    { name = "botocore", extras = ["crt"], specifier = ">=1.42.96" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "mcp", specifier = ">=1.27.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "starlette", specifier = ">=0.52.1" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "respx", specifier = ">=0.21" },
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest-asyncio", specifier = ">=0.26.0" },
+    { name = "respx", specifier = ">=0.23.1" },
 ]
 
 [[package]]

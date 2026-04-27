@@ -31,7 +31,7 @@ dependencies = [
     # keep pydantic range loose so downstream (wet/mnemo/crg) that pull cohere
     # can resolve to a lower pydantic-core while mcp-core itself doesn't need
     # 2.13+ features. Upstream release notes: 2.9+ is all we actually rely on.
-    "pydantic>=2.9,<2.13",
+    "pydantic>=2.13.3,<2.14",
     "loguru>=0.7.3",
     "platformdirs>=4.9.6",
     "tomli-w>=1.2.0",
@@ -48,7 +48,7 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.15.11",
+    "ruff>=0.15.12",
     "ty>=0.0.32",
 ]
 
