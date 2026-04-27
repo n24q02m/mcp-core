@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.8.1 (2026-04-27)
+
+### Bug Fixes
+
+- Relax pydantic spec to >=2.9,<2.14 (loose-range intent)
+  ([#98](https://github.com/n24q02m/mcp-core/pull/98),
+  [`32bce70`](https://github.com/n24q02m/mcp-core/commit/32bce70083c77c5ef622e7700cab228d5704e2cf))
+
+
 ## v1.8.0 (2026-04-27)
 
 ### Bug Fixes
