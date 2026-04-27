@@ -208,11 +208,19 @@ async def _poll_until_complete(
             r = await client.get(poll_url, timeout=5.0)
             if r.status_code == 200:
                 data = r.json()
-                state = data.get("state") or next(iter(data.values()), None)
-                if state == "complete":
+                # ``setupStatus`` is multi-key: mcp-core seeds it with
+                # ``{gdrive: idle}``; servers like better-email-mcp add
+                # provider-specific keys (``outlook``) when their
+                # background flow finishes. Earlier code peeked only the
+                # first value ("idle") and never saw completion. Treat
+                # any ``error:*`` value as terminal and any non-idle
+                # ``complete`` as success.
+                values = list(data.values()) if isinstance(data, dict) else []
+                for v in values:
+                    if isinstance(v, str) and v.startswith("error"):
+                        raise RuntimeError(f"Setup failed: {data}")
+                if any(v == "complete" for v in values):
                     return
-                if state == "error":
-                    raise RuntimeError(f"Setup failed: {data}")
         except httpx.HTTPError:
             pass
         await asyncio.sleep(3)
