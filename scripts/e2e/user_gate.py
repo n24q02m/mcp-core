@@ -7,15 +7,20 @@ browser per ``feedback_relay_fill_all_fields.md`` — automation = mock layer
 that bypasses the real validation.
 
 Instead the driver prints the gate URL and polls a status endpoint until the
-server reports completion.
+server reports completion. Progress is echoed every 30s with the latest
+``setup-status`` body so a stuck upstream consent surface is visible at
+glance instead of looking like a hung driver.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 
 import httpx
+
+_PROGRESS_LOG_INTERVAL = 30.0
 
 
 def announce_and_wait(
@@ -25,6 +30,9 @@ def announce_and_wait(
     timeout: float = 600.0,
 ) -> None:
     """Print gate banner to stderr, poll ``poll_url`` for ``state=complete``.
+
+    Echoes ``[gate] elapsed=Xs remaining=Ys status=<body>`` every 30s while
+    waiting so a stuck upstream consent doesn't look like a hung driver.
 
     Raises:
         RuntimeError: if the poll endpoint returns ``state=error``.
@@ -36,12 +44,24 @@ def announce_and_wait(
     print(f"Relay URL: {relay_url}", file=sys.stderr)
     print(f"{bar}\n", file=sys.stderr)
 
-    deadline = time.time() + timeout
+    start = time.time()
+    deadline = start + timeout
+    last_log = 0.0
     while time.time() < deadline:
         try:
             r = httpx.get(poll_url, timeout=5.0)
             if r.status_code == 200:
                 data = r.json()
+                now = time.time()
+                if (now - last_log) >= _PROGRESS_LOG_INTERVAL:
+                    elapsed = int(now - start)
+                    remaining = int(deadline - now)
+                    print(
+                        f"[gate] elapsed={elapsed}s remaining={remaining}s "
+                        f"status={json.dumps(data)}",
+                        file=sys.stderr,
+                    )
+                    last_log = now
                 state = data.get("state") or next(iter(data.values()), None)
                 if state == "complete":
                     return
