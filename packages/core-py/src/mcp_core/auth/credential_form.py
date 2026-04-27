@@ -289,6 +289,10 @@ def render_credential_form(
             padding: 0.75rem 1.5rem;
             transition: background-color 0.15s ease, opacity 0.15s ease;
             margin-top: 0.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
         }}
 
         .submit-btn:hover {{
@@ -307,6 +311,22 @@ def render_credential_form(
 
         .submit-btn[aria-busy="true"] {{
             cursor: wait;
+        }}
+
+        .submit-btn[aria-busy="true"]::before {{
+            content: "";
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }}
+
+        @keyframes spin {{
+            to {{
+                transform: rotate(360deg);
+            }}
         }}
 
         .status-box {{
