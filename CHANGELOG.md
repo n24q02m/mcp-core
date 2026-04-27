@@ -2,6 +2,77 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-04-27)
+
+### Bug Fixes
+
+- E2e _poll_until_complete handles multi-key setupStatus
+  ([`b6fbd39`](https://github.com/n24q02m/mcp-core/commit/b6fbd39f973d33ff523932667c8e2042b105e186))
+
+- E2e driver T2 cascade — OAuth client, per-session HTTP transport, tool-name corrections
+  ([`3b17733`](https://github.com/n24q02m/mcp-core/commit/3b177335e3dc3f8b9e5869be94f60b58062979b8))
+
+- Restore email-outlook deployment=[local, remote]
+  ([#96](https://github.com/n24q02m/mcp-core/pull/96),
+  [`454ffbb`](https://github.com/n24q02m/mcp-core/commit/454ffbb652b188c7ecc8f9fa55c1c76022cdae18))
+
+- Restore wet-full + mnemo-full to t2-interaction after per-sub GDrive
+  ([`26c13f9`](https://github.com/n24q02m/mcp-core/commit/26c13f968f69fde21370c0ada740955aa1898064))
+
+- Restrict e2e-t0 workflow GITHUB_TOKEN to read-only
+  ([`f08170e`](https://github.com/n24q02m/mcp-core/commit/f08170e9e1ffe20bb5b98fa309e596fd11e1916e))
+
+- Set secure directory permissions for sqlite credential store
+  ([#91](https://github.com/n24q02m/mcp-core/pull/91),
+  [`b30fea5`](https://github.com/n24q02m/mcp-core/commit/b30fea505fb82ad60ad2396b0a8ed8a56abf2dc2))
+
+- **deps**: Update dependency cryptography to v47
+  ([#87](https://github.com/n24q02m/mcp-core/pull/87),
+  [`fa9b917`](https://github.com/n24q02m/mcp-core/commit/fa9b917ca8b6dc69c71875a086104a860e207342))
+
+- **deps**: Update non-major dependencies ([#85](https://github.com/n24q02m/mcp-core/pull/85),
+  [`d5ea96a`](https://github.com/n24q02m/mcp-core/commit/d5ea96acb88a448dd2c15dcbea87e5d6cd3d4301))
+
+- **transport/smart-stdio**: Cancel SSE body before awaiting reader promise
+  ([#89](https://github.com/n24q02m/mcp-core/pull/89),
+  [`5bfb316`](https://github.com/n24q02m/mcp-core/commit/5bfb316e5b9f8d98fdea823c01377b6212adb5ba))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#86](https://github.com/n24q02m/mcp-core/pull/86),
+  [`a8cf561`](https://github.com/n24q02m/mcp-core/commit/a8cf5610a68a010472770cabca7a9fde61331289))
+
+### Features
+
+- Add focus-visible states and styling for dynamic info elements
+  ([#88](https://github.com/n24q02m/mcp-core/pull/88),
+  [`25cd4c9`](https://github.com/n24q02m/mcp-core/commit/25cd4c9c07070f28eb1609006c28d8b28d536a15))
+
+- Add visual feedback for disabled inputs in credential form
+  ([#90](https://github.com/n24q02m/mcp-core/pull/90),
+  [`e51c270`](https://github.com/n24q02m/mcp-core/commit/e51c270693c3e4c555c30b2a4330ff90e63a3474))
+
+- E2e driver browser-form flow for telegram-user multi-step OTP/2FA
+  ([`93e3f5c`](https://github.com/n24q02m/mcp-core/commit/93e3f5c28e511e33f98bae3570b5a5fca08b7f24))
+
+- E2e driver delegated-OAuth path
+  ([`f945cce`](https://github.com/n24q02m/mcp-core/commit/f945cceb2f9db7edbfc3b2212953bee64aab1807))
+
+- E2e driver device-code response handling + email-outlook config
+  ([`a38bea8`](https://github.com/n24q02m/mcp-core/commit/a38bea8dc215c42b50e1f925e3531b0b4dacc690))
+
+- E2e driver hardening + reclassify notion-oauth out of T2 matrix
+  ([#95](https://github.com/n24q02m/mcp-core/pull/95),
+  [`88ffde0`](https://github.com/n24q02m/mcp-core/commit/88ffde0399f29095f85e0f500fab8399ff706060))
+
+- Optimize pollForResponses array find lookup ([#92](https://github.com/n24q02m/mcp-core/pull/92),
+  [`735a7ec`](https://github.com/n24q02m/mcp-core/commit/735a7ec0b820ab9a0d723941ea75fa4d4a1b1aac))
+
+- Prefill credential form fields from OAuth query params
+  ([#97](https://github.com/n24q02m/mcp-core/pull/97),
+  [`651c47d`](https://github.com/n24q02m/mcp-core/commit/651c47dc76b4f0d1e51d5678622d22c0cf89e765))
+
+
 ## v1.8.0-beta.1 (2026-04-27)
 
 ### Bug Fixes

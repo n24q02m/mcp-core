@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-embedding-daemon"
-version = "1.8.0-beta.1"
+version = "1.8.0"
 description = "Shared ONNX/GGUF embedding server for the n24q02m MCP ecosystem"
 readme = "README.md"
 requires-python = "==3.13.*"
