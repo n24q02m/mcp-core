@@ -23,10 +23,9 @@ REPO_TO_TEMPLATE: dict[str, str] = {
     "better-godot-mcp": "compose-godot.yml.j2",
 }
 
-# nosemgrep: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
 # Generates docker-compose YAML for ephemeral test deployments, not HTML.
 # No XSS surface: output is consumed only by ``docker compose -f``.
-_env = jinja2.Environment(
+_env = jinja2.Environment(  # nosemgrep: python.flask.security.xss.audit.direct-use-of-jinja2.direct-use-of-jinja2
     loader=jinja2.FileSystemLoader(Path(__file__).parent / "templates"),
     autoescape=False,
     keep_trailing_newline=True,
