@@ -356,6 +356,7 @@ def run_t2_config(config: dict, deployment: str) -> None:
                         acquire_jwt_via_browser_form(
                             base_url,
                             _announce_form,
+                            creds=creds,
                             flow_label="browser-form",
                         )
                     )

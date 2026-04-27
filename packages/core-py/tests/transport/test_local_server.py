@@ -432,7 +432,7 @@ class TestBuildLocalAppForwardsCustomFormRenderer:
         import hashlib
         import secrets
 
-        def custom_renderer(_schema: dict, submit_url: str) -> str:
+        def custom_renderer(_schema: dict, submit_url: str, **_kwargs: object) -> str:
             return f"<!DOCTYPE html><html><body><h1>Custom Forwarded</h1><a href='{submit_url}'>x</a></body></html>"
 
         app, _ = build_local_app(

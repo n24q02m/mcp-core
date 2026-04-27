@@ -226,3 +226,120 @@ async def test_live_progress_logger_emits_and_cancels_cleanly(monkeypatch):
     assert "[gate] test" in err, f"expected progress lines, got: {err!r}"
     assert "elapsed=" in err
     assert "remaining=" in err
+
+
+# ---------------------------------------------------------------------------
+# Phase C3.5: ``acquire_jwt_via_browser_form`` builds prefill query string
+# from creds so the user lands on a form with skret-derived fields already
+# filled (e.g. TELEGRAM_PHONE) and only types what skret cannot supply
+# (OTP, 2FA password).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_browser_form_announces_url_with_prefill_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Driver must append ``&prefill_<KEY>=<VALUE>`` for each cred key.
+
+    The user opens the URL, sees TELEGRAM_PHONE pre-filled, clicks Connect,
+    and only types OTP / 2FA in the chained step UI. URL-encoding ensures
+    a phone like ``+84...`` survives the query without ``+`` decoding to
+    space.
+    """
+    captured_url: list[str] = []
+
+    def announce(url: str) -> None:
+        captured_url.append(url)
+
+    async def fake_register(_client: object, _base: str) -> str:
+        return "local-browser"
+
+    async def fake_health(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(oauth_client, "_register_client", fake_register)
+    monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+
+    # Use a short timeout to avoid hanging the test suite. We never satisfy
+    # ``code_future`` so this raises TimeoutError after the announce — but
+    # the URL is captured before then.
+    with pytest.raises(TimeoutError):
+        await oauth_client.acquire_jwt_via_browser_form(
+            "http://127.0.0.1:0",
+            announce,
+            timeout=0.1,
+            creds={
+                "TELEGRAM_PHONE": "+84123456789",
+                "MCP_DCR_SERVER_SECRET": "should-be-excluded",
+            },
+        )
+
+    assert len(captured_url) == 1
+    url = captured_url[0]
+    # Phone is URL-encoded so + survives unmangled.
+    assert "prefill_TELEGRAM_PHONE=%2B84123456789" in url
+    # Server secret never leaks into the user-visible URL.
+    assert "MCP_DCR_SERVER_SECRET" not in url
+
+
+@pytest.mark.asyncio
+async def test_browser_form_omits_empty_prefill_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty creds values must not produce ``prefill_KEY=`` (empty value)."""
+    captured_url: list[str] = []
+
+    def announce(url: str) -> None:
+        captured_url.append(url)
+
+    async def fake_register(_client: object, _base: str) -> str:
+        return "local-browser"
+
+    async def fake_health(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(oauth_client, "_register_client", fake_register)
+    monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+
+    with pytest.raises(TimeoutError):
+        await oauth_client.acquire_jwt_via_browser_form(
+            "http://127.0.0.1:0",
+            announce,
+            timeout=0.1,
+            creds={"TELEGRAM_PHONE": "", "TELEGRAM_BOT_TOKEN": "abc"},
+        )
+
+    url = captured_url[0]
+    assert "prefill_TELEGRAM_PHONE=" not in url
+    assert "prefill_TELEGRAM_BOT_TOKEN=abc" in url
+
+
+@pytest.mark.asyncio
+async def test_browser_form_no_creds_no_prefill_qs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without ``creds=...`` the URL has no ``prefill_*`` query suffix."""
+    captured_url: list[str] = []
+
+    def announce(url: str) -> None:
+        captured_url.append(url)
+
+    async def fake_register(_client: object, _base: str) -> str:
+        return "local-browser"
+
+    async def fake_health(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(oauth_client, "_register_client", fake_register)
+    monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+
+    with pytest.raises(TimeoutError):
+        await oauth_client.acquire_jwt_via_browser_form(
+            "http://127.0.0.1:0",
+            announce,
+            timeout=0.1,
+        )
+
+    url = captured_url[0]
+    assert "prefill_" not in url

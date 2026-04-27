@@ -36,6 +36,14 @@ export interface RelayConfigSchema {
 export interface RenderOptions {
   submitUrl: string
   pageTitle?: string
+  /**
+   * Optional ``{KEY: VALUE}`` map populated by the OAuth AS from
+   * ``?prefill_<KEY>=<VALUE>`` query params on GET /authorize. Each matching
+   * field renders with an HTML-escaped ``value="..."`` attr so users only
+   * type what skret cannot supply (OTP / 2FA / one-time codes). Non-matching
+   * keys are ignored.
+   */
+  prefill?: Record<string, string>
 }
 
 function escapeHtml(value: unknown): string {
@@ -47,7 +55,7 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
-function renderField(field: ConfigField): string {
+function renderField(field: ConfigField, value = ''): string {
   const key = escapeHtml(field.key ?? '')
   const label = escapeHtml(field.label ?? '')
   const fieldType = escapeHtml(field.type ?? 'text')
@@ -60,6 +68,8 @@ function renderField(field: ConfigField): string {
   const requiredBadge = required
     ? '<span class="required-badge">Required</span>'
     : '<span class="optional-badge">Optional</span>'
+
+  const valueAttr = value ? ` value="${escapeHtml(value)}"` : ''
 
   let helpHtml = ''
   let ariaDescribedby = ''
@@ -87,7 +97,7 @@ function renderField(field: ConfigField): string {
                 autocomplete="off"
                 autocorrect="off"
                 autocapitalize="off"
-                spellcheck="false"${requiredAttr}${ariaDescribedby}
+                spellcheck="false"${valueAttr}${requiredAttr}${ariaDescribedby}
             />
             ${helpHtml}
         </div>`
@@ -118,6 +128,7 @@ function renderCapability(cap: CapabilityInfo): string {
  * @param schema RelayConfigSchema with server metadata and field definitions.
  * @param options.submitUrl URL the form POSTs to as JSON via fetch().
  * @param options.pageTitle Optional browser tab title. Defaults to displayName.
+ * @param options.prefill Optional ``{KEY: VALUE}`` map for input ``value=`` attrs.
  * @returns Complete HTML document string, XSS-safe with all dynamic content escaped.
  */
 export function renderCredentialForm(schema: RelayConfigSchema, options: RenderOptions): string {
@@ -129,8 +140,9 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
   const fields = schema.fields ?? []
   const capabilityInfo = schema.capabilityInfo ?? []
+  const prefill = options.prefill ?? {}
 
-  const fieldsHtml = fields.map(renderField).join('')
+  const fieldsHtml = fields.map((f) => renderField(f, prefill[f.key] ?? '')).join('')
 
   let capabilitiesHtml = ''
   if (capabilityInfo.length > 0) {

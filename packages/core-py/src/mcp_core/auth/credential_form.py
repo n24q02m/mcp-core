@@ -13,8 +13,13 @@ def _escape(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
 
-def _render_field(field: dict[str, Any]) -> str:
-    """Render a single ConfigField as an HTML input block."""
+def _render_field(field: dict[str, Any], value: str = "") -> str:
+    """Render a single ConfigField as an HTML input block.
+
+    ``value`` is the prefill string from the GET ``?prefill_<KEY>=<VALUE>``
+    query param. When non-empty it lands as an HTML-escaped ``value`` attr
+    so the user sees the field already filled and only has to click Connect.
+    """
     key = _escape(field.get("key", ""))
     label = _escape(field.get("label", ""))
     field_type = _escape(field.get("type", "text"))
@@ -27,6 +32,8 @@ def _render_field(field: dict[str, Any]) -> str:
     required_badge = (
         '<span class="required-badge">Required</span>' if required else '<span class="optional-badge">Optional</span>'
     )
+
+    value_attr = f' value="{_escape(value)}"' if value else ""
 
     help_html = ""
     aria_describedby = ""
@@ -52,7 +59,7 @@ def _render_field(field: dict[str, Any]) -> str:
                 autocomplete="off"
                 autocorrect="off"
                 autocapitalize="off"
-                spellcheck="false"{required_attr}{aria_describedby}
+                spellcheck="false"{value_attr}{required_attr}{aria_describedby}
             />
             {help_html}
         </div>"""
@@ -81,6 +88,7 @@ def render_credential_form(
     *,
     submit_url: str,
     page_title: str | None = None,
+    prefill: dict[str, str] | None = None,
 ) -> str:
     """Render a dark-themed HTML credential form from a RelayConfigSchema dict.
 
@@ -88,6 +96,10 @@ def render_credential_form(
         schema: RelayConfigSchema dict with server metadata and field definitions.
         submit_url: URL the form POSTs to as JSON via fetch().
         page_title: Optional browser tab title. Defaults to displayName.
+        prefill: Optional ``{KEY: VALUE}`` mapping for input ``value=`` attrs.
+            Driver populates this from skret via ``?prefill_<KEY>=<VALUE>``
+            query params on the GET so users only type what skret can't
+            supply (OTP, 2FA password). Non-matching keys are ignored.
 
     Returns:
         Complete HTML document string, XSS-safe with all dynamic content escaped.
@@ -101,7 +113,8 @@ def render_credential_form(
     fields: list[dict[str, Any]] = schema.get("fields", [])
     capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
 
-    fields_html = "".join(_render_field(f) for f in fields)
+    prefill = prefill or {}
+    fields_html = "".join(_render_field(f, prefill.get(f.get("key", ""), "")) for f in fields)
 
     capabilities_html = ""
     if capability_info:

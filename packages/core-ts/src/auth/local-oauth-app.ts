@@ -105,11 +105,16 @@ export interface LocalOAuthAppOptions {
   /**
    * Optional renderer used in place of the default credential form on GET
    * /authorize. Receives the relay schema and an options object with
-   * ``submitUrl`` (which embeds the PKCE nonce) and returns the full HTML
-   * page. Consumers (email, telegram) use this to inject rich UX while
-   * reusing core OAuth plumbing.
+   * ``submitUrl`` (which embeds the PKCE nonce) plus an optional ``prefill``
+   * mapping carrying skret-derived field values from
+   * ``?prefill_<KEY>=<VALUE>`` query params. Consumers (email, telegram)
+   * use this to inject rich UX while reusing core OAuth plumbing; renderers
+   * may safely ignore ``prefill`` if they don't display matching inputs.
    */
-  customCredentialFormHtml?: (schema: RelayConfigSchema, options: { submitUrl: string }) => string
+  customCredentialFormHtml?: (
+    schema: RelayConfigSchema,
+    options: { submitUrl: string; prefill?: Record<string, string> }
+  ) => string
 }
 
 export interface LocalOAuthAppResult {
@@ -278,6 +283,18 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       return
     }
 
+    // Extract prefill values from query: ``?prefill_<KEY>=<VALUE>``. The
+    // driver populates these from skret so users only type what skret
+    // cannot supply (OTP / 2FA / one-time codes). Renderers receive the
+    // flat ``{KEY: VALUE}`` map and emit ``value="..."`` on matching
+    // inputs.
+    const prefill: Record<string, string> = {}
+    params.forEach((value, key) => {
+      if (key.startsWith('prefill_')) {
+        prefill[key.slice('prefill_'.length)] = value
+      }
+    })
+
     const nonce = randomBytes(32).toString('base64url')
     // Generate a per-authorize-request subject here (not at /token time) so the
     // credential save callback and the eventual JWT share the same ``sub``. If
@@ -299,8 +316,8 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     const submitUrl = `${base}/authorize?nonce=${nonce}`
     const html =
       options.customCredentialFormHtml !== undefined
-        ? options.customCredentialFormHtml(options.relaySchema, { submitUrl })
-        : renderCredentialForm(options.relaySchema, { submitUrl })
+        ? options.customCredentialFormHtml(options.relaySchema, { submitUrl, prefill })
+        : renderCredentialForm(options.relaySchema, { submitUrl, prefill })
     htmlResponse(res, 200, html)
   }
 

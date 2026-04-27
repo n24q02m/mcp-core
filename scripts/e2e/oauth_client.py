@@ -31,7 +31,7 @@ import secrets
 import sys
 import time
 from collections.abc import Awaitable, Callable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 
@@ -408,14 +408,29 @@ async def acquire_jwt_via_browser_form(
     multi-step exchange completes. The captured code is then exchanged
     at ``/token`` for the JWT.
 
-    ``creds`` is currently ignored — the user fills the entire form in the
-    browser. It's accepted for symmetry with :func:`acquire_jwt` so the
-    driver doesn't need a separate code path to load skret values that
-    would be wasted.
+    ``creds`` is forwarded to the form via ``?prefill_<KEY>=<VALUE>`` query
+    params on the GET so skret-derived fields (e.g. TELEGRAM_PHONE) render
+    pre-filled. The user only types what skret cannot supply (OTP, 2FA
+    password). ``MCP_DCR_SERVER_SECRET`` and any empty values are excluded
+    — the secret is server-side infra, not a form field, and empty values
+    would render as blank ``value=""`` attrs that confuse the placeholder.
     """
-    del creds  # browser-only flow; user types everything
     if timeout is None:
         timeout = get_flow_timeout(flow_label)
+
+    # Build prefill query string from creds. Values are URL-encoded so a
+    # ``+`` in a phone number reaches the server unmangled (raw ``+`` in a
+    # query string decodes to space).
+    prefill_qs = ""
+    if creds:
+        excluded = {"MCP_DCR_SERVER_SECRET"}
+        prefill_pairs = [
+            f"prefill_{quote(k)}={quote(v)}"
+            for k, v in creds.items()
+            if v and k not in excluded
+        ]
+        if prefill_pairs:
+            prefill_qs = "&" + "&".join(prefill_pairs)
 
     verifier, challenge = _pkce_pair()
     state = secrets.token_urlsafe(16)
@@ -441,6 +456,7 @@ async def acquire_jwt_via_browser_form(
                 f"code_challenge={challenge}&"
                 f"code_challenge_method=S256&"
                 f"response_type=code"
+                f"{prefill_qs}"
             )
 
             result = announce(authorize_url)
