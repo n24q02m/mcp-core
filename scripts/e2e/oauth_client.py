@@ -274,6 +274,94 @@ async def _start_callback_listener(
     return server, port
 
 
+async def acquire_jwt_via_browser_form(
+    base_url: str,
+    announce: Callable[[str], Awaitable[None]] | Callable[[str], None],
+    timeout: float = 600.0,
+    creds: dict[str, str] | None = None,
+) -> str:
+    """Drive a relay-form flow that requires user input INSIDE the form.
+
+    telegram-user is the canonical case: phone submit returns
+    ``next_step.type == "otp_required"``; the form renders an OTP input
+    in-place, the user types the code, the form chains to
+    ``password_required`` if 2FA is on, and only the final POST receives
+    a ``redirect_url``. The driver cannot fill OTP / password
+    server-to-server (those values come from the user's phone, not skret),
+    so it announces the local ``/authorize`` URL and waits for the form
+    to navigate the browser into the local callback listener after the
+    multi-step exchange completes. The captured code is then exchanged
+    at ``/token`` for the JWT.
+
+    ``creds`` is currently ignored — the user fills the entire form in the
+    browser. It's accepted for symmetry with :func:`acquire_jwt` so the
+    driver doesn't need a separate code path to load skret values that
+    would be wasted.
+    """
+    del creds  # browser-only flow; user types everything
+    verifier, challenge = _pkce_pair()
+    state = secrets.token_urlsafe(16)
+
+    code_future: asyncio.Future[tuple[str, str]] = (
+        asyncio.get_event_loop().create_future()
+    )
+    server, port = await _start_callback_listener(code_future)
+    try:
+        redirect_uri = f"http://127.0.0.1:{port}/callback"
+
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            client_id = await _register_client(client, base_url)
+            authorize_url = (
+                f"{base_url}/authorize?"
+                f"client_id={client_id}&"
+                f"redirect_uri={redirect_uri}&"
+                f"state={state}&"
+                f"code_challenge={challenge}&"
+                f"code_challenge_method=S256&"
+                f"response_type=code"
+            )
+
+            result = announce(authorize_url)
+            if asyncio.iscoroutine(result):
+                await result
+
+            try:
+                code, returned_state = await asyncio.wait_for(
+                    code_future, timeout=timeout
+                )
+            except asyncio.TimeoutError as e:
+                raise TimeoutError(
+                    f"OAuth callback not received within {timeout}s — "
+                    f"user did not complete the form"
+                ) from e
+            if returned_state != state:
+                raise RuntimeError(
+                    f"OAuth state mismatch: expected {state}, got {returned_state}"
+                )
+
+            token_resp = await client.post(
+                f"{base_url}/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                    "client_id": client_id,
+                    "code_verifier": verifier,
+                },
+            )
+            token_resp.raise_for_status()
+            token_body = token_resp.json()
+            access_token = token_body.get("access_token")
+            if not access_token:
+                raise RuntimeError(
+                    f"No access_token in /token response: {token_body}"
+                )
+            return str(access_token)
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
 async def acquire_jwt_via_upstream_consent(
     base_url: str,
     announce: Callable[[str], Awaitable[None]] | Callable[[str], None],

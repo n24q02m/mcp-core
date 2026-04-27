@@ -25,7 +25,11 @@ import yaml
 
 from e2e.client_runner import run_e2e_http, wait_for_health
 from e2e.compose_renderer import render_compose
-from e2e.oauth_client import acquire_jwt, acquire_jwt_via_upstream_consent
+from e2e.oauth_client import (
+    acquire_jwt,
+    acquire_jwt_via_browser_form,
+    acquire_jwt_via_upstream_consent,
+)
 from e2e.ports import allocate_port
 from e2e.skret_loader import load_namespace_required
 
@@ -235,13 +239,17 @@ def run_t2_config(config: dict, deployment: str) -> None:
             wait_for_health(base_url)
 
             access_token: str | None = None
-            if config["auth"] == "oauth" and config["tier"] == "t2-interaction":
-                # Delegated OAuth (notion-oauth): /authorize 302 redirects
-                # browser to the upstream provider for consent. The driver
-                # binds a local callback listener, hands the upstream URL
-                # to the user via announce_and_wait-style banner, and
-                # exchanges the captured code for a JWT.
-                def _announce(upstream_url: str) -> None:
+            flow = config.get("flow")
+            if config["auth"] == "none":
+                pass  # godot
+            elif flow == "oauth-redirect" or (
+                config["auth"] == "oauth" and config["tier"] == "t2-interaction"
+            ):
+                # notion-oauth: /authorize 302 redirects to the upstream
+                # provider for consent. Driver binds a local callback
+                # listener, announces the upstream URL, captures the code
+                # the local mcp redirects back with, exchanges for JWT.
+                def _announce_upstream(upstream_url: str) -> None:
                     bar = "=" * 60
                     print(f"\n{bar}", file=sys.stderr)
                     print(
@@ -253,46 +261,62 @@ def run_t2_config(config: dict, deployment: str) -> None:
                     print(f"{bar}\n", file=sys.stderr)
 
                 access_token = asyncio.run(
-                    acquire_jwt_via_upstream_consent(base_url, _announce)
+                    acquire_jwt_via_upstream_consent(base_url, _announce_upstream)
                 )
-            elif config["auth"] != "none":
-                # Drive the OAuth 2.1 PKCE flow: GET /authorize form, POST
-                # creds, /token-exchange auth code → JWT for /mcp Bearer.
-                # For t2-interaction relay configs (email-outlook,
-                # telegram-user) the credential POST returns ``next_step``
-                # with verification_url + user_code; the driver announces it
-                # and polls /setup-status until complete before exchanging
-                # the auth code at /token.
-                if config["tier"] == "t2-interaction":
-                    def _announce_next_step(next_step: dict) -> None:
-                        bar = "=" * 60
-                        print(f"\n{bar}", file=sys.stderr)
+            elif flow == "browser-form":
+                # telegram-user: form is multi-step (phone -> OTP -> 2FA).
+                # Driver cannot fill OTP server-to-server (it comes from
+                # the user's phone), so it announces /authorize and waits
+                # for the form to navigate browser into the local listener.
+                def _announce_form(form_url: str) -> None:
+                    bar = "=" * 60
+                    print(f"\n{bar}", file=sys.stderr)
+                    print(
+                        f"[USER ACTION REQUIRED] {config['user_gate']}",
+                        file=sys.stderr,
+                    )
+                    print("Open this URL in your browser:", file=sys.stderr)
+                    print(f"  {form_url}", file=sys.stderr)
+                    print(f"{bar}\n", file=sys.stderr)
+
+                access_token = asyncio.run(
+                    acquire_jwt_via_browser_form(base_url, _announce_form)
+                )
+            elif config["tier"] == "t2-interaction":
+                # email-outlook (flow=device-code): server-to-server POST
+                # returns next_step with verification_url + user_code; the
+                # user signs in upstream while the server polls; driver
+                # polls /setup-status until complete before /token.
+                def _announce_next_step(next_step: dict) -> None:
+                    bar = "=" * 60
+                    print(f"\n{bar}", file=sys.stderr)
+                    print(
+                        f"[USER ACTION REQUIRED] {config['user_gate']}",
+                        file=sys.stderr,
+                    )
+                    if next_step.get("verification_url"):
                         print(
-                            f"[USER ACTION REQUIRED] {config['user_gate']}",
+                            f"  Open: {next_step['verification_url']}",
                             file=sys.stderr,
                         )
-                        if next_step.get("verification_url"):
-                            print(
-                                f"  Open: {next_step['verification_url']}",
-                                file=sys.stderr,
-                            )
-                        if next_step.get("user_code"):
-                            print(
-                                f"  User code: {next_step['user_code']}",
-                                file=sys.stderr,
-                            )
-                        print(f"{bar}\n", file=sys.stderr)
-
-                    access_token = asyncio.run(
-                        acquire_jwt(
-                            base_url,
-                            creds=creds,
-                            on_next_step=_announce_next_step,
-                            poll_completion_url=f"{base_url}/setup-status",
+                    if next_step.get("user_code"):
+                        print(
+                            f"  User code: {next_step['user_code']}",
+                            file=sys.stderr,
                         )
+                    print(f"{bar}\n", file=sys.stderr)
+
+                access_token = asyncio.run(
+                    acquire_jwt(
+                        base_url,
+                        creds=creds,
+                        on_next_step=_announce_next_step,
+                        poll_completion_url=f"{base_url}/setup-status",
                     )
-                else:
-                    access_token = asyncio.run(acquire_jwt(base_url, creds=creds))
+                )
+            else:
+                # t2-non-interaction relay: server-to-server POST is enough.
+                access_token = asyncio.run(acquire_jwt(base_url, creds=creds))
 
             asyncio.run(
                 run_e2e_http(

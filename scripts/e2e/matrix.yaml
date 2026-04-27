@@ -116,6 +116,7 @@ configs:
     tier: t2-interaction
     auth: oauth
     deployment: [remote]
+    flow: oauth-redirect
     skret_namespace: /better-notion-mcp/prod
     skret_keys: [NOTION_OAUTH_CLIENT_ID, NOTION_OAUTH_CLIENT_SECRET, MCP_DCR_SERVER_SECRET]
     user_gate: "Click Notion consent in browser"
@@ -130,6 +131,7 @@ configs:
     repo: better-email-mcp
     tier: t2-interaction
     auth: relay
+    flow: device-code
     # local-relay mode rejects outlook.com / hotmail.com / live.com paste-
     # token submits with a "switch to remote-relay" message
     # (better-email-mcp/CLAUDE.md). Outlook is only testable in remote-
@@ -145,6 +147,14 @@ configs:
     repo: better-telegram-mcp
     tier: t2-interaction
     auth: relay
+    flow: browser-form
+    # User mode (MTProto) requires phone -> OTP -> optional 2FA password,
+    # all chained in the same /authorize form via next_step responses
+    # (otp_required / password_required). The driver cannot fill OTP/2FA
+    # server-to-server (they come from the user's phone, not skret), so
+    # it announces the local /authorize URL and waits for the form to
+    # navigate the browser into the local callback listener after the
+    # multi-step exchange completes.
     deployment: [local, remote]
     skret_namespace: /better-telegram-mcp/prod
     skret_keys: [TELEGRAM_PHONE, MCP_DCR_SERVER_SECRET]
