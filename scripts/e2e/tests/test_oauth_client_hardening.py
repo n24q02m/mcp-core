@@ -15,7 +15,6 @@ import pytest
 
 from e2e import oauth_client
 
-
 # ----- FLOW_TIMEOUTS lookup -----
 
 

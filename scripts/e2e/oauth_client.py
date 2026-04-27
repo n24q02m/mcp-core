@@ -472,7 +472,7 @@ async def acquire_jwt_via_browser_form(
                 code, returned_state = await asyncio.wait_for(
                     code_future, timeout=timeout
                 )
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 raise TimeoutError(
                     f"OAuth callback not received within {timeout}s — "
                     f"user did not complete the form"
@@ -574,7 +574,7 @@ async def acquire_jwt_via_upstream_consent(
                 code, returned_state = await asyncio.wait_for(
                     code_future, timeout=timeout
                 )
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 raise TimeoutError(
                     f"OAuth callback not received within {timeout}s — "
                     f"user consent not completed"
