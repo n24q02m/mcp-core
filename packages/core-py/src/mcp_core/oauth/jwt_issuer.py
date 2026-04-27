@@ -31,6 +31,7 @@ class JWTIssuer:
     def _load_or_generate_keys(self) -> None:
         self.keys_dir.mkdir(parents=True, exist_ok=True)
         import os
+
         if os.name != "nt":
             self.keys_dir.chmod(0o700)
 
