@@ -272,6 +272,7 @@ async def test_browser_form_announces_url_with_prefill_query(
                 "TELEGRAM_PHONE": "+84123456789",
                 "MCP_DCR_SERVER_SECRET": "should-be-excluded",
             },
+            allowed_prefill_keys=["TELEGRAM_PHONE", "MCP_DCR_SERVER_SECRET"],
         )
 
     assert len(captured_url) == 1
@@ -307,11 +308,106 @@ async def test_browser_form_omits_empty_prefill_values(
             announce,
             timeout=0.1,
             creds={"TELEGRAM_PHONE": "", "TELEGRAM_BOT_TOKEN": "abc"},
+            allowed_prefill_keys=["TELEGRAM_PHONE", "TELEGRAM_BOT_TOKEN"],
         )
 
     url = captured_url[0]
     assert "prefill_TELEGRAM_PHONE=" not in url
     assert "prefill_TELEGRAM_BOT_TOKEN=abc" in url
+
+
+@pytest.mark.asyncio
+async def test_browser_form_filters_unrelated_skret_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SECURITY: keys NOT in ``allowed_prefill_keys`` MUST NOT leak into URL.
+
+    The skret namespace often co-locates deploy-time secrets (CI tokens,
+    Docker Hub PATs, SMTP passwords) alongside the runtime form fields.
+    Iterating ``creds.items()`` without a whitelist would propagate every
+    one of those into the announced URL → browser history → access logs
+    → screenshots. ``allowed_prefill_keys`` (driven by matrix.yaml's
+    ``skret_keys``) hard-restricts which keys are eligible.
+    """
+    captured_url: list[str] = []
+
+    def announce(url: str) -> None:
+        captured_url.append(url)
+
+    async def fake_register(_client: object, _base: str) -> str:
+        return "local-browser"
+
+    async def fake_health(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(oauth_client, "_register_client", fake_register)
+    monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+
+    with pytest.raises(TimeoutError):
+        await oauth_client.acquire_jwt_via_browser_form(
+            "http://127.0.0.1:0",
+            announce,
+            timeout=0.1,
+            creds={
+                "TELEGRAM_PHONE": "+84123",
+                "TELEGRAM_BOT_TOKEN": "secret-bot-token",
+                "DOCKERHUB_TOKEN": "dckr_pat_should_not_leak",
+                "CI_APP_KEY": "-----BEGIN RSA PRIVATE KEY-----\nfoo\n-----END",
+                "SMTP_CREDENTIAL": "user@gmail.com:appsecret",
+            },
+            allowed_prefill_keys=["TELEGRAM_PHONE"],
+        )
+
+    url = captured_url[0]
+    assert "prefill_TELEGRAM_PHONE=%2B84123" in url
+    assert "DOCKERHUB_TOKEN" not in url
+    assert "dckr_pat_should_not_leak" not in url
+    assert "CI_APP_KEY" not in url
+    assert "RSA%20PRIVATE%20KEY" not in url
+    assert "SMTP_CREDENTIAL" not in url
+    assert "appsecret" not in url
+    assert "TELEGRAM_BOT_TOKEN" not in url
+
+
+@pytest.mark.asyncio
+async def test_browser_form_no_allowed_keys_means_no_prefill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``allowed_prefill_keys=None`` with ``creds=...`` produces empty prefill.
+
+    Defensive default: if a caller forgets to pass the whitelist, fall
+    back to suppressing all prefill rather than leaking the entire
+    namespace. The ``creds`` parameter then becomes a no-op for the URL
+    construction (it is still kept on the call signature for symmetry
+    and future use).
+    """
+    captured_url: list[str] = []
+
+    def announce(url: str) -> None:
+        captured_url.append(url)
+
+    async def fake_register(_client: object, _base: str) -> str:
+        return "local-browser"
+
+    async def fake_health(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(oauth_client, "_register_client", fake_register)
+    monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+
+    with pytest.raises(TimeoutError):
+        await oauth_client.acquire_jwt_via_browser_form(
+            "http://127.0.0.1:0",
+            announce,
+            timeout=0.1,
+            creds={"TELEGRAM_PHONE": "+84", "DOCKERHUB_TOKEN": "secret"},
+            # allowed_prefill_keys omitted (defaults to None)
+        )
+
+    url = captured_url[0]
+    assert "prefill_" not in url
+    assert "+84" not in url
+    assert "secret" not in url
 
 
 @pytest.mark.asyncio
