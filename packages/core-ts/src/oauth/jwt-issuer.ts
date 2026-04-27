@@ -30,7 +30,7 @@ export class JWTIssuer {
   /** Must call before using issuer — loads or generates RSA keys. */
   async init(): Promise<void> {
     if (this._initialized) return
-    mkdirSync(this.keysDir, { recursive: true })
+    mkdirSync(this.keysDir, { recursive: true, mode: 0o700 })
 
     if (existsSync(this.privateKeyPath) && existsSync(this.publicKeyPath)) {
       const privatePem = readFileSync(this.privateKeyPath, 'utf-8')

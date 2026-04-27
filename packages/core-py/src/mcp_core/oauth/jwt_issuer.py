@@ -30,6 +30,9 @@ class JWTIssuer:
 
     def _load_or_generate_keys(self) -> None:
         self.keys_dir.mkdir(parents=True, exist_ok=True)
+        import os
+        if os.name != "nt":
+            self.keys_dir.chmod(0o700)
 
         if self.private_key_path.exists() and self.public_key_path.exists():
             with open(self.private_key_path, "rb") as f:
