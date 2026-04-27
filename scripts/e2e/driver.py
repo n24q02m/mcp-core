@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as _dt
+import os
 import subprocess
 import sys
 import tempfile
@@ -290,8 +291,9 @@ def run_t2_config(config: dict, deployment: str) -> None:
     # mcp container exposes. ``host_port`` in matrix.yaml pins the port;
     # everything else uses an ephemeral allocation.
     port = config.get("host_port") or allocate_port()
+    image_tag = os.environ.get("MCP_E2E_IMAGE_TAG", "beta")
     compose_yaml = render_compose(
-        config, deployment=deployment, creds=creds, host_port=port
+        config, deployment=deployment, creds=creds, host_port=port, image_tag=image_tag
     )
 
     with tempfile.TemporaryDirectory() as td:
@@ -357,6 +359,7 @@ def run_t2_config(config: dict, deployment: str) -> None:
                             base_url,
                             _announce_form,
                             creds=creds,
+                            allowed_prefill_keys=skret_keys,
                             flow_label="browser-form",
                         )
                     )

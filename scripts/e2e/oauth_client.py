@@ -394,6 +394,7 @@ async def acquire_jwt_via_browser_form(
     timeout: float | None = None,
     creds: dict[str, str] | None = None,
     flow_label: str | None = "browser-form",
+    allowed_prefill_keys: list[str] | None = None,
 ) -> str:
     """Drive a relay-form flow that requires user input INSIDE the form.
 
@@ -411,23 +412,35 @@ async def acquire_jwt_via_browser_form(
     ``creds`` is forwarded to the form via ``?prefill_<KEY>=<VALUE>`` query
     params on the GET so skret-derived fields (e.g. TELEGRAM_PHONE) render
     pre-filled. The user only types what skret cannot supply (OTP, 2FA
-    password). ``MCP_DCR_SERVER_SECRET`` and any empty values are excluded
-    — the secret is server-side infra, not a form field, and empty values
-    would render as blank ``value=""`` attrs that confuse the placeholder.
+    password).
+
+    ``allowed_prefill_keys`` is REQUIRED whenever ``creds`` is non-empty:
+    it whitelists which keys may appear in the announced URL. Without
+    this filter, the entire SSM namespace (which often co-locates
+    deploy-time secrets like CI tokens or Docker Hub PATs alongside
+    the runtime form fields) would leak into the user-visible URL and
+    propagate into browser history, server access logs, and any
+    screenshot the user shares while debugging. ``MCP_DCR_SERVER_SECRET``
+    is always excluded — it is server-side infra, never a form field.
+    Empty values are dropped so they do not render as blank ``value=""``
+    attrs that hide placeholders.
     """
     if timeout is None:
         timeout = get_flow_timeout(flow_label)
 
-    # Build prefill query string from creds. Values are URL-encoded so a
-    # ``+`` in a phone number reaches the server unmangled (raw ``+`` in a
-    # query string decodes to space).
+    # Build prefill query string. Hard-filter to ``allowed_prefill_keys``
+    # so only matrix-declared form fields appear in the user-visible URL —
+    # CI / Docker / SMTP secrets that share the namespace stay server-side.
+    # Values are URL-encoded so a ``+`` in a phone number reaches the
+    # server unmangled (raw ``+`` in a query string decodes to space).
     prefill_qs = ""
     if creds:
         excluded = {"MCP_DCR_SERVER_SECRET"}
+        allowed = set(allowed_prefill_keys or ())
         prefill_pairs = [
             f"prefill_{quote(k)}={quote(v)}"
             for k, v in creds.items()
-            if v and k not in excluded
+            if v and k not in excluded and k in allowed
         ]
         if prefill_pairs:
             prefill_qs = "&" + "&".join(prefill_pairs)
