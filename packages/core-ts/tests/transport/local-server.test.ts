@@ -255,11 +255,15 @@ describe('runLocalServer without relaySchema (godot-style)', () => {
     }
   })
 
-  it('handles sequential POST requests on /mcp (stateless per-request transport)', async () => {
-    // Regression: sharing one stateless StreamableHTTPServerTransport across
-    // requests caused the first POST to succeed and every subsequent POST to
-    // return HTTP 500 ("message ID collisions" per SDK source).
-    // runLocalServer now creates a fresh server + transport per /mcp request.
+  it('handles sequential POST requests on /mcp (per-session transport)', async () => {
+    // Regression history:
+    //  - V1: shared stateless transport -> message ID collisions, 2nd POST 500.
+    //  - V2: fresh stateless transport per request -> initialize OK but
+    //    notifications/initialized + tools/list returned 500 because each
+    //    request landed on a fresh transport with _initialized=false.
+    //  - V3 (current): per-session map keyed by Mcp-Session-Id, sessionId
+    //    minted on initialize, reused on subsequent POSTs. Mirrors Python
+    //    StreamableHTTPSessionManager + the SDK's stateful-mode example.
     const handle = await runLocalServer(makeMcpServer, {
       serverName: `test-sequential-${Date.now()}`,
       port: 0
@@ -286,17 +290,35 @@ describe('runLocalServer without relaySchema (godot-style)', () => {
         })
       })
       expect(init.status).toBe(200)
+      const sessionId = init.headers.get('mcp-session-id')
+      expect(sessionId).toBeTruthy()
+      const sessionHeaders = {
+        ...commonHeaders,
+        'mcp-session-id': sessionId!,
+        'mcp-protocol-version': '2025-03-26'
+      }
+
+      // notifications/initialized completes the handshake; SDK clients send
+      // this automatically. Without it tools/list still works (no SDK
+      // _initialized check on the server side) but exercising it here is
+      // the actual regression: V2 stateless mode 500'd on this exact POST.
+      const initialized = await fetch(baseUrl, {
+        method: 'POST',
+        headers: sessionHeaders,
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
+      })
+      expect(initialized.status).toBe(202)
 
       const list = await fetch(baseUrl, {
         method: 'POST',
-        headers: commonHeaders,
+        headers: sessionHeaders,
         body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
       })
       expect(list.status).toBe(200)
 
       const list2 = await fetch(baseUrl, {
         method: 'POST',
-        headers: commonHeaders,
+        headers: sessionHeaders,
         body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })
       })
       expect(list2.status).toBe(200)

@@ -14,6 +14,7 @@
  * Bearer enforcement, and lifecycle semantics are kept identical.
  */
 
+import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -145,32 +146,51 @@ export async function runLocalServer(
     jwtIssuer = oauthApp.jwtIssuer
   }
 
-  // MCP stateless pattern: create a fresh Server + StreamableHTTPServerTransport
-  // per request. The official SDK comment in webStandardStreamableHttp.js line 137
-  // states: "In stateless mode (no sessionIdGenerator), each request must use a
-  // fresh transport. Reusing a stateless transport causes message ID collisions
-  // between clients." Sharing one transport across requests made the first POST
-  // succeed but every subsequent POST return HTTP 500 for servers without Bearer
-  // auth (e.g. better-godot-mcp). This pattern mirrors the Python side's
-  // StreamableHTTPSessionManager which creates per-request session state.
-  async function handleStatelessRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const server = serverFactory()
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    try {
+  // MCP per-session pattern (mirrors Python's StreamableHTTPSessionManager):
+  //
+  //  - Each MCP client gets its own ``StreamableHTTPServerTransport`` keyed by
+  //    Mcp-Session-Id, plus its own ``McpServer`` instance.
+  //  - The first POST (initialize) has no session header; we mint a UUID via
+  //    ``sessionIdGenerator`` and register the transport in ``onsessioninitialized``.
+  //  - Subsequent POSTs (notifications/initialized, tools/list, tools/call)
+  //    carry Mcp-Session-Id and are routed to the same transport, so the SDK's
+  //    ``_initialized`` flag is in the right state for ``validateSession`` /
+  //    ``validateProtocolVersion`` to accept the request.
+  //
+  // Stateless mode (sessionIdGenerator: undefined) was an earlier attempt; it
+  // returned HTTP 500 on the SDK-mandatory ``notifications/initialized`` POST
+  // because each request landed on a fresh transport with ``_initialized=false``
+  // and the SDK had no session manager to bridge them. Per-session routing is
+  // the same architecture the SDK examples + Python core-py use.
+  const transports = new Map<string, StreamableHTTPServerTransport>()
+  const servers = new Map<string, McpServer>()
+
+  async function handleSessionRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const sessionHeader = req.headers['mcp-session-id']
+    const incomingSessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader
+
+    let transport = incomingSessionId ? transports.get(incomingSessionId) : undefined
+
+    if (!transport) {
+      const server = serverFactory()
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sessionId) => {
+          transports.set(sessionId, transport!)
+          servers.set(sessionId, server)
+        },
+        onsessionclosed: (sessionId) => {
+          transports.delete(sessionId)
+          servers.delete(sessionId)
+          server.close().catch(() => {
+            /* best-effort cleanup */
+          })
+        }
+      })
       await server.connect(transport)
-      await transport.handleRequest(req, res)
-    } finally {
-      try {
-        await transport.close()
-      } catch {
-        /* best-effort cleanup */
-      }
-      try {
-        await server.close()
-      } catch {
-        /* best-effort cleanup */
-      }
     }
+
+    await transport.handleRequest(req, res)
   }
 
   async function mcpHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -194,13 +214,13 @@ export async function runLocalServer(
       }
       if (options.authScope) {
         await options.authScope(claims, async () => {
-          await handleStatelessRequest(req, res)
+          await handleSessionRequest(req, res)
         })
         return
       }
     }
-    // Delegate to per-request MCP transport.
-    await handleStatelessRequest(req, res)
+    // Delegate to per-session MCP transport.
+    await handleSessionRequest(req, res)
   }
 
   const handler = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -281,6 +301,27 @@ export async function runLocalServer(
       new Promise<void>((resolve, reject) => {
         const delegatedShutdown = oauthApp && 'shutdown' in oauthApp ? oauthApp.shutdown() : Promise.resolve()
         delegatedShutdown
+          .then(async () => {
+            // Drain per-session transports + servers so their open SSE streams
+            // and tool-call timers don't keep the event loop alive after the
+            // HTTP server closes.
+            for (const transport of transports.values()) {
+              try {
+                await transport.close()
+              } catch {
+                /* best-effort cleanup */
+              }
+            }
+            for (const server of servers.values()) {
+              try {
+                await server.close()
+              } catch {
+                /* best-effort cleanup */
+              }
+            }
+            transports.clear()
+            servers.clear()
+          })
           .then(() => {
             httpServer.close((err) => {
               try {
