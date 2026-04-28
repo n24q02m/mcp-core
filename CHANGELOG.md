@@ -2,6 +2,144 @@
 
 <!-- version list -->
 
+## v1.10.0 (2026-04-28)
+
+### Bug Fixes
+
+- E2e driver tag default latest + add notion-oauth t3-staging tier
+  ([#116](https://github.com/n24q02m/mcp-core/pull/116),
+  [`1cf982f`](https://github.com/n24q02m/mcp-core/commit/1cf982fd9c364a880f9875ce425150e489f0f728))
+
+- E2e driver tag default latest + add notion-oauth t3-staging tier
+  ([#115](https://github.com/n24q02m/mcp-core/pull/115),
+  [`7c2b2b2`](https://github.com/n24q02m/mcp-core/commit/7c2b2b248d55642837059cdb37e57d84edbaca4f))
+
+- E2e driver tag default latest + add notion-oauth t3-staging tier
+  ([#114](https://github.com/n24q02m/mcp-core/pull/114),
+  [`3dfea8e`](https://github.com/n24q02m/mcp-core/commit/3dfea8e162a081a7f24c3e61ee9b07bfaa2cb296))
+
+- **auth**: Correct schema field accessor 'name'->'key' + strict _setup_complete check
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **lint**: Biome format + ruff unused imports for transparent-bridge waves
+  ([#119](https://github.com/n24q02m/mcp-core/pull/119),
+  [`790c1fe`](https://github.com/n24q02m/mcp-core/commit/790c1fed20da1122831d981ec3d19cc3530a5999))
+
+- **lint**: Ruff format pass for transparent-bridge waves
+  ([#119](https://github.com/n24q02m/mcp-core/pull/119),
+  [`790c1fe`](https://github.com/n24q02m/mcp-core/commit/790c1fed20da1122831d981ec3d19cc3530a5999))
+
+- **lint**: Ruff format Wave 3 files ([#120](https://github.com/n24q02m/mcp-core/pull/120),
+  [`a39f397`](https://github.com/n24q02m/mcp-core/commit/a39f397e5e6a0260979d7c5b4b12f3333036f521))
+
+- **security**: Silence false-positive express-data-exfiltration on prefill copy
+  ([#119](https://github.com/n24q02m/mcp-core/pull/119),
+  [`790c1fe`](https://github.com/n24q02m/mcp-core/commit/790c1fed20da1122831d981ec3d19cc3530a5999))
+
+- **stdio**: Bump startup_timeout default to 60s + MCP_STDIO_STARTUP_TIMEOUT env override
+  ([#116](https://github.com/n24q02m/mcp-core/pull/116),
+  [`1cf982f`](https://github.com/n24q02m/mcp-core/commit/1cf982fd9c364a880f9875ce425150e489f0f728))
+
+- **stdio**: Bump startup_timeout default to 60s + MCP_STDIO_STARTUP_TIMEOUT env override
+  ([#115](https://github.com/n24q02m/mcp-core/pull/115),
+  [`7c2b2b2`](https://github.com/n24q02m/mcp-core/commit/7c2b2b248d55642837059cdb37e57d84edbaca4f))
+
+- **stdio**: Strip MCP_TRANSPORT from daemon child env to prevent fork bomb
+  ([#116](https://github.com/n24q02m/mcp-core/pull/116),
+  [`1cf982f`](https://github.com/n24q02m/mcp-core/commit/1cf982fd9c364a880f9875ce425150e489f0f728))
+
+- **stdio**: Strip MCP_TRANSPORT from daemon child env to prevent fork bomb
+  ([#115](https://github.com/n24q02m/mcp-core/pull/115),
+  [`7c2b2b2`](https://github.com/n24q02m/mcp-core/commit/7c2b2b248d55642837059cdb37e57d84edbaca4f))
+
+- **stdio**: Timeout 60s + strip MCP_TRANSPORT to prevent fork bomb
+  ([#115](https://github.com/n24q02m/mcp-core/pull/115),
+  [`7c2b2b2`](https://github.com/n24q02m/mcp-core/commit/7c2b2b248d55642837059cdb37e57d84edbaca4f))
+
+- **test**: Narrow read_config result before 'not in' (ty type check)
+  ([#120](https://github.com/n24q02m/mcp-core/pull/120),
+  [`a39f397`](https://github.com/n24q02m/mcp-core/commit/a39f397e5e6a0260979d7c5b4b12f3333036f521))
+
+- **transport**: Auto-open browser at root URL not /authorize
+  ([#117](https://github.com/n24q02m/mcp-core/pull/117),
+  [`d4c37b4`](https://github.com/n24q02m/mcp-core/commit/d4c37b42696ab4f7ccc9873ad6d873a088565b85))
+
+- **transport**: RunLocalServer auto-opens browser when no creds
+  ([#116](https://github.com/n24q02m/mcp-core/pull/116),
+  [`1cf982f`](https://github.com/n24q02m/mcp-core/commit/1cf982fd9c364a880f9875ce425150e489f0f728))
+
+- **transport**: Use is_schema_complete() as auto-open gate in run_local_server
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **transport**: Use isSchemaComplete() as auto-open gate (core-ts parity)
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+### Features
+
+- **auth**: Add is_schema_complete() helper for relay auto-open gate
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **auth**: Add isSchemaComplete() parity in core-ts
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **auth**: Mark _setup_complete=true after authorize_post + otp_handler succeed
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **auth**: Mark _setup_complete=true after authorizePost + otpHandler succeed (parity)
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **lifecycle**: 4-line lock format + parse/expiry helpers + sweep_stale_locks (core-py)
+  ([#119](https://github.com/n24q02m/mcp-core/pull/119),
+  [`790c1fe`](https://github.com/n24q02m/mcp-core/commit/790c1fed20da1122831d981ec3d19cc3530a5999))
+
+- **lifecycle**: 4-line lock format + sweep + mtime refresh (core-ts parity)
+  ([#119](https://github.com/n24q02m/mcp-core/pull/119),
+  [`790c1fe`](https://github.com/n24q02m/mcp-core/commit/790c1fed20da1122831d981ec3d19cc3530a5999))
+
+- **storage**: Add _setup_complete flag parity in core-ts
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **storage**: Add _setup_complete metadata flag + mark_setup_complete()
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **transparent-bridge**: Wave 2 — stale lock hardening (core-py + core-ts)
+  ([#119](https://github.com/n24q02m/mcp-core/pull/119),
+  [`790c1fe`](https://github.com/n24q02m/mcp-core/commit/790c1fed20da1122831d981ec3d19cc3530a5999))
+
+- **transparent-bridge**: Wave 3 — fast-handshake stdio-proxy with capabilities cache
+  ([#120](https://github.com/n24q02m/mcp-core/pull/120),
+  [`a39f397`](https://github.com/n24q02m/mcp-core/commit/a39f397e5e6a0260979d7c5b4b12f3333036f521))
+
+- **transport**: Cache_path_for_lock + persist/load_capabilities_cache + version validation
+  ([#120](https://github.com/n24q02m/mcp-core/pull/120),
+  [`a39f397`](https://github.com/n24q02m/mcp-core/commit/a39f397e5e6a0260979d7c5b4b12f3333036f521))
+
+- **transport**: Handle_initialize / tools_list from capabilities cache
+  ([#120](https://github.com/n24q02m/mcp-core/pull/120),
+  [`a39f397`](https://github.com/n24q02m/mcp-core/commit/a39f397e5e6a0260979d7c5b4b12f3333036f521))
+
+- **transport**: Schema-completeness gate + _setup_complete flag (Wave 1)
+  ([#118](https://github.com/n24q02m/mcp-core/pull/118),
+  [`f3b7497`](https://github.com/n24q02m/mcp-core/commit/f3b7497d328c40884cc1e990050435ee5a179969))
+
+- **transport**: Sweep stale locks at startup + hourly mtime refresh background task
+  ([#119](https://github.com/n24q02m/mcp-core/pull/119),
+  [`790c1fe`](https://github.com/n24q02m/mcp-core/commit/790c1fed20da1122831d981ec3d19cc3530a5999))
+
+- **transport**: Wire fast-handshake into stdio proxy + persist cache at daemon startup
+  ([#120](https://github.com/n24q02m/mcp-core/pull/120),
+  [`a39f397`](https://github.com/n24q02m/mcp-core/commit/a39f397e5e6a0260979d7c5b4b12f3333036f521))
+
+
 ## v1.9.0 (2026-04-28)
 
 ### Bug Fixes
