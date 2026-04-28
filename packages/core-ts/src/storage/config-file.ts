@@ -129,7 +129,7 @@ async function saveStore(store: ConfigStore): Promise<void> {
   }
   const key = await getKey()
   const encrypted = await encryptData(key, JSON.stringify(store))
-  await withRetry(() => writeFile(configPath, encrypted))
+  await withRetry(() => writeFile(configPath, encrypted, { mode: 0o600 }))
 }
 
 /**
