@@ -38,6 +38,8 @@ import {
 } from '../auth/local-oauth-app.js'
 import { jsonResponse } from '../auth/router.js'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
+import { tryOpenBrowser } from '../relay/browser.js'
+import { readConfig } from '../storage/config-file.js'
 
 /** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
 export type JWTClaims = JWTPayload
@@ -277,6 +279,24 @@ export async function runLocalServer(
   fs.mkdirSync(lockDir, { recursive: true, mode: 0o700 })
   const lockFile = path.join(lockDir, `${options.serverName}-${actualPort}.lock`)
   fs.writeFileSync(lockFile, `${process.pid}\n${actualPort}\n${proxyToken}\n`, { mode: 0o600 })
+
+  // Auto-open the credential form in the user's browser when no creds exist
+  // yet. The daemon stderr URL is hidden from the user (stdio-proxy redirects
+  // it to ~/daemon_stderr.log), so without this the relay form is unreachable
+  // unless the user calls a tool that triggers credential_state's lazy
+  // browser-open path. Best-effort: any failure surfaces via tryOpenBrowser's
+  // ASCII fallback banner.
+  if (oauthApp) {
+    try {
+      const existingConfig = await readConfig(options.serverName)
+      if (existingConfig === null) {
+        const setupUrl = `http://${host}:${actualPort}/authorize`
+        await tryOpenBrowser(setupUrl)
+      }
+    } catch {
+      /* best-effort: never crash startup on browser-open failure */
+    }
+  }
 
   // Invoke setup hook. Supports legacy 1-arg (success-only) and new 2-arg
   // (success + failure) signatures via Function.prototype.length so upstream

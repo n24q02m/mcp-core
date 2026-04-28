@@ -391,11 +391,18 @@ async def run_local_server(
         # Check if credentials already exist
         existing_config = read_config(server_name)
         if existing_config is None:
+            setup_url = f"http://{actual_host}:{actual_port}/authorize"
             logger.info(
-                "No credentials found. Open http://{}:{} in browser to configure",
-                actual_host,
-                actual_port,
+                "No credentials found. Opening {} in browser to configure", setup_url
             )
+            # Auto-open browser so user sees relay form immediately on first
+            # connect. Without this the daemon stderr URL is hidden from the
+            # user (stdio-proxy redirects it to ~/daemon_stderr.log) and they
+            # have no way to discover the credential form. Best-effort: any
+            # failure is reported via the ASCII banner inside try_open_browser.
+            from mcp_core.relay.browser import try_open_browser
+
+            try_open_browser(setup_url)
         else:
             logger.info("Credentials already configured for {}", server_name)
 
