@@ -41,6 +41,9 @@ from mcp_core.auth.well_known import (
     protected_resource_metadata,
 )
 from mcp_core.oauth.jwt_issuer import JWTIssuer
+from mcp_core.storage.config_file import (
+    mark_setup_complete as _mark_config_setup_complete,
+)
 
 # Auth codes and PKCE sessions expire after 10 minutes
 _AUTH_CODE_TTL_S = 600
@@ -328,6 +331,24 @@ def create_local_oauth_app(
                 {"ok": False, "error": next_step.get("text", "Unknown error")},
             )
 
+        # Mark the persistent ``_setup_complete`` flag once the user has
+        # successfully submitted the form. For single-step flows this is the
+        # final state. For multi-step flows (OTP / 2FA), defer marking until
+        # the chain completes — see ``otp_handler``. The flag lets
+        # ``runLocalServer``'s ``is_schema_complete`` gate distinguish "user
+        # finished the form" from "config.enc has values from peer-share".
+        is_multi_step = next_step is not None and next_step.get("type") in (
+            "otp_required",
+            "password_required",
+        )
+        if not is_multi_step:
+            try:
+                _mark_config_setup_complete(server_name)
+            except Exception:  # noqa: BLE001
+                logger.opt(exception=True).warning(
+                    "Failed to mark _setup_complete=true for {}", server_name
+                )
+
         # Generate auth code. Copy ``sub`` so /token issues the JWT with the
         # same subject the credentials were saved under.
         auth_code = secrets.token_urlsafe(32)
@@ -561,6 +582,14 @@ def create_local_oauth_app(
             return JSONResponse({"ok": True, "next_step": next_step})
 
         # Completion (callback returned None or unknown dict type).
+        # Mark persistent _setup_complete flag now that the multi-step chain
+        # has finished — single-step counterpart lives in authorize_post.
+        try:
+            _mark_config_setup_complete(server_name)
+        except Exception:  # noqa: BLE001
+            logger.opt(exception=True).warning(
+                "Failed to mark _setup_complete=true for {}", server_name
+            )
         _clear_pending_step()
         return JSONResponse({"ok": True})
 
