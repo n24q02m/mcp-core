@@ -19,6 +19,32 @@ export interface ConfigField {
   required?: boolean
 }
 
+/**
+ * Return true iff every required field in `schema` has a non-empty value in
+ * `config`. For schemas whose fields are all optional, requires the explicit
+ * `_setup_complete: "true"` flag — see core-py `is_schema_complete` docstring.
+ *
+ * Strict equality on the flag: only the literal string `"true"` counts. This
+ * guards against legacy / partial bootstrap entries (e.g. peer-shared cloud
+ * keys) tricking the auto-open gate into thinking the user has configured.
+ */
+export function isSchemaComplete(
+  config: Record<string, string> | null | undefined,
+  schema: RelayConfigSchema
+): boolean {
+  if (!config) return false
+
+  const requiredKeys = (schema.fields ?? [])
+    .filter((field) => field.required === true)
+    .map((field) => field.key)
+
+  if (requiredKeys.length > 0) {
+    return requiredKeys.every((key) => Boolean(config[key]))
+  }
+
+  return config._setup_complete === 'true'
+}
+
 export interface CapabilityInfo {
   label: string
   priority?: string

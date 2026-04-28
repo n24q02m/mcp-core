@@ -171,6 +171,29 @@ export async function deleteConfig(serverName: string): Promise<void> {
   }
 }
 
+/**
+ * Metadata flag set by `markSetupComplete` after a successful relay-form
+ * submission (POST /authorize). `runLocalServer`/`isSchemaComplete` read this
+ * to distinguish "user has submitted the form" from "config.enc has values
+ * written by a peer-share or partial bootstrap path". Lives alongside the
+ * user's normal credential keys in the same per-server config dict.
+ */
+export const SETUP_COMPLETE_KEY = '_setup_complete'
+
+/**
+ * Set the `_setup_complete` flag in `serverName`'s config. Idempotent.
+ * Creates a new entry with just the flag if no prior config exists (useful
+ * for all-optional schemas where the user may submit an empty form).
+ *
+ * Strict equality semantics in `isSchemaComplete` rely on this writing the
+ * literal string `"true"`.
+ */
+export async function markSetupComplete(serverName: string): Promise<void> {
+  const existing = (await readConfig(serverName)) ?? {}
+  existing[SETUP_COMPLETE_KEY] = 'true'
+  await writeConfig(serverName, existing)
+}
+
 export async function listConfigs(): Promise<string[]> {
   const store = await loadStore()
   return Object.keys(store.servers)

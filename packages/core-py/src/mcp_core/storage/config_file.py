@@ -26,6 +26,13 @@ _DEFAULT_CONFIG_PATH = Path(user_config_dir("mcp", appauthor=False)) / "config.e
 _MAX_RETRIES = 3
 _BASE_DELAY_S = 0.1
 
+# Metadata flag set by ``mark_setup_complete`` after a successful
+# ``POST /authorize`` in the relay flow. ``runLocalServer``/``is_schema_complete``
+# read this to distinguish "user submitted the form" from "config.enc has values
+# from a peer-share or partial bootstrap path". Lives alongside the user's
+# normal credential keys in the same per-server config dict.
+SETUP_COMPLETE_KEY = "_setup_complete"
+
 # Allow overriding config path for testing
 _config_path_override: str | None = None
 
@@ -174,6 +181,23 @@ def delete_config(server_name: str) -> None:
             config_path.unlink()
     else:
         _save_store(store)
+
+
+def mark_setup_complete(server_name: str) -> None:
+    """Set the ``_setup_complete`` metadata flag in ``server_name``'s config.
+
+    Called by ``local_oauth_app.authorize_post`` after a successful credential
+    save. Lets ``runLocalServer`` distinguish "user has submitted the form"
+    from "config.enc has values written by a peer / bootstrap path" — see
+    ``mcp_core.auth.credential_form.is_schema_complete`` for the consumer.
+
+    Idempotent: calling twice produces the same end state. Creates a new entry
+    with just the flag if no prior config exists (useful for all-optional
+    schemas where the user may submit an empty form).
+    """
+    existing = read_config(server_name) or {}
+    existing[SETUP_COMPLETE_KEY] = "true"
+    write_config(server_name, existing)
 
 
 def list_configs() -> list[str]:

@@ -38,6 +38,7 @@ import {
 } from '../auth/local-oauth-app.js'
 import { jsonResponse } from '../auth/router.js'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
+import { isSchemaComplete } from '../auth/credential-form.js'
 import { tryOpenBrowser } from '../relay/browser.js'
 import { readConfig } from '../storage/config-file.js'
 
@@ -292,7 +293,14 @@ export async function runLocalServer(
   if (oauthApp) {
     try {
       const existingConfig = await readConfig(options.serverName)
-      if (existingConfig === null) {
+      // Use schema completeness instead of "config === null" so peer-share
+      // paths writing partial entries (e.g. wet inheriting CRG cloud keys)
+      // do not suppress the relay form when required fields are missing.
+      const configComplete = options.relaySchema
+        ? isSchemaComplete(existingConfig, options.relaySchema)
+        : existingConfig !== null
+
+      if (!configComplete) {
         const setupUrl = `http://${host}:${actualPort}/`
         await tryOpenBrowser(setupUrl)
       }

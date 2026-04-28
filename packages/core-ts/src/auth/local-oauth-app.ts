@@ -25,6 +25,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
+import { markSetupComplete as markConfigSetupComplete } from '../storage/config-file.js'
 import { type RelayConfigSchema, renderCredentialForm } from './credential-form.js'
 import {
   createRouter,
@@ -416,6 +417,23 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       }
     }
 
+    // Mark the persistent ``_setup_complete`` flag once the user submits
+    // successfully. Multi-step flows (OTP / 2FA) defer marking until the
+    // final step in ``otpHandler`` — see core-py parity. Best-effort: any
+    // storage error is logged via warning rather than failing the response.
+    const isMultiStep =
+      nextStep !== null && (nextStep.type === 'otp_required' || nextStep.type === 'password_required')
+    if (!isMultiStep) {
+      try {
+        await markConfigSetupComplete(options.serverName)
+      } catch (err) {
+        console.warn(
+          `Failed to mark _setup_complete=true for ${options.serverName}:`,
+          err instanceof Error ? err.message : String(err)
+        )
+      }
+    }
+
     // Generate auth code. Carry ``sub`` so /token can issue JWT with the
     // same subject the credentials were saved under.
     const authCode = randomBytes(32).toString('base64url')
@@ -636,6 +654,16 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     }
 
     // Completion (callback returned null / undefined or unknown dict type).
+    // Mark persistent _setup_complete flag now that the multi-step chain has
+    // finished — single-step counterpart lives in authorizePost.
+    try {
+      await markConfigSetupComplete(options.serverName)
+    } catch (err) {
+      console.warn(
+        `Failed to mark _setup_complete=true for ${options.serverName}:`,
+        err instanceof Error ? err.message : String(err)
+      )
+    }
     clearPendingStep()
     jsonResponse(res, 200, { ok: true })
   }
