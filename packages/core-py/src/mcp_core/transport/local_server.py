@@ -391,7 +391,13 @@ async def run_local_server(
         # Check if credentials already exist
         existing_config = read_config(server_name)
         if existing_config is None:
-            setup_url = f"http://{actual_host}:{actual_port}/authorize"
+            # Open the root URL ("/") so the OAuth-AS auto-bootstraps PKCE
+            # and redirects to /authorize with valid parameters. Opening
+            # /authorize directly returns ``invalid_request`` because the
+            # endpoint requires client_id/redirect_uri/state/code_challenge —
+            # see ``local_oauth_app.root()`` docstring ("one-URL UX without
+            # exposing raw OAuth machinery").
+            setup_url = f"http://{actual_host}:{actual_port}/"
             logger.info(
                 "No credentials found. Opening {} in browser to configure", setup_url
             )

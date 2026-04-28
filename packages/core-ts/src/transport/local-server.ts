@@ -284,13 +284,16 @@ export async function runLocalServer(
   // yet. The daemon stderr URL is hidden from the user (stdio-proxy redirects
   // it to ~/daemon_stderr.log), so without this the relay form is unreachable
   // unless the user calls a tool that triggers credential_state's lazy
-  // browser-open path. Best-effort: any failure surfaces via tryOpenBrowser's
-  // ASCII fallback banner.
+  // browser-open path. We open the root URL ("/") which auto-bootstraps PKCE
+  // and redirects to /authorize with valid params; opening /authorize directly
+  // returns invalid_request because it requires client_id/redirect_uri/state/
+  // code_challenge. See `local-oauth-app.ts` root handler docstring.
+  // Best-effort: any failure surfaces via tryOpenBrowser's ASCII fallback banner.
   if (oauthApp) {
     try {
       const existingConfig = await readConfig(options.serverName)
       if (existingConfig === null) {
-        const setupUrl = `http://${host}:${actualPort}/authorize`
+        const setupUrl = `http://${host}:${actualPort}/`
         await tryOpenBrowser(setupUrl)
       }
     } catch {
