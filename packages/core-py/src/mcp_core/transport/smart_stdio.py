@@ -163,7 +163,7 @@ def _spawn_daemon(daemon_cmd: list[str]) -> None:
 def run_smart_stdio_proxy(
     server_name: str,
     daemon_cmd: list[str],
-    startup_timeout: float = 15.0,
+    startup_timeout: float | None = None,
 ) -> int:
     """Entry point for the Smart Stdio Proxy.
 
@@ -176,14 +176,26 @@ def run_smart_stdio_proxy(
         server_name: Name of the MCP server (e.g. "wet-mcp").
         daemon_cmd: Command to spawn if daemon is not running.
         startup_timeout: Seconds to wait for daemon lock after spawn.
+            Defaults to 60s, overridable via ``MCP_STDIO_STARTUP_TIMEOUT`` env
+            var. Windows + cold Python imports + busy CI workers commonly take
+            30-50s for the daemon to write its lock file, so the previous
+            15s default produced spurious timeouts on slow hosts.
 
     Returns:
         Exit code (0 = success, 1 = daemon failed to start, 2 = HTTP error).
     """
+    import os
     import queue
     import threading
 
     import httpx
+
+    if startup_timeout is None:
+        env_value = os.environ.get("MCP_STDIO_STARTUP_TIMEOUT", "")
+        try:
+            startup_timeout = float(env_value) if env_value else 60.0
+        except ValueError:
+            startup_timeout = 60.0
 
     # 1. Find or spawn the daemon
     result = get_active_daemon(server_name)
