@@ -261,6 +261,52 @@ export async function runSmartStdioProxy(
           return 2
         }
 
+        // Streamable HTTP (newer MCP transport spec) sends the session id as
+        // an HTTP response header on the initialize response. Older HTTP+SSE
+        // transport instead encodes the session id inside an "endpoint" SSE
+        // event. Detect Streamable HTTP first; the daemon returns 400 on
+        // subsequent POSTs without `Mcp-Session-Id`, so silently treating
+        // sessionful Streamable HTTP as stateless leaves the proxy stuck.
+        const sessionIdHeader = res.headers.get('mcp-session-id')
+        if (sessionIdHeader) {
+          postHeaders['Mcp-Session-Id'] = sessionIdHeader
+          endpointUrl = url
+          modeDetermined = true
+          process.stderr.write(`[stdio-proxy] Streamable HTTP session: ${sessionIdHeader}\n`)
+
+          activeSseBody = res.body
+          const parser = new SseParser()
+          const reader = res.body.getReader()
+          const decoder = new TextDecoder()
+
+          parser.onMessage((data) => {
+            process.stdout.write(data)
+            if (!data.endsWith('\n')) {
+              process.stdout.write('\n')
+            }
+          })
+
+          const readSsePromise = (async () => {
+            try {
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                parser.feed(decoder.decode(value, { stream: true }))
+              }
+            } catch (e: any) {
+              process.stderr.write(`[stdio-proxy] SSE error: ${e}\n`)
+            }
+          })()
+
+          // Drain the initialize-response SSE body before reading the next
+          // stdin line, so we don't lose the response or starve the client.
+          try {
+            await readSsePromise
+          } catch {}
+          activeSseBody = null
+          continue
+        }
+
         activeSseBody = res.body
         const parser = new SseParser()
         const reader = res.body.getReader()
