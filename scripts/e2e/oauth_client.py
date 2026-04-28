@@ -31,7 +31,7 @@ import secrets
 import sys
 import time
 from collections.abc import Awaitable, Callable
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
@@ -409,41 +409,34 @@ async def acquire_jwt_via_browser_form(
     multi-step exchange completes. The captured code is then exchanged
     at ``/token`` for the JWT.
 
-    ``creds`` is forwarded to the form via ``?prefill_<KEY>=<VALUE>`` query
-    params on the GET so skret-derived fields (e.g. TELEGRAM_PHONE) render
-    pre-filled. The user only types what skret cannot supply (OTP, 2FA
-    password).
+    ``creds`` is forwarded to the form via ``POST /authorize/prefill?state=<X>``
+    BEFORE the announce so the URL the user opens carries only OAuth params —
+    skret values never appear in the URL, browser history, server access
+    logs, screenshots, or HTTP referrer headers.
 
     ``allowed_prefill_keys`` is REQUIRED whenever ``creds`` is non-empty:
-    it whitelists which keys may appear in the announced URL. Without
-    this filter, the entire SSM namespace (which often co-locates
-    deploy-time secrets like CI tokens or Docker Hub PATs alongside
-    the runtime form fields) would leak into the user-visible URL and
-    propagate into browser history, server access logs, and any
-    screenshot the user shares while debugging. ``MCP_DCR_SERVER_SECRET``
-    is always excluded — it is server-side infra, never a form field.
-    Empty values are dropped so they do not render as blank ``value=""``
-    attrs that hide placeholders.
+    it whitelists which keys reach the server-side prefill store. The
+    SSM namespace co-locates deploy-time secrets (CI tokens, Docker Hub
+    PATs) alongside the runtime form fields; without the filter those
+    would propagate into the rendered form's ``value=`` attrs.
+    ``MCP_DCR_SERVER_SECRET`` is always excluded — it is server-side
+    infra, never a form field. Empty values are dropped so they do not
+    render as blank ``value=""`` attrs that hide placeholders.
     """
     if timeout is None:
         timeout = get_flow_timeout(flow_label)
 
-    # Build prefill query string. Hard-filter to ``allowed_prefill_keys``
-    # so only matrix-declared form fields appear in the user-visible URL —
-    # CI / Docker / SMTP secrets that share the namespace stay server-side.
-    # Values are URL-encoded so a ``+`` in a phone number reaches the
-    # server unmangled (raw ``+`` in a query string decodes to space).
-    prefill_qs = ""
+    # Filter creds to ``allowed_prefill_keys`` so only matrix-declared
+    # form fields reach the server-side prefill store — CI / Docker /
+    # SMTP secrets that share the namespace stay out of the form's
+    # ``value=`` attrs.
+    prefill_data: dict[str, str] = {}
     if creds:
         excluded = {"MCP_DCR_SERVER_SECRET"}
         allowed = set(allowed_prefill_keys or ())
-        prefill_pairs = [
-            f"prefill_{quote(k)}={quote(v)}"
-            for k, v in creds.items()
-            if v and k not in excluded and k in allowed
-        ]
-        if prefill_pairs:
-            prefill_qs = "&" + "&".join(prefill_pairs)
+        prefill_data = {
+            k: v for k, v in creds.items() if v and k not in excluded and k in allowed
+        }
 
     verifier, challenge = _pkce_pair()
     state = secrets.token_urlsafe(16)
@@ -461,6 +454,19 @@ async def acquire_jwt_via_browser_form(
             # Probe BEFORE printing the URL; user clicking a link to a dead
             # server is the worst failure mode (silent, looks like driver bug).
             await _health_probe(client, base_url)
+            # Push prefill server-side BEFORE announcing the URL so the value
+            # never leaves the client-server boundary via URL.
+            if prefill_data:
+                prefill_resp = await client.post(
+                    f"{base_url}/authorize/prefill",
+                    params={"state": state},
+                    json=prefill_data,
+                )
+                if prefill_resp.status_code not in (200, 204):
+                    raise RuntimeError(
+                        f"prefill POST failed: {prefill_resp.status_code} "
+                        f"{prefill_resp.text}"
+                    )
             authorize_url = (
                 f"{base_url}/authorize?"
                 f"client_id={client_id}&"
@@ -469,7 +475,6 @@ async def acquire_jwt_via_browser_form(
                 f"code_challenge={challenge}&"
                 f"code_challenge_method=S256&"
                 f"response_type=code"
-                f"{prefill_qs}"
             )
 
             result = announce(authorize_url)

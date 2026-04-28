@@ -142,6 +142,14 @@ def create_local_oauth_app(
     pending_sessions: dict[str, dict[str, Any]] = {}
     # Structure: {auth_code: {code_challenge, code_challenge_method, created_at}}
     auth_codes: dict[str, dict[str, Any]] = {}
+    # Server-side prefill keyed by OAuth ``state`` token. The E2E driver POSTs
+    # skret-derived form values to /authorize/prefill BEFORE announcing the
+    # /authorize URL, so credentials never appear in the URL the user opens.
+    # Without this, ``?prefill_TELEGRAM_PHONE=%2B84...`` would leak into
+    # browser history, server access logs, screenshots, and HTTP referrer.
+    # Structure: {state: {data: {KEY: VALUE}, created_at: monotonic}}
+    pending_prefills: dict[str, dict[str, Any]] = {}
+    _PREFILL_TTL_S = 300.0
 
     # One pending multi-step session at a time. POST /otp has no sub in its
     # body, so we also capture the sub that opened this flow (via POST
@@ -210,15 +218,23 @@ def create_local_oauth_app(
                 status_code=400,
             )
 
-        # Extract prefill values from query: ``?prefill_<KEY>=<VALUE>``. The
-        # driver builds these from skret so the user only types what skret
-        # cannot supply (OTP / 2FA password). Renderers receive a flat
-        # ``{KEY: VALUE}`` dict; values land as HTML-escaped ``value`` attrs
-        # on matching inputs in the form.
+        # Resolve prefill values for the form. Two channels, in priority order:
+        #   1. Server-side store keyed by ``state`` -- written by the E2E driver
+        #      via POST /authorize/prefill BEFORE the user opens the URL. This
+        #      is the safe channel; nothing leaves the server boundary.
+        #   2. URL query string ``?prefill_<KEY>=<VALUE>`` -- legacy fallback for
+        #      callers that have not migrated yet. Deprecated.
+        # Renderers receive a flat ``{KEY: VALUE}`` dict; values land as
+        # HTML-escaped ``value`` attrs on matching inputs in the form.
         prefill: dict[str, str] = {}
-        for k in params.keys():
-            if k.startswith("prefill_"):
-                prefill[k.removeprefix("prefill_")] = params[k]
+        _prune_expired(pending_prefills, _PREFILL_TTL_S)
+        stored = pending_prefills.pop(state, None) if state else None
+        if stored:
+            prefill.update(stored.get("data", {}))
+        else:
+            for k in params.keys():
+                if k.startswith("prefill_"):
+                    prefill[k.removeprefix("prefill_")] = params[k]
 
         # Create a session nonce that ties the form submission to this PKCE flow
         # and a fresh per-authorize ``sub`` that will be passed to the credential
@@ -347,6 +363,41 @@ def create_local_oauth_app(
         if request.method == "GET":
             return await authorize_get(request)
         return await authorize_post(request)
+
+    async def authorize_prefill(request: Request) -> JSONResponse:
+        """POST /authorize/prefill -- driver-only side channel for form prefill.
+
+        Stores form prefill values keyed by the OAuth ``state`` token chosen by
+        the client. ``GET /authorize?state=<X>`` then hydrates the form on
+        render — credentials never appear in the URL the user opens.
+        """
+        state = request.query_params.get("state")
+        if not state:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Missing state"},
+                status_code=400,
+            )
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Body must be JSON object"},
+                status_code=400,
+            )
+        if not isinstance(body, dict):
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Body must be JSON object"},
+                status_code=400,
+            )
+        # Coerce all values to string + drop empties so blank ``value=""`` attrs
+        # don't shadow placeholder text in the rendered form.
+        data: dict[str, str] = {}
+        for k, v in body.items():
+            if v is not None and len(str(v)) > 0:
+                data[str(k)] = str(v)
+        pending_prefills[state] = {"data": data, "created_at": time.monotonic()}
+        _prune_expired(pending_prefills, _PREFILL_TTL_S)
+        return JSONResponse({}, status_code=204)
 
     async def token(request: Request) -> JSONResponse:
         """POST /token -- exchange auth code + PKCE code_verifier for JWT."""
@@ -656,6 +707,7 @@ def create_local_oauth_app(
     routes = [
         Route("/", root, methods=["GET"]),
         Route("/authorize", authorize, methods=["GET", "POST"]),
+        Route("/authorize/prefill", authorize_prefill, methods=["POST"]),
         Route("/otp", otp_handler, methods=["POST"]),
         Route("/token", token, methods=["POST"]),
         Route("/register", register_handler, methods=["POST"]),

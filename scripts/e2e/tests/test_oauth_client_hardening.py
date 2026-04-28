@@ -232,25 +232,46 @@ async def test_live_progress_logger_emits_and_cancels_cleanly(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Phase C3.5: ``acquire_jwt_via_browser_form`` builds prefill query string
-# from creds so the user lands on a form with skret-derived fields already
-# filled (e.g. TELEGRAM_PHONE) and only types what skret cannot supply
-# (OTP, 2FA password).
+# Issue #103: ``acquire_jwt_via_browser_form`` POSTs prefill server-side via
+# ``/authorize/prefill?state=<X>`` BEFORE announcing the URL. Skret-derived
+# values never appear in the URL the user opens — no leak into browser
+# history, server access logs, screenshots, or HTTP referrer.
 # ---------------------------------------------------------------------------
 
 
+def _patch_async_post(
+    monkeypatch: pytest.MonkeyPatch, captured: list[dict[str, Any]]
+) -> None:
+    """Intercept httpx.AsyncClient.post on /authorize/prefill so unit tests
+    don't need a real server. Only the prefill call is captured; other POSTs
+    raise so we notice if behavior diverges."""
+
+    real_post = httpx.AsyncClient.post
+
+    async def fake_post(
+        self: httpx.AsyncClient, url: str, **kwargs: Any
+    ) -> httpx.Response:
+        if "/authorize/prefill" in url:
+            captured.append(
+                {"url": url, "params": kwargs.get("params"), "json": kwargs.get("json")}
+            )
+            return httpx.Response(204)
+        return await real_post(self, url, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+
 @pytest.mark.asyncio
-async def test_browser_form_announces_url_with_prefill_query(
+async def test_browser_form_url_carries_no_prefill_query(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Driver must append ``&prefill_<KEY>=<VALUE>`` for each cred key.
+    """Issue #103: announced URL must NOT contain prefill_<KEY>= bytes.
 
-    The user opens the URL, sees TELEGRAM_PHONE pre-filled, clicks Connect,
-    and only types OTP / 2FA in the chained step UI. URL-encoding ensures
-    a phone like ``+84...`` survives the query without ``+`` decoding to
-    space.
+    Skret values are pushed via POST /authorize/prefill keyed by OAuth
+    state instead. URL the user opens carries only PKCE/OAuth params.
     """
     captured_url: list[str] = []
+    captured_posts: list[dict[str, Any]] = []
 
     def announce(url: str) -> None:
         captured_url.append(url)
@@ -263,10 +284,8 @@ async def test_browser_form_announces_url_with_prefill_query(
 
     monkeypatch.setattr(oauth_client, "_register_client", fake_register)
     monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+    _patch_async_post(monkeypatch, captured_posts)
 
-    # Use a short timeout to avoid hanging the test suite. We never satisfy
-    # ``code_future`` so this raises TimeoutError after the announce — but
-    # the URL is captured before then.
     with pytest.raises(TimeoutError):
         await oauth_client.acquire_jwt_via_browser_form(
             "http://127.0.0.1:0",
@@ -281,18 +300,31 @@ async def test_browser_form_announces_url_with_prefill_query(
 
     assert len(captured_url) == 1
     url = captured_url[0]
-    # Phone is URL-encoded so + survives unmangled.
-    assert "prefill_TELEGRAM_PHONE=%2B84123456789" in url
-    # Server secret never leaks into the user-visible URL.
-    assert "MCP_DCR_SERVER_SECRET" not in url
+    # Hard guarantee: NO prefill bytes in the user-visible URL.
+    assert "prefill_" not in url
+    assert "TELEGRAM_PHONE" not in url
+    assert "84123456789" not in url
+    assert "%2B84123456789" not in url
+
+    # Prefill MUST have been pushed server-side.
+    assert len(captured_posts) == 1
+    post = captured_posts[0]
+    assert "/authorize/prefill" in post["url"]
+    state = post["params"]["state"]
+    assert state and len(state) >= 16  # state is the random PKCE token
+    body = post["json"]
+    assert body == {"TELEGRAM_PHONE": "+84123456789"}
+    # MCP_DCR_SERVER_SECRET stays server-side, never reaches the form.
+    assert "MCP_DCR_SERVER_SECRET" not in body
 
 
 @pytest.mark.asyncio
 async def test_browser_form_omits_empty_prefill_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Empty creds values must not produce ``prefill_KEY=`` (empty value)."""
+    """Empty creds values must not appear in the POSTed prefill body."""
     captured_url: list[str] = []
+    captured_posts: list[dict[str, Any]] = []
 
     def announce(url: str) -> None:
         captured_url.append(url)
@@ -305,6 +337,7 @@ async def test_browser_form_omits_empty_prefill_values(
 
     monkeypatch.setattr(oauth_client, "_register_client", fake_register)
     monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+    _patch_async_post(monkeypatch, captured_posts)
 
     with pytest.raises(TimeoutError):
         await oauth_client.acquire_jwt_via_browser_form(
@@ -315,25 +348,20 @@ async def test_browser_form_omits_empty_prefill_values(
             allowed_prefill_keys=["TELEGRAM_PHONE", "TELEGRAM_BOT_TOKEN"],
         )
 
-    url = captured_url[0]
-    assert "prefill_TELEGRAM_PHONE=" not in url
-    assert "prefill_TELEGRAM_BOT_TOKEN=abc" in url
+    body = captured_posts[0]["json"]
+    assert "TELEGRAM_PHONE" not in body
+    assert body == {"TELEGRAM_BOT_TOKEN": "abc"}
 
 
 @pytest.mark.asyncio
 async def test_browser_form_filters_unrelated_skret_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """SECURITY: keys NOT in ``allowed_prefill_keys`` MUST NOT leak into URL.
-
-    The skret namespace often co-locates deploy-time secrets (CI tokens,
-    Docker Hub PATs, SMTP passwords) alongside the runtime form fields.
-    Iterating ``creds.items()`` without a whitelist would propagate every
-    one of those into the announced URL → browser history → access logs
-    → screenshots. ``allowed_prefill_keys`` (driven by matrix.yaml's
-    ``skret_keys``) hard-restricts which keys are eligible.
-    """
+    """SECURITY: keys NOT in ``allowed_prefill_keys`` MUST NOT reach the
+    server-side prefill store either — protect against a future renderer
+    surfacing them via ``value=`` attrs."""
     captured_url: list[str] = []
+    captured_posts: list[dict[str, Any]] = []
 
     def announce(url: str) -> None:
         captured_url.append(url)
@@ -346,6 +374,7 @@ async def test_browser_form_filters_unrelated_skret_keys(
 
     monkeypatch.setattr(oauth_client, "_register_client", fake_register)
     monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+    _patch_async_post(monkeypatch, captured_posts)
 
     with pytest.raises(TimeoutError):
         await oauth_client.acquire_jwt_via_browser_form(
@@ -363,14 +392,15 @@ async def test_browser_form_filters_unrelated_skret_keys(
         )
 
     url = captured_url[0]
-    assert "prefill_TELEGRAM_PHONE=%2B84123" in url
+    assert "prefill_" not in url
     assert "DOCKERHUB_TOKEN" not in url
     assert "dckr_pat_should_not_leak" not in url
     assert "CI_APP_KEY" not in url
-    assert "RSA%20PRIVATE%20KEY" not in url
     assert "SMTP_CREDENTIAL" not in url
     assert "appsecret" not in url
-    assert "TELEGRAM_BOT_TOKEN" not in url
+
+    body = captured_posts[0]["json"]
+    assert body == {"TELEGRAM_PHONE": "+84123"}
 
 
 @pytest.mark.asyncio
