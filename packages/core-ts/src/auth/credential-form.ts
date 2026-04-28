@@ -34,9 +34,7 @@ export function isSchemaComplete(
 ): boolean {
   if (!config) return false
 
-  const requiredKeys = (schema.fields ?? [])
-    .filter((field) => field.required === true)
-    .map((field) => field.key)
+  const requiredKeys = (schema.fields ?? []).filter((field) => field.required === true).map((field) => field.key)
 
   if (requiredKeys.length > 0) {
     return requiredKeys.every((key) => Boolean(config[key]))

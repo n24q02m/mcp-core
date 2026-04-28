@@ -421,8 +421,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     // successfully. Multi-step flows (OTP / 2FA) defer marking until the
     // final step in ``otpHandler`` — see core-py parity. Best-effort: any
     // storage error is logged via warning rather than failing the response.
-    const isMultiStep =
-      nextStep !== null && (nextStep.type === 'otp_required' || nextStep.type === 'password_required')
+    const isMultiStep = nextStep !== null && (nextStep.type === 'otp_required' || nextStep.type === 'password_required')
     if (!isMultiStep) {
       try {
         await markConfigSetupComplete(options.serverName)

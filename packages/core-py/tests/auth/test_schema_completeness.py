@@ -1,4 +1,3 @@
-import pytest
 from mcp_core.auth.credential_form import is_schema_complete
 
 

@@ -111,11 +111,7 @@ export function refreshLockTimestamp(path: string): void {
  * preventing pile-up of dozens of `<server>-<port>.lock` files when daemons
  * exit abnormally (Windows OOM, taskkill, signal).
  */
-export function sweepStaleLocks(
-  serverName: string,
-  ttlHours: number = DEFAULT_LOCK_TTL_HOURS,
-  root?: string
-): number {
+export function sweepStaleLocks(serverName: string, ttlHours: number = DEFAULT_LOCK_TTL_HOURS, root?: string): number {
   const dir = locksDir(root)
   if (!existsSync(dir)) return 0
 
@@ -161,12 +157,7 @@ export function sweepStaleLocks(
  *
  * Returns the absolute path to the lock file.
  */
-export function writeLockFile(
-  serverName: string,
-  port: number,
-  token: string,
-  root?: string
-): string {
+export function writeLockFile(serverName: string, port: number, token: string, root?: string): string {
   const dir = locksDir(root)
   const path = join(dir, `${serverName}-${port}.lock`)
   const payload = `${process.pid}\n${port}\n${token}\n${new Date().toISOString()}\n`

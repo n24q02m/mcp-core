@@ -37,21 +37,15 @@ describe('isSchemaComplete', () => {
   })
 
   it('all required present is complete', () => {
-    expect(
-      isSchemaComplete({ API_KEY: 'k', BASE_URL: 'https://x' }, SCHEMA_2_REQUIRED_1_OPTIONAL)
-    ).toBe(true)
+    expect(isSchemaComplete({ API_KEY: 'k', BASE_URL: 'https://x' }, SCHEMA_2_REQUIRED_1_OPTIONAL)).toBe(true)
   })
 
   it('required present, optional missing is complete', () => {
-    expect(
-      isSchemaComplete({ API_KEY: 'k', BASE_URL: 'https://x' }, SCHEMA_2_REQUIRED_1_OPTIONAL)
-    ).toBe(true)
+    expect(isSchemaComplete({ API_KEY: 'k', BASE_URL: 'https://x' }, SCHEMA_2_REQUIRED_1_OPTIONAL)).toBe(true)
   })
 
   it('required present with empty string is incomplete', () => {
-    expect(
-      isSchemaComplete({ API_KEY: 'k', BASE_URL: '' }, SCHEMA_2_REQUIRED_1_OPTIONAL)
-    ).toBe(false)
+    expect(isSchemaComplete({ API_KEY: 'k', BASE_URL: '' }, SCHEMA_2_REQUIRED_1_OPTIONAL)).toBe(false)
   })
 
   it('all-optional schema with _setup_complete=true is complete', () => {

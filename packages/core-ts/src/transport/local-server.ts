@@ -25,6 +25,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { JWTPayload } from 'jose'
 import type { RelayConfigSchema } from '../auth/credential-form.js'
+import { isSchemaComplete } from '../auth/credential-form.js'
 import {
   createDelegatedOAuthApp,
   type DelegatedOAuthAppOptions,
@@ -37,9 +38,8 @@ import {
   type StepCallback
 } from '../auth/local-oauth-app.js'
 import { jsonResponse } from '../auth/router.js'
-import type { JWTIssuer } from '../oauth/jwt-issuer.js'
-import { isSchemaComplete } from '../auth/credential-form.js'
 import { refreshLockTimestamp, sweepStaleLocks, writeLockFile } from '../lifecycle/lock.js'
+import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 import { tryOpenBrowser } from '../relay/browser.js'
 import { readConfig } from '../storage/config-file.js'
 
@@ -292,10 +292,7 @@ export async function runLocalServer(
 
   // Refresh the lock timestamp hourly so the 24h TTL sweep does not kill
   // long-running daemons. Cancelled in `close()`.
-  const lockRefreshInterval = setInterval(
-    () => refreshLockTimestamp(lockFile),
-    3600 * 1000
-  )
+  const lockRefreshInterval = setInterval(() => refreshLockTimestamp(lockFile), 3600 * 1000)
   if (typeof lockRefreshInterval.unref === 'function') {
     lockRefreshInterval.unref()
   }

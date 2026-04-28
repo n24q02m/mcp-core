@@ -6,7 +6,6 @@ These tests exercise the gate logic directly without spinning up a real uvicorn
 server (the gate decision is the unit under test, not the HTTP plumbing).
 """
 
-import pytest
 
 from mcp_core.auth.credential_form import is_schema_complete
 
