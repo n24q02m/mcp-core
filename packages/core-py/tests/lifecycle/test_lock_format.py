@@ -16,9 +16,7 @@ def _write_legacy_lock(path: Path, pid: int, port: int) -> None:
     path.write_text(f"{pid}\n{port}\nproxy-token\n", encoding="utf-8")
 
 
-def _write_4line_lock(
-    path: Path, pid: int, port: int, age_hours: float = 0
-) -> None:
+def _write_4line_lock(path: Path, pid: int, port: int, age_hours: float = 0) -> None:
     ts = (datetime.now(timezone.utc) - timedelta(hours=age_hours)).isoformat()
     path.write_text(f"{pid}\n{port}\nproxy-token\n{ts}\n", encoding="utf-8")
 

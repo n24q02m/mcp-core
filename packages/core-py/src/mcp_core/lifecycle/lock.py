@@ -94,9 +94,7 @@ def _is_pid_alive(pid: int) -> bool:
             import ctypes
 
             PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            handle = ctypes.windll.kernel32.OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION, False, pid
-            )
+            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
             if handle:
                 ctypes.windll.kernel32.CloseHandle(handle)
                 return True
@@ -119,10 +117,7 @@ def refresh_lock_timestamp(path: Path) -> None:
     md = parse_lock_metadata(path)
     if md is None:
         return
-    payload = (
-        f"{md.pid}\n{md.port}\n{md.token}\n"
-        f"{datetime.now(timezone.utc).isoformat()}\n"
-    )
+    payload = f"{md.pid}\n{md.port}\n{md.token}\n{datetime.now(timezone.utc).isoformat()}\n"
     try:
         # Preserve fixed-width padding so the on-disk size never shrinks
         # while a Windows byte-range lock is held past the metadata region.
@@ -212,9 +207,7 @@ class LifecycleLock:
             except OSError as e:
                 self._fh.close()
                 self._fh = None
-                raise RuntimeError(
-                    f"LifecycleLock: another process holds {self._lock_file}"
-                ) from e
+                raise RuntimeError(f"LifecycleLock: another process holds {self._lock_file}") from e
         else:
             import fcntl
 
@@ -223,18 +216,14 @@ class LifecycleLock:
             except BlockingIOError as e:
                 self._fh.close()
                 self._fh = None
-                raise RuntimeError(
-                    f"LifecycleLock: another process holds {self._lock_file}"
-                ) from e
+                raise RuntimeError(f"LifecycleLock: another process holds {self._lock_file}") from e
         # Rewrite metadata from offset 0. We cannot ``truncate(0)`` on
         # Windows without dropping our byte-range lock, so we write a
         # fixed-size record and pad with spaces so any stale tail is
         # overwritten deterministically.
         self._fh.seek(0)
         created_at = datetime.now(timezone.utc).isoformat()
-        payload = (
-            f"{os.getpid()}\n{self._port}\n{self._token or ''}\n{created_at}\n"
-        )
+        payload = f"{os.getpid()}\n{self._port}\n{self._token or ''}\n{created_at}\n"
         self._fh.write(payload.ljust(512, " "))
         self._fh.flush()
         if sys.platform != "win32":

@@ -268,9 +268,7 @@ def build_local_app(
     return combined_app, jwt_issuer
 
 
-async def _refresh_lock_timestamp_loop(
-    lock_path: Path, interval_seconds: float = 3600.0
-) -> None:
+async def _refresh_lock_timestamp_loop(lock_path: Path, interval_seconds: float = 3600.0) -> None:
     """Refresh the daemon's lock-file timestamp every ``interval_seconds`` so
     the 24h TTL sweep does not mistake a long-running daemon for a stale lock.
 
@@ -290,9 +288,7 @@ async def _refresh_lock_timestamp_loop(
         try:
             refresh_lock_timestamp(lock_path)
         except Exception:  # noqa: BLE001
-            logger.opt(exception=True).debug(
-                "Failed to refresh lock timestamp at {}", lock_path
-            )
+            logger.opt(exception=True).debug("Failed to refresh lock timestamp at {}", lock_path)
 
 
 async def run_local_server(
@@ -475,9 +471,7 @@ async def run_local_server(
         # server shutdown.
         import asyncio as _asyncio
 
-        refresh_task = _asyncio.create_task(
-            _refresh_lock_timestamp_loop(lock.path, interval_seconds=3600.0)
-        )
+        refresh_task = _asyncio.create_task(_refresh_lock_timestamp_loop(lock.path, interval_seconds=3600.0))
         try:
             await server.serve()
         finally:

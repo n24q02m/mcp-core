@@ -42,9 +42,7 @@ async def test_refresh_loop_cancellable_during_sleep(tmp_path):
         encoding="utf-8",
     )
 
-    task = asyncio.create_task(
-        _refresh_lock_timestamp_loop(lock_path, interval_seconds=60.0)
-    )
+    task = asyncio.create_task(_refresh_lock_timestamp_loop(lock_path, interval_seconds=60.0))
     # Cancel before any refresh fires.
     await asyncio.sleep(0.01)
     task.cancel()
