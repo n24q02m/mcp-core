@@ -388,9 +388,20 @@ async def run_local_server(
     lock = LifecycleLock(name=server_name, port=actual_port, token=proxy_token)
 
     with lock:
-        # Check if credentials already exist
+        # Decide whether to auto-open the relay form. Use schema-completeness
+        # (is_schema_complete) instead of "config is None" so peer-share paths
+        # writing partial entries (e.g. wet-mcp inheriting CRG cloud keys) do
+        # not suppress the form when wet's required fields are still missing.
         existing_config = read_config(server_name)
-        if existing_config is None:
+        from mcp_core.auth.credential_form import is_schema_complete
+
+        config_complete = (
+            is_schema_complete(existing_config, relay_schema)
+            if relay_schema is not None
+            else existing_config is not None
+        )
+
+        if not config_complete:
             # Open the root URL ("/") so the OAuth-AS auto-bootstraps PKCE
             # and redirects to /authorize with valid parameters. Opening
             # /authorize directly returns ``invalid_request`` because the
@@ -399,7 +410,8 @@ async def run_local_server(
             # exposing raw OAuth machinery").
             setup_url = f"http://{actual_host}:{actual_port}/"
             logger.info(
-                "No credentials found. Opening {} in browser to configure", setup_url
+                "Configuration incomplete. Opening {} in browser to configure",
+                setup_url,
             )
             # Auto-open browser so user sees relay form immediately on first
             # connect. Without this the daemon stderr URL is hidden from the
