@@ -2,6 +2,64 @@
 
 <!-- version list -->
 
+## v1.8.2 (2026-04-28)
+
+### Bug Fixes
+
+- Add ty: ignore for downstream type checkers ([#101](https://github.com/n24q02m/mcp-core/pull/101),
+  [`f6d3ef8`](https://github.com/n24q02m/mcp-core/commit/f6d3ef8a1688b249eaff55b7c2ac293126b123f0))
+
+- Hard-filter browser-form prefill to matrix-declared skret_keys
+  ([#100](https://github.com/n24q02m/mcp-core/pull/100),
+  [`0edd57a`](https://github.com/n24q02m/mcp-core/commit/0edd57aa4912185c5cca3d5b39a3461a1e0c6792))
+
+- Ruff lint cleanup for e2e driver (TimeoutError, import sort, type args)
+  ([#99](https://github.com/n24q02m/mcp-core/pull/99),
+  [`525e673`](https://github.com/n24q02m/mcp-core/commit/525e673cfb10e43eb22a8eea07112966cd986738))
+
+- Run formatting on python file after fixing file permission bug
+  ([#109](https://github.com/n24q02m/mcp-core/pull/109),
+  [`34e0379`](https://github.com/n24q02m/mcp-core/commit/34e0379cbd10a43f366800c22c0147b523673512))
+
+- Secure file and directory permissions for sensitive data
+  ([#109](https://github.com/n24q02m/mcp-core/pull/109),
+  [`34e0379`](https://github.com/n24q02m/mcp-core/commit/34e0379cbd10a43f366800c22c0147b523673512))
+
+- Use cast() for AsyncClient stubs in oauth_client tests
+  ([#102](https://github.com/n24q02m/mcp-core/pull/102),
+  [`77b59da`](https://github.com/n24q02m/mcp-core/commit/77b59daa7615bdcdcb9a10576216c2d92aa06eaf))
+
+- **auth**: Clear aria-invalid on input retry ([#110](https://github.com/n24q02m/mcp-core/pull/110),
+  [`a847c4e`](https://github.com/n24q02m/mcp-core/commit/a847c4ecd96f961b8b150e48754e083dd54adade))
+
+- **deps**: Pin pydantic <2.13 across core-py + embedding-daemon for cohere compatibility
+  ([#112](https://github.com/n24q02m/mcp-core/pull/112),
+  [`a763171`](https://github.com/n24q02m/mcp-core/commit/a7631714210e7ab405981d2a6b2f71d6c44d5984))
+
+- **deps**: Update non-major dependencies ([#105](https://github.com/n24q02m/mcp-core/pull/105),
+  [`96ddf37`](https://github.com/n24q02m/mcp-core/commit/96ddf379807c4671e718cff74a7764133b9d9763))
+
+- **transport/smart-stdio**: Honor Mcp-Session-Id response header for Streamable HTTP
+  ([#111](https://github.com/n24q02m/mcp-core/pull/111),
+  [`c4d0666`](https://github.com/n24q02m/mcp-core/commit/c4d06668f9655ee7c9d9ddda772ed0c955ff75d6))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#108](https://github.com/n24q02m/mcp-core/pull/108),
+  [`aec0a99`](https://github.com/n24q02m/mcp-core/commit/aec0a99534c2306db7b45938cd8c4b0863c55878))
+
+- **deps**: Pin dependencies ([#104](https://github.com/n24q02m/mcp-core/pull/104),
+  [`3324965`](https://github.com/n24q02m/mcp-core/commit/33249659e3093974ae97a17a70347fc34ecd93d5))
+
+- **deps**: Update actions/checkout action to v6
+  ([#106](https://github.com/n24q02m/mcp-core/pull/106),
+  [`71f7e9f`](https://github.com/n24q02m/mcp-core/commit/71f7e9fcc5f02e89b3266d967f9409ac37fb6141))
+
+- **deps**: Update astral-sh/setup-uv action to v8
+  ([#107](https://github.com/n24q02m/mcp-core/pull/107),
+  [`793efa7`](https://github.com/n24q02m/mcp-core/commit/793efa7e645374e13bd534b1c2a3c68d0ada774a))
+
+
 ## v1.8.1 (2026-04-27)
 
 ### Bug Fixes
