@@ -153,6 +153,45 @@ def load_capabilities_cache(
     return cache
 
 
+def handle_initialize_from_cache(lock_path: Path, request: dict) -> dict | None:
+    """Build a JSON-RPC ``initialize`` response from cached capabilities.
+
+    Returns ``None`` when no usable cache exists (caller should bridge to the
+    live daemon instead). The cache is validated against the running mcp-core
+    version, so an upgraded core never serves stale handshake responses.
+    """
+    cache = load_capabilities_cache(lock_path, validate_version=True)
+    if cache is None:
+        return None
+    params = request.get("params") or {}
+    return {
+        "jsonrpc": "2.0",
+        "id": request.get("id"),
+        "result": {
+            "protocolVersion": params.get("protocolVersion", "2025-11-25"),
+            "capabilities": cache.get("capabilities", {}),
+            "serverInfo": cache.get("serverInfo", {}),
+        },
+    }
+
+
+def handle_tools_list_from_cache(lock_path: Path, request: dict) -> dict | None:
+    """Build a JSON-RPC ``tools/list`` response from cached tools.
+
+    Returns ``None`` when no usable cache exists (caller bridges to live
+    daemon instead). Uses the same version-validated cache loader as
+    ``handle_initialize_from_cache``.
+    """
+    cache = load_capabilities_cache(lock_path, validate_version=True)
+    if cache is None:
+        return None
+    return {
+        "jsonrpc": "2.0",
+        "id": request.get("id"),
+        "result": {"tools": cache.get("tools", [])},
+    }
+
+
 def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
     """Read pid, port, and token from a lock file.
 
