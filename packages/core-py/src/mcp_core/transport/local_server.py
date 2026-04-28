@@ -472,6 +472,34 @@ async def run_local_server(
         import asyncio as _asyncio
 
         refresh_task = _asyncio.create_task(_refresh_lock_timestamp_loop(lock.path, interval_seconds=3600.0))
+
+        # Persist the daemon's MCP capabilities + tools/list response next to
+        # its lock file. The smart-stdio proxy reads this on subsequent runs
+        # to answer ``initialize`` / ``tools/list`` from disk while the daemon
+        # is cold-starting — Claude Code sees the full tool surface within
+        # ~1s of session start instead of 30-60s. Best-effort: any failure
+        # here just disables the fast-handshake optimization on next run.
+        try:
+            from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
+            from mcp_core.transport.smart_stdio import persist_capabilities_cache
+
+            tools_list = await mcp.list_tools()
+            tools_payload = [t.model_dump() if hasattr(t, "model_dump") else dict(t) for t in tools_list]
+            try:
+                core_version = _pkg_version("n24q02m-mcp-core")
+            except PackageNotFoundError:
+                core_version = "0.0.0"
+            persist_capabilities_cache(
+                lock.path,
+                server_name,
+                core_version,
+                {"tools": {"listChanged": False}},
+                tools_payload,
+            )
+        except Exception:  # noqa: BLE001
+            logger.opt(exception=True).debug("Failed to persist capabilities cache")
+
         try:
             await server.serve()
         finally:

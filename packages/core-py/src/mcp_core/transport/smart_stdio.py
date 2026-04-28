@@ -15,6 +15,7 @@ against the daemon's BearerMCPApp without going through the browser OAuth flow.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import time
@@ -80,6 +81,115 @@ def _iter_sse(response: httpx.Response) -> Iterator[_SseEvent]:
     yield from _flush()
 
 
+def _current_mcp_core_version() -> str:
+    """Return the installed ``n24q02m-mcp-core`` version, or ``0.0.0`` if unknown.
+
+    Used by ``load_capabilities_cache`` to invalidate stale caches after an
+    upgrade — a cache produced by mcp-core 1.9.0 is unsafe to serve once the
+    user installs 2.0.0 because the protocol or capabilities surface may
+    have changed.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("n24q02m-mcp-core")
+    except PackageNotFoundError:
+        return "0.0.0"
+
+
+def cache_path_for_lock(lock_path: Path) -> Path:
+    """Cache file lives next to the lock file with a ``.tools.json`` suffix.
+
+    Co-locating cache + lock makes cleanup trivial: deleting a stale lock by
+    its filename pattern can also delete its companion cache without a
+    separate sweep step.
+    """
+    return lock_path.with_suffix(".tools.json")
+
+
+def persist_capabilities_cache(
+    lock_path: Path,
+    server_name: str,
+    server_version: str,
+    capabilities: dict,
+    tools: list[dict],
+) -> None:
+    """Write the daemon's MCP capabilities + ``tools/list`` response to disk.
+
+    Called once after FastMCP fully initializes. Subsequent stdio-proxy
+    invocations can serve ``initialize`` and ``tools/list`` immediately from
+    this cache while the daemon is cold-starting, so Claude Code sees the
+    full tool surface within ~1s of session start instead of ~30-60s.
+    """
+    payload = {
+        "serverInfo": {"name": server_name, "version": server_version},
+        "capabilities": capabilities,
+        "tools": tools,
+    }
+    cache_path = cache_path_for_lock(lock_path)
+    cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def load_capabilities_cache(lock_path: Path, validate_version: bool = False) -> dict | None:
+    """Read cached capabilities. Returns None if the file is missing, malformed,
+    or — when ``validate_version`` is True — written by a different mcp-core
+    version. Callers serving handshake requests from the cache should pass
+    ``validate_version=True`` to avoid serving stale tool surfaces after an
+    upgrade.
+    """
+    cache_path = cache_path_for_lock(lock_path)
+    if not cache_path.exists():
+        return None
+    try:
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if validate_version:
+        cached_version = cache.get("serverInfo", {}).get("version")
+        if cached_version != _current_mcp_core_version():
+            return None
+    return cache
+
+
+def handle_initialize_from_cache(lock_path: Path, request: dict) -> dict | None:
+    """Build a JSON-RPC ``initialize`` response from cached capabilities.
+
+    Returns ``None`` when no usable cache exists (caller should bridge to the
+    live daemon instead). The cache is validated against the running mcp-core
+    version, so an upgraded core never serves stale handshake responses.
+    """
+    cache = load_capabilities_cache(lock_path, validate_version=True)
+    if cache is None:
+        return None
+    params = request.get("params") or {}
+    return {
+        "jsonrpc": "2.0",
+        "id": request.get("id"),
+        "result": {
+            "protocolVersion": params.get("protocolVersion", "2025-11-25"),
+            "capabilities": cache.get("capabilities", {}),
+            "serverInfo": cache.get("serverInfo", {}),
+        },
+    }
+
+
+def handle_tools_list_from_cache(lock_path: Path, request: dict) -> dict | None:
+    """Build a JSON-RPC ``tools/list`` response from cached tools.
+
+    Returns ``None`` when no usable cache exists (caller bridges to live
+    daemon instead). Uses the same version-validated cache loader as
+    ``handle_initialize_from_cache``.
+    """
+    cache = load_capabilities_cache(lock_path, validate_version=True)
+    if cache is None:
+        return None
+    return {
+        "jsonrpc": "2.0",
+        "id": request.get("id"),
+        "result": {"tools": cache.get("tools", [])},
+    }
+
+
 def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
     """Read pid, port, and token from a lock file.
 
@@ -96,6 +206,24 @@ def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
         return port, token
     except (OSError, ValueError):
         return None
+
+
+def _find_newest_lock(server_name: str) -> Path | None:
+    """Return the most recent lock file path for ``server_name``, or None.
+
+    Used by fast-handshake to locate a capabilities cache even before the
+    proxy has confirmed the daemon is HTTP-ready. Mtime ordering means a
+    fresh daemon's lock wins over a stale residue.
+    """
+    locks_dir = Path.home() / ".config" / "mcp" / "locks"
+    if not locks_dir.exists():
+        return None
+    candidates = sorted(
+        locks_dir.glob(f"{server_name}-*.lock"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
 
 
 def get_active_daemon(server_name: str) -> tuple[int, str] | None:
@@ -261,12 +389,50 @@ def run_smart_stdio_proxy(
 
     from urllib.parse import urljoin
 
-    # The MCP SDK StreamableHTTPSessionManager requires the initial connection
-    # to be a POST containing the "initialize" JSON-RPC message. It will return
-    # the SSE stream directly in response to this POST.
-    first_line = line_queue.get()
-    if first_line is None:
+    # Fast-handshake: a cache file written by a previous (or concurrent) daemon
+    # run lets us answer `initialize` and `tools/list` from disk immediately,
+    # before bridging to the live HTTP daemon. The user-visible win: tools
+    # appear in Claude Code's /mcp panel ~1s after session start instead of
+    # 30-60s while the daemon's Python imports finish. The bridge to the
+    # daemon still runs for `tools/call` and any other non-cacheable method.
+    cache_lock_path = _find_newest_lock(server_name)
+    pending_first_line: bytes | None = None
+
+    while True:
+        candidate = line_queue.get()
+        if candidate is None:
+            return 0
+        cached_response = None
+        try:
+            request = json.loads(candidate)
+        except (ValueError, TypeError):
+            request = None
+
+        if request and isinstance(request, dict) and cache_lock_path is not None:
+            method = request.get("method")
+            if method == "initialize":
+                cached_response = handle_initialize_from_cache(cache_lock_path, request)
+            elif method == "tools/list":
+                cached_response = handle_tools_list_from_cache(cache_lock_path, request)
+            elif method == "notifications/initialized":
+                # No response expected; swallow when serving from cache so
+                # we don't spuriously bridge to the daemon for a fire-and-forget
+                # notification.
+                continue
+
+        if cached_response is not None:
+            sys.stdout.buffer.write((json.dumps(cached_response) + "\n").encode("utf-8"))
+            sys.stdout.buffer.flush()
+            continue
+
+        # First non-cacheable line — fall through to the daemon bridge below
+        # using this line as the SSE-stream-establishing POST body.
+        pending_first_line = candidate
+        break
+
+    if pending_first_line is None:
         return 0
+    first_line = pending_first_line
 
     with httpx.Client(timeout=httpx.Timeout(5.0, read=300.0)) as client:
         try:
