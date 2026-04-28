@@ -150,3 +150,36 @@ def test_response_serializable_to_json(tmp_path):
     )
     json.dumps(init)
     json.dumps(tools)
+
+
+def test_find_newest_lock_picks_most_recent_mtime(tmp_path, monkeypatch):
+    """`_find_newest_lock` is the cache discovery primitive — fresher lock wins."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    locks_dir = tmp_path / ".config" / "mcp" / "locks"
+    locks_dir.mkdir(parents=True)
+
+    older = locks_dir / "demo-1001.lock"
+    newer = locks_dir / "demo-1002.lock"
+    older.write_text("1\n1001\nt\n2026-01-01T00:00:00+00:00\n", encoding="utf-8")
+    newer.write_text("2\n1002\nt\n2026-04-28T00:00:00+00:00\n", encoding="utf-8")
+    # Bump newer's mtime so the test is deterministic across filesystems.
+    import os
+    import time
+
+    now = time.time()
+    os.utime(older, (now - 100, now - 100))
+    os.utime(newer, (now, now))
+
+    from mcp_core.transport.smart_stdio import _find_newest_lock
+
+    found = _find_newest_lock("demo")
+    assert found == newer
+
+
+def test_find_newest_lock_returns_none_when_no_locks(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    from mcp_core.transport.smart_stdio import _find_newest_lock
+
+    assert _find_newest_lock("demo") is None

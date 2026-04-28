@@ -210,6 +210,24 @@ def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
         return None
 
 
+def _find_newest_lock(server_name: str) -> Path | None:
+    """Return the most recent lock file path for ``server_name``, or None.
+
+    Used by fast-handshake to locate a capabilities cache even before the
+    proxy has confirmed the daemon is HTTP-ready. Mtime ordering means a
+    fresh daemon's lock wins over a stale residue.
+    """
+    locks_dir = Path.home() / ".config" / "mcp" / "locks"
+    if not locks_dir.exists():
+        return None
+    candidates = sorted(
+        locks_dir.glob(f"{server_name}-*.lock"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
 def get_active_daemon(server_name: str) -> tuple[int, str] | None:
     """Find the active daemon for server_name.
 
@@ -373,12 +391,50 @@ def run_smart_stdio_proxy(
 
     from urllib.parse import urljoin
 
-    # The MCP SDK StreamableHTTPSessionManager requires the initial connection
-    # to be a POST containing the "initialize" JSON-RPC message. It will return
-    # the SSE stream directly in response to this POST.
-    first_line = line_queue.get()
-    if first_line is None:
+    # Fast-handshake: a cache file written by a previous (or concurrent) daemon
+    # run lets us answer `initialize` and `tools/list` from disk immediately,
+    # before bridging to the live HTTP daemon. The user-visible win: tools
+    # appear in Claude Code's /mcp panel ~1s after session start instead of
+    # 30-60s while the daemon's Python imports finish. The bridge to the
+    # daemon still runs for `tools/call` and any other non-cacheable method.
+    cache_lock_path = _find_newest_lock(server_name)
+    pending_first_line: bytes | None = None
+
+    while True:
+        candidate = line_queue.get()
+        if candidate is None:
+            return 0
+        cached_response = None
+        try:
+            request = json.loads(candidate)
+        except (ValueError, TypeError):
+            request = None
+
+        if request and isinstance(request, dict) and cache_lock_path is not None:
+            method = request.get("method")
+            if method == "initialize":
+                cached_response = handle_initialize_from_cache(cache_lock_path, request)
+            elif method == "tools/list":
+                cached_response = handle_tools_list_from_cache(cache_lock_path, request)
+            elif method == "notifications/initialized":
+                # No response expected; swallow when serving from cache so
+                # we don't spuriously bridge to the daemon for a fire-and-forget
+                # notification.
+                continue
+
+        if cached_response is not None:
+            sys.stdout.buffer.write((json.dumps(cached_response) + "\n").encode("utf-8"))
+            sys.stdout.buffer.flush()
+            continue
+
+        # First non-cacheable line — fall through to the daemon bridge below
+        # using this line as the SSE-stream-establishing POST body.
+        pending_first_line = candidate
+        break
+
+    if pending_first_line is None:
         return 0
+    first_line = pending_first_line
 
     with httpx.Client(timeout=httpx.Timeout(5.0, read=300.0)) as client:
         try:
