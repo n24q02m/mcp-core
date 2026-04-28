@@ -135,14 +135,30 @@ def get_active_daemon(server_name: str) -> tuple[int, str] | None:
 
 
 def _spawn_daemon(daemon_cmd: list[str]) -> None:
-    """Spawn a daemon in a detached background process."""
+    """Spawn a daemon in a detached background process.
+
+    The daemon must run in HTTP mode -- it is the backend that the proxy
+    bridges to. Without a clean env, the child inherits MCP_TRANSPORT=stdio
+    from the parent proxy, re-enters this same code path, and fork-bombs
+    itself spawning daemons recursively until the OS exhausts handles.
+    Strip stdio-mode env vars so the daemon falls into the HTTP branch of
+    its own ``main()``.
+    """
+    import os
+
     logger.debug(f"Spawning daemon: {daemon_cmd}")
+    daemon_env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"MCP_TRANSPORT", "TRANSPORT_MODE"}
+    }
     if sys.platform == "win32":
         # CREATE_NO_WINDOW (0x08000000) | CREATE_NEW_PROCESS_GROUP (0x200)
         # We use CREATE_NO_WINDOW instead of DETACHED_PROCESS to prevent popping up terminals
         creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000200
         subprocess.Popen(
             daemon_cmd,
+            env=daemon_env,
             creationflags=creation_flags,
             close_fds=True,
             stdin=subprocess.DEVNULL,
@@ -152,6 +168,7 @@ def _spawn_daemon(daemon_cmd: list[str]) -> None:
     else:
         subprocess.Popen(
             daemon_cmd,
+            env=daemon_env,
             start_new_session=True,
             close_fds=True,
             stdin=subprocess.DEVNULL,
@@ -163,7 +180,7 @@ def _spawn_daemon(daemon_cmd: list[str]) -> None:
 def run_smart_stdio_proxy(
     server_name: str,
     daemon_cmd: list[str],
-    startup_timeout: float = 15.0,
+    startup_timeout: float | None = None,
 ) -> int:
     """Entry point for the Smart Stdio Proxy.
 
@@ -176,14 +193,26 @@ def run_smart_stdio_proxy(
         server_name: Name of the MCP server (e.g. "wet-mcp").
         daemon_cmd: Command to spawn if daemon is not running.
         startup_timeout: Seconds to wait for daemon lock after spawn.
+            Defaults to 60s, overridable via ``MCP_STDIO_STARTUP_TIMEOUT`` env
+            var. Windows + cold Python imports + busy CI workers commonly take
+            30-50s for the daemon to write its lock file, so the previous
+            15s default produced spurious timeouts on slow hosts.
 
     Returns:
         Exit code (0 = success, 1 = daemon failed to start, 2 = HTTP error).
     """
+    import os
     import queue
     import threading
 
     import httpx
+
+    if startup_timeout is None:
+        env_value = os.environ.get("MCP_STDIO_STARTUP_TIMEOUT", "")
+        try:
+            startup_timeout = float(env_value) if env_value else 60.0
+        except ValueError:
+            startup_timeout = 60.0
 
     # 1. Find or spawn the daemon
     result = get_active_daemon(server_name)
