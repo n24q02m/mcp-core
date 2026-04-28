@@ -841,9 +841,10 @@ def is_schema_complete(config: dict[str, Any] | None, schema: dict[str, Any]) ->
     if not config:
         return False
 
-    required_fields = [f["name"] for f in schema.get("fields", []) if f.get("required")]
+    required_fields = [f["key"] for f in schema.get("fields", []) if f.get("required")]
 
     if required_fields:
-        return all(config.get(name) for name in required_fields)
+        return all(config.get(key) for key in required_fields)
 
-    return bool(config.get("_setup_complete", False))
+    flag = config.get("_setup_complete")
+    return flag is True or flag == "true"
