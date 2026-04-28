@@ -274,9 +274,9 @@ export async function runLocalServer(
 
   const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
   const lockDir = path.join(os.homedir(), '.config', 'mcp', 'locks')
-  fs.mkdirSync(lockDir, { recursive: true })
+  fs.mkdirSync(lockDir, { recursive: true, mode: 0o700 })
   const lockFile = path.join(lockDir, `${options.serverName}-${actualPort}.lock`)
-  fs.writeFileSync(lockFile, `${process.pid}\n${actualPort}\n${proxyToken}\n`, { mode: 0o644 })
+  fs.writeFileSync(lockFile, `${process.pid}\n${actualPort}\n${proxyToken}\n`, { mode: 0o600 })
 
   // Invoke setup hook. Supports legacy 1-arg (success-only) and new 2-arg
   // (success + failure) signatures via Function.prototype.length so upstream

@@ -31,6 +31,8 @@ class LifecycleLock:
         self._token = token
         self._root = root or Path.home() / ".config" / "mcp" / "locks"
         self._root.mkdir(parents=True, exist_ok=True)
+        if sys.platform != "win32":
+            self._root.chmod(0o700)
         self._lock_file = self._root / f"{name}-{port}.lock"
         self._fh: Any | None = None
 
@@ -73,6 +75,8 @@ class LifecycleLock:
         payload = f"{os.getpid()}\n{self._port}\n{self._token or ''}\n"
         self._fh.write(payload.ljust(512, " "))
         self._fh.flush()
+        if sys.platform != "win32":
+            os.chmod(self._lock_file, 0o600)
         return self
 
     def __exit__(

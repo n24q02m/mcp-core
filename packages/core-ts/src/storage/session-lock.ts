@@ -97,7 +97,7 @@ export async function writeSessionLock(serverName: string, info: SessionInfo): P
   const path = lockPath(serverName)
   const dir = dirname(path)
   if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true })
+    await mkdir(dir, { recursive: true, mode: 0o700 })
   }
 
   const data: SessionInfoJson = {

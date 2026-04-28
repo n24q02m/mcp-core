@@ -125,7 +125,7 @@ async function saveStore(store: ConfigStore): Promise<void> {
   const configPath = getConfigPath()
   const dir = dirname(configPath)
   if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true })
+    await mkdir(dir, { recursive: true, mode: 0o700 })
   }
   const key = await getKey()
   const encrypted = await encryptData(key, JSON.stringify(store))
