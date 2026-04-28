@@ -291,7 +291,13 @@ def run_t2_config(config: dict, deployment: str) -> None:
     # mcp container exposes. ``host_port`` in matrix.yaml pins the port;
     # everything else uses an ephemeral allocation.
     port = config.get("host_port") or allocate_port()
-    image_tag = os.environ.get("MCP_E2E_IMAGE_TAG", "beta")
+    # Default to ``latest`` so post-stable-cascade runs hit the freshly
+    # published image. Stable CD pushes ``latest`` (and version tags) but
+    # leaves ``beta`` untouched, so a stale ``beta`` tag from before the
+    # cascade silently lacks routes added in the latest stable (e.g.
+    # ``/authorize/prefill`` introduced in mcp-core v1.9.0). Override to
+    # ``MCP_E2E_IMAGE_TAG=beta`` when verifying pre-release behavior.
+    image_tag = os.environ.get("MCP_E2E_IMAGE_TAG", "latest")
     compose_yaml = render_compose(
         config, deployment=deployment, creds=creds, host_port=port, image_tag=image_tag
     )

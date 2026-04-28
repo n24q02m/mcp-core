@@ -1,24 +1,31 @@
-# E2E test matrix — single source of truth for the 15-config 3-axis taxonomy.
+# E2E test matrix — single source of truth for the 16-config 3-axis taxonomy.
 #
 # Axes:
 #   - auth: none / oauth / relay
 #   - interaction: non-interaction / interaction (encoded via tier)
-#   - tier: t0-only / t2-non-interaction / t2-interaction
+#   - tier: t0-only / t2-non-interaction / t2-interaction / t3-staging
 #
 # Multi-user is a deployment property of remote mode (PUBLIC_URL env), not a
 # config — single isolation test runs at mcp-core fixture level.
 #
 # Schema validated by tests/test_matrix.py.
 #
-# Reclassified out of T2 matrix (2026-04-27):
-#   - notion-oauth: requires registering ``http://127.0.0.1:38765/callback``
-#     in the Notion app dashboard out-of-band before each clean-state run,
-#     violating ``feedback_no_out_of_band_test_setup.md``. Notion has no
-#     DCR + does not accept loopback wildcards, so the only valid options
-#     are (a) prod-stable callback + tunnel, (b) reclassify out of T2.
-#     Path (b) chosen here. notion-oauth is verified post-deploy via
-#     manual smoke against ``https://notion-mcp.n24q02m.com`` instead;
-#     it is NOT part of the T2 PASS gate for release cascade.
+# t3-staging tier (2026-04-28):
+#   - notion-oauth: Notion app dashboard does not accept dynamic loopback
+#     callbacks and Notion has no DCR. Path (a) "prod-stable callback +
+#     tunnel" was selected so a single registered callback serves every
+#     run. Release flow differs from the rest of the matrix:
+#         release beta CD --> deploy to notion-mcp-staging.n24q02m.com
+#         --> driver hits staging URL (callback prod-registered)
+#         --> if staging E2E PASS, dispatch stable CD
+#     Other MCPs (T2 configs) still run "test local --> release stable"
+#     directly because their relay/device-code flows do not require an
+#     out-of-band-registered callback.
+#   - User directive (cfdeb529 2026-04-28): "Cập nhật matrix test để
+#     riêng notion remote oauth sẽ phải release beta -> deploy
+#     beta/staging -> test staging trước thay vì test local rồi release
+#     stable luôn như các mcp server còn lại."
+#   - See ``feedback_notion_oauth_staging_flow.md`` for the full rule.
 
 version: 1
 configs:
@@ -186,3 +193,27 @@ configs:
     skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
     user_gate: "Click GDrive device-code link"
+
+  # ============================================================
+  # T3 staging (notion-oauth — beta deploy -> staging E2E gate, 1 config)
+  # ============================================================
+
+  - id: notion-oauth
+    repo: better-notion-mcp
+    tier: t3-staging
+    auth: oauth
+    flow: oauth-redirect
+    # No local Docker spin-up; driver hits the staging URL directly. The
+    # Notion app dashboard has the staging callback prod-registered:
+    #     redirect_uri = https://notion-mcp-staging.n24q02m.com/auth/callback
+    # Driver flow:
+    #   1. CI/CD just dispatched ``release beta`` -> staging redeployed.
+    #   2. Driver opens upstream Notion ``/oauth/authorize?...&state=<x>``
+    #      -> announces URL via user_gate.
+    #   3. User clicks "Allow" -> Notion redirects to staging callback.
+    #   4. Staging exchanges code -> JWT -> driver retrieves JWT via
+    #      ``acquire_jwt_via_upstream_consent`` against the staging URL.
+    #   5. PASS -> dispatch stable CD; FAIL -> investigate before stable.
+    deployment: [staging]
+    staging_url: https://notion-mcp-staging.n24q02m.com
+    user_gate: "Click 'Allow' on the Notion consent screen"
