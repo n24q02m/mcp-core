@@ -15,6 +15,7 @@ against the daemon's BearerMCPApp without going through the browser OAuth flow.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import time
@@ -78,6 +79,78 @@ def _iter_sse(response: httpx.Response) -> Iterator[_SseEvent]:
 
     # Final flush if stream ended without trailing blank line.
     yield from _flush()
+
+
+def _current_mcp_core_version() -> str:
+    """Return the installed ``n24q02m-mcp-core`` version, or ``0.0.0`` if unknown.
+
+    Used by ``load_capabilities_cache`` to invalidate stale caches after an
+    upgrade — a cache produced by mcp-core 1.9.0 is unsafe to serve once the
+    user installs 2.0.0 because the protocol or capabilities surface may
+    have changed.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("n24q02m-mcp-core")
+    except PackageNotFoundError:
+        return "0.0.0"
+
+
+def cache_path_for_lock(lock_path: Path) -> Path:
+    """Cache file lives next to the lock file with a ``.tools.json`` suffix.
+
+    Co-locating cache + lock makes cleanup trivial: deleting a stale lock by
+    its filename pattern can also delete its companion cache without a
+    separate sweep step.
+    """
+    return lock_path.with_suffix(".tools.json")
+
+
+def persist_capabilities_cache(
+    lock_path: Path,
+    server_name: str,
+    server_version: str,
+    capabilities: dict,
+    tools: list[dict],
+) -> None:
+    """Write the daemon's MCP capabilities + ``tools/list`` response to disk.
+
+    Called once after FastMCP fully initializes. Subsequent stdio-proxy
+    invocations can serve ``initialize`` and ``tools/list`` immediately from
+    this cache while the daemon is cold-starting, so Claude Code sees the
+    full tool surface within ~1s of session start instead of ~30-60s.
+    """
+    payload = {
+        "serverInfo": {"name": server_name, "version": server_version},
+        "capabilities": capabilities,
+        "tools": tools,
+    }
+    cache_path = cache_path_for_lock(lock_path)
+    cache_path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def load_capabilities_cache(
+    lock_path: Path, validate_version: bool = False
+) -> dict | None:
+    """Read cached capabilities. Returns None if the file is missing, malformed,
+    or — when ``validate_version`` is True — written by a different mcp-core
+    version. Callers serving handshake requests from the cache should pass
+    ``validate_version=True`` to avoid serving stale tool surfaces after an
+    upgrade.
+    """
+    cache_path = cache_path_for_lock(lock_path)
+    if not cache_path.exists():
+        return None
+    try:
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if validate_version:
+        cached_version = cache.get("serverInfo", {}).get("version")
+        if cached_version != _current_mcp_core_version():
+            return None
+    return cache
 
 
 def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
