@@ -250,6 +250,15 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
   const pendingSessions = new Map<string, PendingSession>()
   const authCodes = new Map<string, AuthCodeEntry>()
 
+  // Server-side prefill keyed by OAuth ``state`` (the PKCE state token chosen
+  // by the client BEFORE the GET /authorize redirect). The E2E driver POSTs
+  // skret-derived form values here so the URL it announces to the user does
+  // NOT contain credential bytes. Without this, ``?prefill_TELEGRAM_PHONE=
+  // %2B84...`` would land in browser history, server access logs, screenshots
+  // and HTTP referrer headers — every place a URL leaks.
+  const pendingPrefills = new Map<string, { data: Record<string, string>; createdAt: number }>()
+  const PREFILL_TTL_S = 300
+
   // Single-user local mode: one pending multi-step session at a time.
   let pendingStep: PendingStep | null = null
   const setupStatus: Record<string, string> = { gdrive: 'idle' }
@@ -283,17 +292,28 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       return
     }
 
-    // Extract prefill values from query: ``?prefill_<KEY>=<VALUE>``. The
-    // driver populates these from skret so users only type what skret
-    // cannot supply (OTP / 2FA / one-time codes). Renderers receive the
-    // flat ``{KEY: VALUE}`` map and emit ``value="..."`` on matching
-    // inputs.
+    // Resolve prefill values for the form. Two channels, in priority order:
+    //  1. Server-side store keyed by ``state`` — written by the E2E driver
+    //     via POST /authorize/prefill BEFORE the user opens the URL. This is
+    //     the safe channel; nothing leaves the server boundary.
+    //  2. URL query string ``?prefill_<KEY>=<VALUE>`` — legacy fallback for
+    //     callers that have not migrated yet. Deprecated; emitted to
+    //     ``X-Prefill-Source: url`` so callers can find them via access logs.
+    // Renderers receive the flat ``{KEY: VALUE}`` map and emit ``value="..."``
+    // on matching inputs.
     const prefill: Record<string, string> = {}
-    params.forEach((value, key) => {
-      if (key.startsWith('prefill_')) {
-        prefill[key.slice('prefill_'.length)] = value
-      }
-    })
+    pruneExpired(pendingPrefills, PREFILL_TTL_S * 1000)
+    const stored = pendingPrefills.get(state)
+    if (stored) {
+      Object.assign(prefill, stored.data)
+      pendingPrefills.delete(state)
+    } else {
+      params.forEach((value, key) => {
+        if (key.startsWith('prefill_')) {
+          prefill[key.slice('prefill_'.length)] = value
+        }
+      })
+    }
 
     const nonce = randomBytes(32).toString('base64url')
     // Generate a per-authorize-request subject here (not at /token time) so the
@@ -426,6 +446,40 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       return
     }
     await authorizePost(req, res)
+  }
+
+  async function authorizePrefill(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // Driver-only side-channel: store form prefill values keyed by the OAuth
+    // ``state`` token chosen by the client. ``GET /authorize?state=<X>`` then
+    // hydrates the form on render — credentials never appear in the URL.
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+    const state = url.searchParams.get('state')
+    if (!state) {
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Missing state' })
+      return
+    }
+    let body: Record<string, string>
+    try {
+      body = await parseJsonBody<Record<string, string>>(req)
+    } catch {
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Body must be JSON object' })
+      return
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Body must be JSON object' })
+      return
+    }
+    // Coerce all values to string + drop empties so blank ``value=""`` attrs
+    // don't shadow the placeholder text in the rendered form.
+    const data: Record<string, string> = {}
+    for (const [k, v] of Object.entries(body)) {
+      if (v != null && String(v).length > 0) {
+        data[k] = String(v)
+      }
+    }
+    pendingPrefills.set(state, { data, createdAt: Date.now() })
+    pruneExpired(pendingPrefills, PREFILL_TTL_S * 1000)
+    jsonResponse(res, 204, {})
   }
 
   async function token(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -695,6 +749,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     { method: 'GET', path: '/', handler: rootHandler },
     { method: 'GET', path: '/authorize', handler: authorize },
     { method: 'POST', path: '/authorize', handler: authorize },
+    { method: 'POST', path: '/authorize/prefill', handler: authorizePrefill },
     { method: 'POST', path: '/token', handler: token },
     { method: 'POST', path: '/register', handler: registerHandler },
     { method: 'POST', path: '/otp', handler: otpHandler },
