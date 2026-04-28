@@ -6,8 +6,6 @@ These tests exercise the gate logic directly without spinning up a real uvicorn
 server (the gate decision is the unit under test, not the HTTP plumbing).
 """
 
-import pytest
-
 from mcp_core.auth.credential_form import is_schema_complete
 
 
@@ -72,16 +70,12 @@ def test_gate_falls_back_to_null_check_when_no_schema():
     relay_schema = None
     existing_config = None
     config_complete = (
-        is_schema_complete(existing_config, relay_schema)
-        if relay_schema is not None
-        else existing_config is not None
+        is_schema_complete(existing_config, relay_schema) if relay_schema is not None else existing_config is not None
     )
     assert config_complete is False
 
     existing_config = {"any_key": "any_value"}
     config_complete = (
-        is_schema_complete(existing_config, relay_schema)
-        if relay_schema is not None
-        else existing_config is not None
+        is_schema_complete(existing_config, relay_schema) if relay_schema is not None else existing_config is not None
     )
     assert config_complete is True

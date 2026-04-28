@@ -147,11 +147,7 @@ def _spawn_daemon(daemon_cmd: list[str]) -> None:
     import os
 
     logger.debug(f"Spawning daemon: {daemon_cmd}")
-    daemon_env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in {"MCP_TRANSPORT", "TRANSPORT_MODE"}
-    }
+    daemon_env = {k: v for k, v in os.environ.items() if k not in {"MCP_TRANSPORT", "TRANSPORT_MODE"}}
     if sys.platform == "win32":
         # CREATE_NO_WINDOW (0x08000000) | CREATE_NEW_PROCESS_GROUP (0x200)
         # We use CREATE_NO_WINDOW instead of DETACHED_PROCESS to prevent popping up terminals

@@ -11,7 +11,6 @@ import pytest
 from mcp_core.storage.config_file import (
     SETUP_COMPLETE_KEY,
     clear_key_cache_for_testing,
-    delete_config,
     mark_setup_complete,
     read_config,
     set_config_path,

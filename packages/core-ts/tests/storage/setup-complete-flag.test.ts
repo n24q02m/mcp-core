@@ -8,8 +8,8 @@ import {
   clearKeyCacheForTesting,
   markSetupComplete,
   readConfig,
-  setConfigPath,
   SETUP_COMPLETE_KEY,
+  setConfigPath,
   writeConfig
 } from '../../src/storage/config-file.js'
 

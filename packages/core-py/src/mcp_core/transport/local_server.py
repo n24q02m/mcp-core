@@ -268,6 +268,29 @@ def build_local_app(
     return combined_app, jwt_issuer
 
 
+async def _refresh_lock_timestamp_loop(lock_path: Path, interval_seconds: float = 3600.0) -> None:
+    """Refresh the daemon's lock-file timestamp every ``interval_seconds`` so
+    the 24h TTL sweep does not mistake a long-running daemon for a stale lock.
+
+    Uses ``mcp_core.lifecycle.lock.refresh_lock_timestamp`` which silently
+    no-ops on legacy 3-line locks (those will be migrated when the daemon
+    next acquires a fresh lock).
+    """
+    import asyncio as _asyncio
+
+    from mcp_core.lifecycle.lock import refresh_lock_timestamp
+
+    while True:
+        try:
+            await _asyncio.sleep(interval_seconds)
+        except _asyncio.CancelledError:
+            return
+        try:
+            refresh_lock_timestamp(lock_path)
+        except Exception:  # noqa: BLE001
+            logger.opt(exception=True).debug("Failed to refresh lock timestamp at {}", lock_path)
+
+
 async def run_local_server(
     mcp: FastMCP,
     *,
@@ -384,6 +407,16 @@ async def run_local_server(
         expires_in_seconds=365 * 24 * 3600,  # 1 year
     )
 
+    # Sweep stale locks for our server name BEFORE acquiring our own lock.
+    # Without this, abnormal-exit residue (Windows OOM, taskkill, signal) can
+    # accumulate dozens of stale `<server>-<port>.lock` files that confuse
+    # `get_active_daemon` probing — see 2026-04-28 wet-mcp 11-stale-lock pile-up.
+    from mcp_core.lifecycle.lock import sweep_stale_locks
+
+    swept = sweep_stale_locks(server_name)
+    if swept:
+        logger.info("Cleaned up {} stale lock file(s) for {}", swept, server_name)
+
     # Acquire lifecycle lock (stores pid, port, and proxy token)
     lock = LifecycleLock(name=server_name, port=actual_port, token=proxy_token)
 
@@ -433,7 +466,20 @@ async def run_local_server(
         # server to exit when background tasks complete.
         setattr(server, "install_signal_handlers", lambda: None)
 
-        await server.serve()
+        # Refresh the lock timestamp hourly so the 24h TTL sweep doesn't
+        # mistake a long-running daemon for a stale lock. Cancelled on
+        # server shutdown.
+        import asyncio as _asyncio
+
+        refresh_task = _asyncio.create_task(_refresh_lock_timestamp_loop(lock.path, interval_seconds=3600.0))
+        try:
+            await server.serve()
+        finally:
+            refresh_task.cancel()
+            try:
+                await refresh_task
+            except (_asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
         logger.info("Server stopped (should_exit={})", server.should_exit)
 
 

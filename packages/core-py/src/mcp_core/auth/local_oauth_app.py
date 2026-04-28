@@ -345,9 +345,7 @@ def create_local_oauth_app(
             try:
                 _mark_config_setup_complete(server_name)
             except Exception:  # noqa: BLE001
-                logger.opt(exception=True).warning(
-                    "Failed to mark _setup_complete=true for {}", server_name
-                )
+                logger.opt(exception=True).warning("Failed to mark _setup_complete=true for {}", server_name)
 
         # Generate auth code. Copy ``sub`` so /token issues the JWT with the
         # same subject the credentials were saved under.
@@ -587,9 +585,7 @@ def create_local_oauth_app(
         try:
             _mark_config_setup_complete(server_name)
         except Exception:  # noqa: BLE001
-            logger.opt(exception=True).warning(
-                "Failed to mark _setup_complete=true for {}", server_name
-            )
+            logger.opt(exception=True).warning("Failed to mark _setup_complete=true for {}", server_name)
         _clear_pending_step()
         return JSONResponse({"ok": True})
 
