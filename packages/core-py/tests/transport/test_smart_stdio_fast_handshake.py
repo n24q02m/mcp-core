@@ -142,12 +142,8 @@ def test_response_serializable_to_json(tmp_path):
         [{"name": "echo", "inputSchema": {"type": "object"}}],
     )
 
-    init = handle_initialize_from_cache(
-        lock, {"jsonrpc": "2.0", "id": 1, "method": "initialize"}
-    )
-    tools = handle_tools_list_from_cache(
-        lock, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
-    )
+    init = handle_initialize_from_cache(lock, {"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    tools = handle_tools_list_from_cache(lock, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
     json.dumps(init)
     json.dumps(tools)
 

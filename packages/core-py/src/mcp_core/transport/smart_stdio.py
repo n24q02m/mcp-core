@@ -130,9 +130,7 @@ def persist_capabilities_cache(
     cache_path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def load_capabilities_cache(
-    lock_path: Path, validate_version: bool = False
-) -> dict | None:
+def load_capabilities_cache(lock_path: Path, validate_version: bool = False) -> dict | None:
     """Read cached capabilities. Returns None if the file is missing, malformed,
     or — when ``validate_version`` is True — written by a different mcp-core
     version. Callers serving handshake requests from the cache should pass

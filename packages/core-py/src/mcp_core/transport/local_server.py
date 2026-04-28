@@ -485,9 +485,7 @@ async def run_local_server(
             from mcp_core.transport.smart_stdio import persist_capabilities_cache
 
             tools_list = await mcp.list_tools()
-            tools_payload = [
-                t.model_dump() if hasattr(t, "model_dump") else dict(t) for t in tools_list
-            ]
+            tools_payload = [t.model_dump() if hasattr(t, "model_dump") else dict(t) for t in tools_list]
             try:
                 core_version = _pkg_version("n24q02m-mcp-core")
             except PackageNotFoundError:
