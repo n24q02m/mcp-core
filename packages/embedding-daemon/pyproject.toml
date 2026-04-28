@@ -26,7 +26,9 @@ dependencies = [
     "onnxruntime>=1.25.1",
     "numpy>=2.4.4",
     "httpx>=0.28.1",
-    "pydantic>=2.13.3",
+    # Keep pydantic <2.13 so downstream consumers using cohere>=6.1.0 can resolve
+    # (cohere caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+).
+    "pydantic>=2.9,<2.13",
 ]
 
 [project.optional-dependencies]
