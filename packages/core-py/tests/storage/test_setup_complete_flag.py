@@ -78,5 +78,6 @@ def test_mark_setup_complete_does_not_pollute_other_servers(isolated_config):
     a = read_config("server-a")
     b = read_config("server-b")
     assert a == {"A": "1", SETUP_COMPLETE_KEY: "true"}
+    assert b is not None
     assert b == {"B": "2"}
     assert SETUP_COMPLETE_KEY not in b
