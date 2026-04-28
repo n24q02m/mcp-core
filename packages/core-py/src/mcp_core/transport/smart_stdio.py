@@ -135,14 +135,30 @@ def get_active_daemon(server_name: str) -> tuple[int, str] | None:
 
 
 def _spawn_daemon(daemon_cmd: list[str]) -> None:
-    """Spawn a daemon in a detached background process."""
+    """Spawn a daemon in a detached background process.
+
+    The daemon must run in HTTP mode -- it is the backend that the proxy
+    bridges to. Without a clean env, the child inherits MCP_TRANSPORT=stdio
+    from the parent proxy, re-enters this same code path, and fork-bombs
+    itself spawning daemons recursively until the OS exhausts handles.
+    Strip stdio-mode env vars so the daemon falls into the HTTP branch of
+    its own ``main()``.
+    """
+    import os
+
     logger.debug(f"Spawning daemon: {daemon_cmd}")
+    daemon_env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"MCP_TRANSPORT", "TRANSPORT_MODE"}
+    }
     if sys.platform == "win32":
         # CREATE_NO_WINDOW (0x08000000) | CREATE_NEW_PROCESS_GROUP (0x200)
         # We use CREATE_NO_WINDOW instead of DETACHED_PROCESS to prevent popping up terminals
         creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000200
         subprocess.Popen(
             daemon_cmd,
+            env=daemon_env,
             creationflags=creation_flags,
             close_fds=True,
             stdin=subprocess.DEVNULL,
@@ -152,6 +168,7 @@ def _spawn_daemon(daemon_cmd: list[str]) -> None:
     else:
         subprocess.Popen(
             daemon_cmd,
+            env=daemon_env,
             start_new_session=True,
             close_fds=True,
             stdin=subprocess.DEVNULL,
