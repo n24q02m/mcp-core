@@ -63,6 +63,11 @@
       "matchManagers": ["mise"],
       "matchDepNames": ["python", "node", "java"],
       "enabled": false
+    },
+    {
+      "description": "Pin pydantic <2.13 — cohere>=6.1.0 caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+ which breaks downstream wet/mnemo/crg.",
+      "matchPackageNames": ["pydantic"],
+      "allowedVersions": "<2.13"
     }
   ]
 }
