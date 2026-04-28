@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.9.0 (2026-04-28)
+
+### Bug Fixes
+
+- Replace Object.assign with explicit copy to silence Semgrep mass-assignment heuristic
+  ([#113](https://github.com/n24q02m/mcp-core/pull/113),
+  [`7e72458`](https://github.com/n24q02m/mcp-core/commit/7e72458757e82136514bb41d8d68fc520443470c))
+
+### Features
+
+- **auth**: POST /authorize/prefill endpoint for driver-only side-channel (closes #103)
+  ([#113](https://github.com/n24q02m/mcp-core/pull/113),
+  [`7e72458`](https://github.com/n24q02m/mcp-core/commit/7e72458757e82136514bb41d8d68fc520443470c))
+
+- **auth**: POST /authorize/prefill endpoint — driver-only side-channel (closes #103)
+  ([#113](https://github.com/n24q02m/mcp-core/pull/113),
+  [`7e72458`](https://github.com/n24q02m/mcp-core/commit/7e72458757e82136514bb41d8d68fc520443470c))
+
+
 ## v1.8.2 (2026-04-28)
 
 ### Bug Fixes
