@@ -97,16 +97,6 @@ export interface RunLocalServerOptions {
    * request in AsyncLocalStorage (e.g., for per-user token lookup).
    */
   authScope?: (claims: JWTClaims, next: () => Promise<void>) => Promise<void>
-  /**
-   * When `true`, skip writing the lock file and the stale-lock sweep.
-   *
-   * Use this for short-lived bootstrap servers (e.g., the eager-relay OAuth AS
-   * in smart-stdio) that must not appear in daemon-discovery reads. Without this
-   * flag, `getActiveDaemon(serverName)` would match the bootstrap lock, route all
-   * MCP traffic to the zero-tools OAuth AS, and the real daemon would never be
-   * reached (C1 lock-collision bug).
-   */
-  suppressLockFile?: boolean
 }
 
 export interface LocalServerHandle {
@@ -290,30 +280,21 @@ export async function runLocalServer(
   // this, abnormal-exit residue (Windows OOM, taskkill, signal) can pile up
   // dozens of `<server>-<port>.lock` files that confuse smart-stdio probing
   // — see 2026-04-28 wet-mcp 11-stale-lock incident.
-  //
-  // Skipped when `suppressLockFile` is true (e.g., the eager-relay bootstrap
-  // OAuth AS in smart-stdio) so the bootstrap server is invisible to
-  // `getActiveDaemon` and never mistaken for the real daemon.
-  let lockFile = ''
-  let lockRefreshInterval: ReturnType<typeof setInterval> | null = null
+  const swept = sweepStaleLocks(options.serverName)
+  if (swept > 0) {
+    console.error(`[runLocalServer] cleaned ${swept} stale lock(s) for ${options.serverName}`)
+  }
 
-  if (!options.suppressLockFile) {
-    const swept = sweepStaleLocks(options.serverName)
-    if (swept > 0) {
-      console.error(`[runLocalServer] cleaned ${swept} stale lock(s) for ${options.serverName}`)
-    }
+  const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
+  const lockDirPath = path.join(os.homedir(), '.config', 'mcp', 'locks')
+  fs.mkdirSync(lockDirPath, { recursive: true, mode: 0o700 })
+  const lockFile = writeLockFile(options.serverName, actualPort, proxyToken, lockDirPath)
 
-    const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
-    const lockDirPath = path.join(os.homedir(), '.config', 'mcp', 'locks')
-    fs.mkdirSync(lockDirPath, { recursive: true, mode: 0o700 })
-    lockFile = writeLockFile(options.serverName, actualPort, proxyToken, lockDirPath)
-
-    // Refresh the lock timestamp hourly so the 24h TTL sweep does not kill
-    // long-running daemons. Cancelled in `close()`.
-    lockRefreshInterval = setInterval(() => refreshLockTimestamp(lockFile), 3600 * 1000)
-    if (typeof lockRefreshInterval.unref === 'function') {
-      lockRefreshInterval.unref()
-    }
+  // Refresh the lock timestamp hourly so the 24h TTL sweep does not kill
+  // long-running daemons. Cancelled in `close()`.
+  const lockRefreshInterval = setInterval(() => refreshLockTimestamp(lockFile), 3600 * 1000)
+  if (typeof lockRefreshInterval.unref === 'function') {
+    lockRefreshInterval.unref()
   }
 
   // Auto-open the credential form in the user's browser when no creds exist
