@@ -2,6 +2,92 @@
 
 <!-- version list -->
 
+## v1.11.0 (2026-04-29)
+
+### Bug Fixes
+
+- Prevent local information disclosure in sensitive config and lock files
+  ([#124](https://github.com/n24q02m/mcp-core/pull/124),
+  [`f17e5b9`](https://github.com/n24q02m/mcp-core/commit/f17e5b9c5950f452a68ca52396ef37955817c7ba))
+
+- Remove Jules planning artifact from repo root
+  ([`8b6545a`](https://github.com/n24q02m/mcp-core/commit/8b6545ae04d8aea175c61c2313615a2332668fa6))
+
+- **deps**: Lock file maintenance ([#123](https://github.com/n24q02m/mcp-core/pull/123),
+  [`0832ac4`](https://github.com/n24q02m/mcp-core/commit/0832ac47ff896e53c8846c96797dfda1d9f5b0e9))
+
+- **deps**: Update dawidd6/action-send-mail action to v17
+  ([#122](https://github.com/n24q02m/mcp-core/pull/122),
+  [`40302c7`](https://github.com/n24q02m/mcp-core/commit/40302c7a16ae1895b6f06744543167a3422268a2))
+
+- **deps**: Update non-major dependencies ([#121](https://github.com/n24q02m/mcp-core/pull/121),
+  [`35a565a`](https://github.com/n24q02m/mcp-core/commit/35a565a8d45034710e415db97e0dbb715c8568a8))
+
+### Features
+
+- Transparent Bridge v2 — D6-D14 Wave 1 ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **auth**: Add secret + oauth_field schema flags (D7)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **auth**: Parity pre-fill renderer for core-ts (D7)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **auth**: Parity secret + oauthField flags for core-ts (D7)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **auth**: Pre-fill renderer with secret protection (D7)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **lifecycle**: Hybrid TTL lock sweep + cred_state metadata (D9)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **lifecycle**: Parity hybrid TTL sweep for core-ts (D9)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **relay**: Add single active form session token state (D11)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **relay**: Parity active form session for core-ts (D11)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **relay**: Parity register_open_relay_tool for core-ts (D6)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **relay**: Register_open_relay_tool helper (D6)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **scripts**: Add mcp-clean-state CLI (D14) ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **transport**: Bridge auto-respawn on daemon crash (D8)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **transport**: Parity bridge auto-respawn for core-ts (D8)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **transport**: Parity version-keyed cache for core-ts (D10)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+- **transport**: Version-keyed tools cache + Windows-safe persist (D10, fixes crg #384)
+  ([#125](https://github.com/n24q02m/mcp-core/pull/125),
+  [`3fbd3a0`](https://github.com/n24q02m/mcp-core/commit/3fbd3a0f66b818fa64cc579d30c1b1f8630c1849))
+
+
 ## v1.10.0 (2026-04-28)
 
 ### Bug Fixes
