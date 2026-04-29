@@ -261,6 +261,16 @@ def daemon_cred_state(server_name: str) -> str:
     return "unconfigured"
 
 
+def daemon_respawn(server_name: str) -> str:
+    """Respawn a dead daemon for ``server_name`` and return its relay URL.
+
+    Stub — replaced by Task 1.11 (auto-respawn). Tool helpers (D6, Task 1.7)
+    import this symbol so the closure can be wired now and exercised via
+    monkeypatched mocks; production wiring lands in Task 1.11.
+    """
+    raise NotImplementedError("Implemented in Task 1.11")
+
+
 def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
     """Read pid, port, and token from a lock file.
 
