@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.11.5 (2026-04-29)
+
+### Bug Fixes
+
+- Strip MCP_TRANSPORT + TRANSPORT_MODE from daemon spawn env (P0 fork-bomb)
+  ([#135](https://github.com/n24q02m/mcp-core/pull/135),
+  [`1eae40b`](https://github.com/n24q02m/mcp-core/commit/1eae40bd8a2adb8b9d3385f5c69aa25e9c92f5dc))
+
+
 ## v1.11.4 (2026-04-29)
 
 ### Bug Fixes
