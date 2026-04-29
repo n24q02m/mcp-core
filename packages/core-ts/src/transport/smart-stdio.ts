@@ -379,11 +379,20 @@ export async function runSmartStdioProxy(
     process.stderr.write(`[stdio-proxy] No active daemon for '${serverName}'. Spawning...\n`)
 
     const [cmd, ...args] = daemonCmd
+    // Strip stdio-mode env vars from inherited environment before passing to
+    // the detached daemon. Without this, the daemon inherits MCP_TRANSPORT=stdio
+    // (or TRANSPORT_MODE=stdio) from the bridge process, re-enters runSmartStdioProxy
+    // in its own main(), and fork-bombs spawning daemons recursively until the OS
+    // exhausts handles. Daemons must run in HTTP mode — they are the backend the
+    // bridge connects to. Mirrors core-py smart_stdio.py `_spawn_daemon` env strip.
+    const cleanEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => k !== 'MCP_TRANSPORT' && k !== 'TRANSPORT_MODE')
+    )
     const child = spawn(cmd, args, {
       detached: true,
       stdio: 'ignore',
       windowsHide: true,
-      env: options.env ? { ...process.env, ...options.env } : process.env
+      env: options.env ? { ...cleanEnv, ...options.env } : cleanEnv
     })
     child.unref()
 
