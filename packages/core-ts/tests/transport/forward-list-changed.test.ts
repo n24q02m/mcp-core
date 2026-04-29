@@ -33,7 +33,7 @@ describe('TS bridge forwards notifications/tools/list_changed (D19)', () => {
       method: 'notifications/tools/list_changed'
     })
 
-    await forwardDaemonMessageToBridge(notification, writer)
+    forwardDaemonMessageToBridge(notification, writer)
 
     expect(out).toEqual([`${notification}\n`])
   })
@@ -46,7 +46,7 @@ describe('TS bridge forwards notifications/tools/list_changed (D19)', () => {
       out.push(s)
     }
 
-    await forwardDaemonMessageToBridge('not json', writer)
+    forwardDaemonMessageToBridge('not json', writer)
 
     // Malformed input should be passed through verbatim (existing behaviour)
     expect(out.length).toBe(1)

@@ -68,8 +68,20 @@ export function daemonIsAlive(serverName: string): boolean {
 export function daemonCredState(serverName: string): string {
   const dir = lockDir()
   if (!existsSync(dir)) return 'unconfigured'
-  for (const filename of readdirSync(dir)) {
-    if (!filename.startsWith(`${serverName}-`) || !filename.endsWith('.lock')) continue
+  // Sort newest-first (by mtime) to match `getActiveDaemon`'s selection order,
+  // so both functions agree on which lock file is canonical when two coexist
+  // (I2 fix — previously readdirSync order caused a stale credState read that
+  // could trigger a redundant eager spawn).
+  const files = readdirSync(dir)
+    .filter((f) => f.startsWith(`${serverName}-`) && f.endsWith('.lock'))
+    .sort((a, b) => {
+      try {
+        return statSync(join(dir, b)).mtimeMs - statSync(join(dir, a)).mtimeMs
+      } catch {
+        return 0
+      }
+    })
+  for (const filename of files) {
     try {
       const meta = parseLock(readFileSync(join(dir, filename), 'utf-8'))
       return meta.credState
@@ -337,9 +349,22 @@ class SseParser {
  * forwarding behaviour can be unit-tested independently (D19). The helper
  * is a dumb pipe — it passes every frame through unchanged, including
  * `notifications/tools/list_changed` server-initiated notifications.
+ *
+ * Synchronous by design: the `writer` call is synchronous and making this
+ * function `async` only converts EPIPE throws into unhandled promise
+ * rejections (I1 fix). EPIPE is caught here and causes a clean exit, because
+ * EPIPE on `process.stdout` means the MCP client closed its stdin and the
+ * proxy should terminate gracefully.
  */
-export async function forwardDaemonMessageToBridge(message: string, writer: (s: string) => void): Promise<void> {
-  writer(message.endsWith('\n') ? message : `${message}\n`)
+export function forwardDaemonMessageToBridge(message: string, writer: (s: string) => void): void {
+  try {
+    writer(message.endsWith('\n') ? message : `${message}\n`)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'EPIPE') {
+      process.exit(0)
+    }
+    throw err
+  }
 }
 
 export interface RunSmartStdioProxyOptions {
@@ -360,6 +385,12 @@ export interface RunSmartStdioProxyOptions {
    * connecting to daemons running on the test machine.
    *
    * @internal
+   *
+   * **Important**: ANY presence of this option (even an empty object `{}`)
+   * causes the proxy to return 0 unconditionally BEFORE entering the daemon
+   * discovery / stdio I/O loop, regardless of the `credState` field value or
+   * whether the eager relay block ran. Use this to unit-test the eager relay
+   * block in isolation without blocking on stdin or daemon spawn.
    */
   _testProbeOverride?: { credState?: 'configured' | 'unconfigured' }
 }
@@ -373,14 +404,37 @@ export async function runSmartStdioProxy(
 
   // D18.1 — eager relay: probe cred_state and open browser before the
   // daemon is ready so the user can configure credentials immediately.
+  //
+  // C1 fix: pass `suppressLockFile: true` so the bootstrap OAuth AS does not
+  // write a `<serverName>-<port>.lock` file. Without this, `getActiveDaemon`
+  // (called a few lines below) would match the OAuth AS lock, route all MCP
+  // traffic to the zero-tools bootstrap server, and the real daemon would
+  // never be reached.
+  //
+  // The handle is closed via `onCredentialsSaved` once the user submits the
+  // form, freeing the bootstrap HTTP server. If no credentials are submitted
+  // (user closes the tab), the handle leaks until process exit — acceptable
+  // for the short-lived proxy bootstrap path.
   if (eagerRelaySchema) {
     const credState = _testProbeOverride?.credState ?? daemonCredState(serverName)
     if (credState === 'unconfigured') {
       const handle = await runLocalServer(() => new McpServer({ name: serverName, version: '0.0.0' }), {
         serverName,
-        relaySchema: eagerRelaySchema
+        relaySchema: eagerRelaySchema,
+        suppressLockFile: true,
+        onCredentialsSaved: (_creds, _ctx) => {
+          void handle.close()
+          return null
+        }
       })
-      const setupUrl = `http://${handle.host}:${handle.port}/authorize`
+      // C2 fix: open the root URL ("/") which auto-bootstraps PKCE and
+      // redirects to /authorize with valid params. Opening /authorize directly
+      // returns 400 invalid_request because PKCE params are missing.
+      // Note: runLocalServer already calls tryOpenBrowser internally when no
+      // config exists; this call ensures the stdio-proxy path also opens the
+      // browser in environments where runLocalServer's internal open is
+      // suppressed or the browser check behaves differently.
+      const setupUrl = `http://${handle.host}:${handle.port}/`
       void tryOpenBrowser(setupUrl)
     }
   }
@@ -470,7 +524,7 @@ export async function runSmartStdioProxy(
 
         if (!isSse) {
           const bodyText = await res.text()
-          await forwardDaemonMessageToBridge(bodyText, (s) => process.stdout.write(s))
+          forwardDaemonMessageToBridge(bodyText, (s) => process.stdout.write(s))
           isStateless = true
           modeDetermined = true
           process.stderr.write(`[stdio-proxy] Stateless mode detected (plain JSON response)\n`)
@@ -562,7 +616,7 @@ export async function runSmartStdioProxy(
           modeDetermined = true
           continue
         } else {
-          await forwardDaemonMessageToBridge(firstEvent.data, (s) => process.stdout.write(s))
+          forwardDaemonMessageToBridge(firstEvent.data, (s) => process.stdout.write(s))
           isStateless = true
           modeDetermined = true
           process.stderr.write(`[stdio-proxy] Stateless mode detected (SSE message event)\n`)
@@ -610,11 +664,11 @@ export async function runSmartStdioProxy(
           const bodyText = await res.text()
           const messages = parseSseMessages(bodyText)
           for (const msg of messages) {
-            await forwardDaemonMessageToBridge(msg, (s) => process.stdout.write(s))
+            forwardDaemonMessageToBridge(msg, (s) => process.stdout.write(s))
           }
         } else {
           const bodyText = await res.text()
-          await forwardDaemonMessageToBridge(bodyText, (s) => process.stdout.write(s))
+          forwardDaemonMessageToBridge(bodyText, (s) => process.stdout.write(s))
         }
       } catch (e: any) {
         process.stderr.write(`[stdio-proxy] Daemon '${serverName}' died unexpectedly.\n`)
