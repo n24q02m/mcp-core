@@ -2,10 +2,38 @@
 
 Renders a dark-themed HTML form from a RelayConfigSchema dict.
 Used as the OAuth authorization page presented to the user during relay config.
+
+Relay config field schema
+-------------------------
+Each ``RelayConfigField`` dict supports keys:
+  name (str, required): config.enc key
+  label (str, required): UI label
+  required (bool, required): server gate
+  secret (bool, optional, default False): True = never re-render value to HTML
+  oauth_field (bool, optional, default False): True = managed by OAuth flow,
+    render as Re-authorize button instead of input
+  type (str, optional, default "text"): UI input type ("text", "password", "url", "email")
+  description (str, optional): help text
+  default (any, optional): default value if user submits empty
+  pattern (str, optional): client-side regex validation
 """
 
 import html
-from typing import Any
+from typing import Any, TypedDict
+
+
+class RelayConfigField(TypedDict, total=False):
+    """Relay config field schema (see module docstring for full spec)."""
+
+    name: str
+    label: str
+    required: bool
+    secret: bool
+    oauth_field: bool
+    type: str
+    description: str
+    default: Any
+    pattern: str
 
 
 def _escape(value: Any) -> str:
@@ -848,3 +876,17 @@ def is_schema_complete(config: dict[str, Any] | None, schema: dict[str, Any]) ->
 
     flag = config.get("_setup_complete")
     return flag is True or flag == "true"
+
+
+def is_secret_field(field: dict) -> bool:
+    """Return True if field stores a credential that must not be re-rendered to HTML."""
+    return bool(field.get("secret", False))
+
+
+def is_oauth_field(field: dict) -> bool:
+    """Return True if field represents an OAuth-managed credential.
+
+    OAuth fields render as "Re-authorize" buttons, not raw input boxes.
+    Examples: refresh_token, access_token, id_token.
+    """
+    return bool(field.get("oauth_field", False))
