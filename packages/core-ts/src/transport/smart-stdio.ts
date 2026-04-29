@@ -4,7 +4,76 @@ import * as os from 'node:os'
 import { join } from 'node:path'
 import * as readline from 'node:readline'
 
+import { isAlive, lockDir, parseLock } from '../lifecycle/lock.js'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
+
+/**
+ * Return the relay form URL for the alive daemon of `serverName`.
+ *
+ * Walks the per-user lock directory, parses the first `<server>-*.lock`
+ * that contains valid 4/5/6-line metadata, and constructs
+ * `http://127.0.0.1:<port>/setup?token=<jwt>` so a Bridge can render a
+ * user-facing setup link without going through the OAuth handshake.
+ *
+ * Throws when no parseable lock file exists for the server. Callers that
+ * prefer a soft signal should call `daemonIsAlive` first.
+ */
+export function daemonRelayUrl(serverName: string): string {
+  const dir = lockDir()
+  if (!existsSync(dir)) throw new Error(`no alive daemon for ${serverName}`)
+  for (const filename of readdirSync(dir)) {
+    if (!filename.startsWith(`${serverName}-`) || !filename.endsWith('.lock')) continue
+    try {
+      const meta = parseLock(readFileSync(join(dir, filename), 'utf-8'))
+      return `http://127.0.0.1:${meta.port}/setup?token=${meta.token}`
+    } catch {
+      // Skip unparseable lock files; try the next match.
+    }
+  }
+  throw new Error(`no alive daemon for ${serverName}`)
+}
+
+/**
+ * Return `true` when at least one parseable lock file for `serverName`
+ * references a process the OS reports as alive. Used by the Bridge when
+ * deciding whether `need_setup` envelopes should bridge to a live daemon
+ * or trigger an auto-respawn.
+ */
+export function daemonIsAlive(serverName: string): boolean {
+  const dir = lockDir()
+  if (!existsSync(dir)) return false
+  for (const filename of readdirSync(dir)) {
+    if (!filename.startsWith(`${serverName}-`) || !filename.endsWith('.lock')) continue
+    try {
+      const meta = parseLock(readFileSync(join(dir, filename), 'utf-8'))
+      if (isAlive(meta)) return true
+    } catch {
+      // Skip unparseable lock files; try the next match.
+    }
+  }
+  return false
+}
+
+/**
+ * Return the latest known `credState` for `serverName`. Reads the first
+ * parseable lock file and returns its 5th line. Returns `"unconfigured"`
+ * if no lock exists, so callers can branch safely on a single string
+ * without nullable handling.
+ */
+export function daemonCredState(serverName: string): string {
+  const dir = lockDir()
+  if (!existsSync(dir)) return 'unconfigured'
+  for (const filename of readdirSync(dir)) {
+    if (!filename.startsWith(`${serverName}-`) || !filename.endsWith('.lock')) continue
+    try {
+      const meta = parseLock(readFileSync(join(dir, filename), 'utf-8'))
+      return meta.credState
+    } catch {
+      // Skip unparseable lock files; try the next match.
+    }
+  }
+  return 'unconfigured'
+}
 
 export interface ActiveDaemon {
   port: number
