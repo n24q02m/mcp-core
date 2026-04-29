@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.11.2 (2026-04-29)
+
+### Bug Fixes
+
+- Enumerate Windows config.enc paths in mcp-clean-state CLI
+  ([#127](https://github.com/n24q02m/mcp-core/pull/127),
+  [`aa34d2c`](https://github.com/n24q02m/mcp-core/commit/aa34d2c1695fd8982837be7302629f178abd0ac0))
+
+
 ## v1.11.1 (2026-04-29)
 
 ### Bug Fixes
