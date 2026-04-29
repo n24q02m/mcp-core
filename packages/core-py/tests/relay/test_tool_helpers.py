@@ -24,6 +24,21 @@ def test_register_calls_mcp_tool_decorator():
     mcp.tool.assert_called()
 
 
+def test_register_passes_explicit_description():
+    """FastMCP does not lift inner-closure docstrings onto FunctionTool.description,
+    so we must pass description= explicitly. Without this, list_tools() returns
+    description=None for config__open_relay and consumer test suites that assert
+    "all tools have a description" break.
+    """
+    mcp = MagicMock()
+    register_open_relay_tool(mcp, "demo", SCHEMA)
+    _, kwargs = mcp.tool.call_args
+    assert kwargs.get("name") == "config__open_relay"
+    assert isinstance(kwargs.get("description"), str)
+    assert "demo" in kwargs["description"]
+    assert kwargs["description"].strip() != ""
+
+
 def test_handler_returns_url_when_alive(monkeypatch):
     monkeypatch.setattr(
         "mcp_core.relay.tool_helpers._daemon_relay_url",

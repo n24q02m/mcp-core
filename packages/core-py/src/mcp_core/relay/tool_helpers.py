@@ -87,7 +87,13 @@ def register_open_relay_tool(mcp, server_name: str, schema: dict[str, Any]) -> N
         register_open_relay_tool(mcp, SERVER_NAME, RELAY_SCHEMA)
     """
     handler = _build_open_relay_handler(server_name, schema)
+    description = (
+        f"Open the relay configuration form for {server_name} in the user's "
+        "browser. Returns the relay URL, whether the browser launched, and the "
+        "current credential state (configured | unconfigured | expired | "
+        "session_active). Auto-respawns the daemon if it has died."
+    )
 
-    @mcp.tool(name="config__open_relay")
+    @mcp.tool(name="config__open_relay", description=description)
     def _config_open_relay() -> dict[str, Any]:
         return handler()

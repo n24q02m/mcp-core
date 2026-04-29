@@ -44,6 +44,13 @@ export {
   type RelaySession,
   sendMessage
 } from './relay/client.js'
+export {
+  buildOpenRelayHandler,
+  type OpenRelayResult,
+  type OpenRelaySchema,
+  registerOpenRelayTool,
+  type ToolRegistrar
+} from './relay/tool-helpers.js'
 export type * from './schema/types.js'
 export {
   deleteConfig,
