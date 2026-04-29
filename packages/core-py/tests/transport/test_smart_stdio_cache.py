@@ -124,4 +124,5 @@ def test_persist_capabilities_cache_advertises_list_changed_true(tmp_path):
     )
 
     cache = load_capabilities_cache(lock)
+    assert cache is not None
     assert cache["capabilities"]["tools"]["listChanged"] is True
