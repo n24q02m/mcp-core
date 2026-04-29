@@ -4,8 +4,13 @@ import * as os from 'node:os'
 import { join } from 'node:path'
 import * as readline from 'node:readline'
 
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+
+import type { RelayConfigSchema } from '../auth/credential-form.js'
 import { isAlive, lockDir, parseLock } from '../lifecycle/lock.js'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
+import { tryOpenBrowser } from '../relay/browser.js'
+import { runLocalServer } from './local-server.js'
 
 /**
  * Return the relay form URL for the alive daemon of `serverName`.
@@ -325,11 +330,65 @@ class SseParser {
   }
 }
 
+/**
+ * Forward a single JSON-RPC message from daemon stdout to bridge stdout.
+ *
+ * Extracted from the inline write calls in `runSmartStdioProxy` so the
+ * forwarding behaviour can be unit-tested independently (D19). The helper
+ * is a dumb pipe — it passes every frame through unchanged, including
+ * `notifications/tools/list_changed` server-initiated notifications.
+ */
+export async function forwardDaemonMessageToBridge(message: string, writer: (s: string) => void): Promise<void> {
+  writer(message.endsWith('\n') ? message : `${message}\n`)
+}
+
+export interface RunSmartStdioProxyOptions {
+  startupTimeout?: number
+  env?: Record<string, string | undefined>
+  /**
+   * When set, the bridge probes `cred_state` at startup and, if
+   * `unconfigured`, spawns a local OAuth AS + opens the browser so the user
+   * can fill in credentials before the daemon starts processing MCP calls.
+   *
+   * Mirrors core-py's `try_open_browser` startup path (D18.1).
+   */
+  eagerRelaySchema?: RelayConfigSchema
+  /**
+   * Test-only injection. When present the function skips the real daemon
+   * discovery / stdio loop and returns 0 immediately after the eager relay
+   * block (if triggered). This prevents tests from blocking on stdin or
+   * connecting to daemons running on the test machine.
+   *
+   * @internal
+   */
+  _testProbeOverride?: { credState?: 'configured' | 'unconfigured' }
+}
+
 export async function runSmartStdioProxy(
   serverName: string,
   daemonCmd: string[],
-  options: { startupTimeout?: number; env?: Record<string, string | undefined> } = {}
+  options: RunSmartStdioProxyOptions = {}
 ): Promise<number> {
+  const { eagerRelaySchema, _testProbeOverride } = options
+
+  // D18.1 — eager relay: probe cred_state and open browser before the
+  // daemon is ready so the user can configure credentials immediately.
+  if (eagerRelaySchema) {
+    const credState = _testProbeOverride?.credState ?? daemonCredState(serverName)
+    if (credState === 'unconfigured') {
+      const handle = await runLocalServer(() => new McpServer({ name: serverName, version: '0.0.0' }), {
+        serverName,
+        relaySchema: eagerRelaySchema
+      })
+      const setupUrl = `http://${handle.host}:${handle.port}/authorize`
+      void tryOpenBrowser(setupUrl)
+    }
+  }
+
+  // Test harness exit: return without entering the daemon connect + stdio
+  // loop so tests don't block on stdin or hit real daemons on the machine.
+  if (_testProbeOverride) return 0
+
   const startupTimeout = options.startupTimeout ?? 15000
   let daemon = await getActiveDaemon(serverName)
 
