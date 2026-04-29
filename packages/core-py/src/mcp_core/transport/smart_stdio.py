@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
+from filelock import FileLock, Timeout
 from loguru import logger
 
 from mcp_core.lifecycle.lock import LifecycleLock
@@ -261,14 +262,131 @@ def daemon_cred_state(server_name: str) -> str:
     return "unconfigured"
 
 
+# Bridge auto-respawn (D8, Task 1.11)
+#
+# When a tool call fails because the underlying daemon has died, the Bridge
+# spawns a fresh daemon and retries — but only once per tool_call_id, so a
+# pathological caller can't infinite-loop the spawn path. ``BridgeAutoRespawn``
+# tracks the per-call cap; ``daemon_respawn`` performs the actual spawn under
+# a cross-process file lock so concurrent bridges don't race to spawn N
+# daemons for the same server.
+MAX_RESPAWN_PER_CALL_ID = 1
+_RESPAWN_TRACK_TTL_SEC = 5 * 60
+
+
+def _respawn_lock_path() -> Path:
+    """Path of the file lock guarding ``daemon_respawn``.
+
+    Co-located with the per-user lock directory so a single ``rm -rf`` of the
+    user's mcp config wipes lock state too. Created lazily by ``FileLock``;
+    we materialize the parent directory at module import time below.
+    """
+    return Path.home() / ".config" / "mcp" / "locks" / ".respawn.lock"
+
+
+_respawn_lock_path().parent.mkdir(parents=True, exist_ok=True)
+_respawn_lock = FileLock(str(_respawn_lock_path()))
+
+
+class BridgeAutoRespawn:
+    """Per-bridge tracker capping respawn attempts per ``tool_call_id``.
+
+    A bridge instance keeps one of these for the lifetime of an MCP session.
+    Each unique ``tool_call_id`` is allowed exactly ``MAX_RESPAWN_PER_CALL_ID``
+    respawn attempt; subsequent attempts within ``_RESPAWN_TRACK_TTL_SEC``
+    are rejected so a bug in the caller can't spawn-storm the daemon.
+    Entries older than the TTL are discarded on read so the table doesn't
+    grow without bound.
+    """
+
+    def __init__(self) -> None:
+        self._respawned: dict[str, float] = {}
+
+    def can_respawn(self, call_id: str) -> bool:
+        ts = self._respawned.get(call_id)
+        if ts is None:
+            return True
+        if time.time() - ts > _RESPAWN_TRACK_TTL_SEC:
+            del self._respawned[call_id]
+            return True
+        return False
+
+    def mark_respawned(self, call_id: str) -> None:
+        self._respawned[call_id] = time.time()
+
+
+def _spawn_daemon_detached(server_name: str) -> str:
+    """Spawn ``uvx <server_name>`` detached from the current process group.
+
+    Production wiring intentionally minimal: the daemon publishes its lock
+    file as part of normal startup, so callers poll ``daemon_is_alive`` /
+    ``daemon_relay_url`` to discover it. Tests monkeypatch this function so
+    the test suite never spawns real subprocesses.
+    """
+    if sys.platform == "win32":
+        # CREATE_NO_WINDOW (0x08000000) | CREATE_NEW_PROCESS_GROUP (0x200) —
+        # match the flags ``_spawn_daemon`` uses in the run_smart_stdio_proxy
+        # path so behaviour stays consistent for the user.
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000200
+        subprocess.Popen(
+            ["uvx", server_name],
+            creationflags=creation_flags,
+            close_fds=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    else:
+        subprocess.Popen(
+            ["uvx", server_name],
+            start_new_session=True,
+            close_fds=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    # Readiness is asserted by ``_wait_daemon_ready`` polling
+    # ``daemon_is_alive`` against the lock file the spawned daemon writes.
+    return ""
+
+
+def _wait_daemon_ready(server_name: str, timeout: int = 60) -> bool:
+    """Poll ``daemon_is_alive`` until alive or ``timeout`` seconds elapse."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if daemon_is_alive(server_name):
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def daemon_respawn(server_name: str) -> str:
     """Respawn a dead daemon for ``server_name`` and return its relay URL.
 
-    Stub — replaced by Task 1.11 (auto-respawn). Tool helpers (D6, Task 1.7)
-    import this symbol so the closure can be wired now and exercised via
-    monkeypatched mocks; production wiring lands in Task 1.11.
+    Serialized through ``_respawn_lock`` so that two bridges noticing the
+    same dead daemon in the same instant don't spawn two daemons. The
+    runner that wins the lock spawns; losers wait on the lock release and
+    then read the relay URL the winner produced. If the lock can't be
+    acquired within 10 seconds we assume a sibling is already in the
+    middle of a spawn and just wait for the daemon to come up.
     """
-    raise NotImplementedError("Implemented in Task 1.11")
+    try:
+        with _respawn_lock.acquire(timeout=10):
+            # Double-check inside the lock: another process holding the
+            # lock just before us may already have spawned a healthy daemon.
+            if daemon_is_alive(server_name):
+                return daemon_relay_url(server_name)
+            _spawn_daemon_detached(server_name)
+            if not _wait_daemon_ready(server_name, timeout=60):
+                raise RuntimeError(f"daemon respawn timeout for {server_name}")
+            return daemon_relay_url(server_name)
+    except Timeout:
+        # Sibling holds the lock — wait for the daemon to come up, then
+        # surface the URL it published. If the sibling itself failed,
+        # readiness times out and we propagate the failure.
+        if not _wait_daemon_ready(server_name, timeout=60):
+            raise RuntimeError(f"sibling respawn timeout for {server_name}")
+        return daemon_relay_url(server_name)
 
 
 def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
