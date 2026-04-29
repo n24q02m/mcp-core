@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.11.1 (2026-04-29)
+
+### Bug Fixes
+
+- Export registerOpenRelayTool from core-ts root + pass description to FastMCP
+  ([#126](https://github.com/n24q02m/mcp-core/pull/126),
+  [`79fa86b`](https://github.com/n24q02m/mcp-core/commit/79fa86b69b27bc50500df5e57776a0a6a9211e80))
+
+
 ## v1.11.0 (2026-04-29)
 
 ### Bug Fixes
