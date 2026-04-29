@@ -75,6 +75,17 @@ export function daemonCredState(serverName: string): string {
   return 'unconfigured'
 }
 
+/**
+ * Respawn a dead daemon for `serverName` and return its relay URL.
+ *
+ * Stub — replaced by Task 1.12 (auto-respawn). Tool helpers (D6, Task 1.8)
+ * import this symbol so the closure can be wired now and exercised via
+ * vi.spyOn mocks; production wiring lands in Task 1.12.
+ */
+export function daemonRespawn(_serverName: string): string {
+  throw new Error('Implemented in Task 1.12')
+}
+
 export interface ActiveDaemon {
   port: number
   token: string
