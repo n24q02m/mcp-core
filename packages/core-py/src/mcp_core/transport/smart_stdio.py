@@ -190,6 +190,77 @@ def handle_tools_list_from_cache(lock_path: Path, request: dict) -> dict | None:
     }
 
 
+def daemon_relay_url(server_name: str) -> str:
+    """Return the relay form URL for the alive daemon of ``server_name``.
+
+    Walks the per-user lock directory, parses the first ``<server>-*.lock``
+    that contains valid 4/5/6-line metadata, and constructs
+    ``http://127.0.0.1:<port>/setup?token=<jwt>`` so a Bridge can render a
+    user-facing setup link without going through the OAuth handshake. Used
+    by D9 ``need_setup_envelope`` (Task 1.7) and by the auto-respawn flow
+    in Task 1.11.
+
+    Raises ``RuntimeError`` when no parseable lock file exists for the
+    server. Callers that prefer a soft signal should call
+    ``daemon_is_alive`` first.
+    """
+    from mcp_core.lifecycle.lock import _lock_dir, parse_lock
+
+    locks_dir = _lock_dir()
+    if not locks_dir.exists():
+        raise RuntimeError(f"no alive daemon for {server_name}")
+    for lock_path in locks_dir.glob(f"{server_name}-*.lock"):
+        try:
+            meta = parse_lock(lock_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        return f"http://127.0.0.1:{meta.port}/setup?token={meta.token}"
+    raise RuntimeError(f"no alive daemon for {server_name}")
+
+
+def daemon_is_alive(server_name: str) -> bool:
+    """Return ``True`` when at least one parseable lock file for
+    ``server_name`` references a process the OS reports as alive.
+
+    Used by the Bridge when deciding whether ``need_setup`` envelopes
+    should bridge to a live daemon or trigger an auto-respawn.
+    """
+    from mcp_core.lifecycle.lock import _is_alive, _lock_dir, parse_lock
+
+    locks_dir = _lock_dir()
+    if not locks_dir.exists():
+        return False
+    for lock_path in locks_dir.glob(f"{server_name}-*.lock"):
+        try:
+            meta = parse_lock(lock_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if _is_alive(meta):
+            return True
+    return False
+
+
+def daemon_cred_state(server_name: str) -> str:
+    """Return the latest known ``cred_state`` for ``server_name``.
+
+    Reads the first parseable lock file and returns its 5th line. Returns
+    ``"unconfigured"`` if no lock exists, so callers can branch safely on
+    a single string without nullable handling.
+    """
+    from mcp_core.lifecycle.lock import _lock_dir, parse_lock
+
+    locks_dir = _lock_dir()
+    if not locks_dir.exists():
+        return "unconfigured"
+    for lock_path in locks_dir.glob(f"{server_name}-*.lock"):
+        try:
+            meta = parse_lock(lock_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        return meta.cred_state
+    return "unconfigured"
+
+
 def _read_lock_metadata(lock_path: Path) -> tuple[int, str] | None:
     """Read pid, port, and token from a lock file.
 
