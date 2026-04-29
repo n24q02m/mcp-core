@@ -113,7 +113,7 @@ async def test_authorize_post_calls_refresh_cache(tmp_path, monkeypatch):
         result = None
         if original_on_credentials_saved is not None:
             raw = original_on_credentials_saved(credentials, context)
-            if _inspect_creds.iscoroutine(raw):
+            if _inspect_creds.isawaitable(raw):
                 raw = await raw
             result = raw
         if not (isinstance(result, dict) and result.get("type") == "error"):
@@ -132,5 +132,64 @@ async def test_authorize_post_calls_refresh_cache(tmp_path, monkeypatch):
 
     assert result is None
     assert original_saved_calls == [{"api_key": "secret"}]
+    assert len(refresh_calls) == 1
+    assert refresh_calls[0] == ("wet-mcp", lock)
+
+
+@pytest.mark.asyncio
+async def test_authorize_post_calls_refresh_cache_with_async_callback(tmp_path, monkeypatch):
+    """D17.2 — refresh helper called even when on_credentials_saved is async.
+
+    Exercises the ``isawaitable`` branch in ``_on_credentials_saved_with_refresh``
+    where the original callback returns a coroutine that must be awaited before
+    the result is inspected.
+    """
+    from mcp_core.transport import local_server
+
+    lock = tmp_path / "wet-mcp-55318.lock"
+    lock.write_text("123\n55318\ntok\n2026-04-29T00:00:00\nconfigured\n2026-04-29T00:00:00\n")
+
+    refresh_calls: list[tuple[str, Path]] = []
+
+    async def fake_refresh(server_name: str, lock_path: Path) -> None:
+        refresh_calls.append((server_name, lock_path))
+
+    monkeypatch.setattr(local_server, "_refresh_capabilities_cache_after_save", fake_refresh)
+
+    original_saved_calls: list[dict] = []
+
+    # async callback — returns a coroutine when called
+    async def async_on_credentials_saved(credentials: dict, context: dict) -> dict | None:
+        original_saved_calls.append(credentials)
+        return None  # success: no error result
+
+    _lock_path_box: list[Path] = []
+
+    async def _on_credentials_saved_with_refresh(
+        credentials: dict,
+        context: dict,
+    ) -> dict | None:
+        import inspect as _inspect_creds
+
+        result = None
+        if async_on_credentials_saved is not None:
+            raw = async_on_credentials_saved(credentials, context)
+            if _inspect_creds.isawaitable(raw):
+                raw = await raw
+            result = raw
+        if not (isinstance(result, dict) and result.get("type") == "error"):
+            if _lock_path_box:
+                try:
+                    await local_server._refresh_capabilities_cache_after_save("wet-mcp", _lock_path_box[0])
+                except Exception:
+                    pass
+        return result
+
+    _lock_path_box.append(lock)
+
+    result = await _on_credentials_saved_with_refresh({"api_key": "async-secret"}, {"sub": "user-2"})
+
+    assert result is None
+    assert original_saved_calls == [{"api_key": "async-secret"}]
     assert len(refresh_calls) == 1
     assert refresh_calls[0] == ("wet-mcp", lock)
