@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.11.4 (2026-04-29)
+
+### Bug Fixes
+
+- Revert D18 eager-relay block in bridge (P0 spam tabs regression)
+  ([#134](https://github.com/n24q02m/mcp-core/pull/134),
+  [`3716bf0`](https://github.com/n24q02m/mcp-core/commit/3716bf0fd90e321defebd45f12606f32f29c7407))
+
+
 ## v1.11.3 (2026-04-29)
 
 ### Bug Fixes
