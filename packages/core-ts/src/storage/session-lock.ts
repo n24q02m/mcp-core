@@ -108,7 +108,7 @@ export async function writeSessionLock(serverName: string, info: SessionInfo): P
 
   // Write atomically via temp file + rename
   const tmpPath = `${path}.tmp`
-  await writeFile(tmpPath, JSON.stringify(data), 'utf-8')
+  await writeFile(tmpPath, JSON.stringify(data), { encoding: 'utf-8', mode: 0o600 })
   await rename(tmpPath, path)
 }
 

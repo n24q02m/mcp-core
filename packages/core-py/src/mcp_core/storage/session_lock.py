@@ -9,6 +9,7 @@ Lock file location: <config_dir>/mcp/relay-session-<server>.lock
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -116,6 +117,8 @@ async def write_session_lock(server_name: str, info: SessionInfo) -> None:
     """
     path = _lock_path(server_name)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.parent.exists() and os.name != "nt":
+        path.parent.chmod(0o700)
 
     data = {
         "session_id": info.session_id,
@@ -126,6 +129,8 @@ async def write_session_lock(server_name: str, info: SessionInfo) -> None:
     # Write atomically via temp file + rename
     tmp_path = path.with_suffix(".tmp")
     tmp_path.write_text(json.dumps(data), encoding="utf-8")
+    if os.name != "nt":
+        os.chmod(tmp_path, 0o600)
     tmp_path.replace(path)
 
     logger.debug("Wrote session lock for %s", server_name)

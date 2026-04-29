@@ -112,11 +112,15 @@ def _load_store() -> dict[str, Any]:
 def _save_store(store: dict[str, Any]) -> None:
     config_path = _get_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
+    if config_path.parent.exists() and os.name != "nt":
+        config_path.parent.chmod(0o700)
     key = _get_key()
     encrypted = encrypt_data(key, json.dumps(store))
 
     def _write() -> None:
         config_path.write_bytes(encrypted)
+        if os.name != "nt":
+            os.chmod(config_path, 0o600)
 
     _with_retry(_write)
 
