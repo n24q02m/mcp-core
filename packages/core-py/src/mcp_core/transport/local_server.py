@@ -416,12 +416,49 @@ async def run_local_server(
     actual_port = port if port != 0 else find_free_port()
     actual_host = host or "127.0.0.1"
 
+    # D17.2: Wrap on_credentials_saved to call _refresh_capabilities_cache_after_save
+    # after a successful credential write.  We use a one-element list as a mutable
+    # box so the wrapper closure can capture lock.path even though the LifecycleLock
+    # is constructed after build_local_app (the lock path is deterministic from
+    # server_name + actual_port, but we fill the box explicitly to stay DRY).
+    _lock_path_box: list[Path] = []
+
+    _original_on_credentials_saved = on_credentials_saved
+
+    async def _on_credentials_saved_with_refresh(
+        credentials: dict,
+        context: dict,
+    ) -> dict | None:
+        result: dict | None = None
+        if _original_on_credentials_saved is not None:
+            import inspect as _inspect_creds
+            from typing import cast
+
+            raw = _original_on_credentials_saved(credentials, context)
+            if _inspect_creds.isawaitable(raw):
+                raw = cast("dict | None", await raw)
+            result = cast("dict | None", raw)
+        # Only refresh when the save succeeded (no error result).
+        if not (isinstance(result, dict) and result.get("type") == "error"):
+            if _lock_path_box:
+                try:
+                    await _refresh_capabilities_cache_after_save(server_name, _lock_path_box[0])
+                except Exception:  # noqa: BLE001
+                    logger.opt(exception=True).debug("Failed to refresh capabilities cache after save")
+        return result
+
+    # Use the wrapped callback only for relay (non-delegated) mode; delegated
+    # OAuth doesn't go through on_credentials_saved at all.
+    _effective_on_credentials_saved = (
+        _on_credentials_saved_with_refresh if delegated_oauth is None else on_credentials_saved
+    )
+
     # Build the combined app
     app, _jwt_issuer = build_local_app(
         mcp,
         server_name=server_name,
         relay_schema=relay_schema,
-        on_credentials_saved=on_credentials_saved,
+        on_credentials_saved=_effective_on_credentials_saved,
         on_step_submitted=on_step_submitted,
         jwt_keys_dir=jwt_keys_dir,
         custom_credential_form_html=custom_credential_form_html,
@@ -477,6 +514,11 @@ async def run_local_server(
 
     # Acquire lifecycle lock (stores pid, port, and proxy token)
     lock = LifecycleLock(name=server_name, port=actual_port, token=proxy_token)
+
+    # Populate lock path box so the credential-save wrapper can use it.
+    # lock.path is deterministic from (server_name, actual_port) and is safe
+    # to read before ``with lock:`` enters.
+    _lock_path_box.append(lock.path)
 
     # Register mcp instance so _refresh_capabilities_cache_after_save can find it
     # by server_name when the credential-save hook fires.

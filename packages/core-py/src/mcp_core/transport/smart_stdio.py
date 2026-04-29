@@ -168,6 +168,8 @@ def handle_initialize_from_cache(lock_path: Path, request: dict) -> dict | None:
         "id": request.get("id"),
         "result": {
             "protocolVersion": params.get("protocolVersion", "2025-11-25"),
+            # Capability dict (incl. listChanged) sourced from cache;
+            # persist_capabilities_cache writes True per D17.1.
             "capabilities": cache.get("capabilities", {}),
             "serverInfo": cache.get("serverInfo", {}),
         },
@@ -537,7 +539,34 @@ async def _poll_tools_list_changed_sentinel(
             continue
         if current_mtime > last_mtime:
             last_mtime = current_mtime
-            await on_change()
+            try:
+                await on_change()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _start_poller_thread(lock_path: Path) -> object:
+    """Start the sentinel poller in a daemon thread; auto-stops on bridge exit.
+
+    D17.3: ``run_smart_stdio_proxy`` is synchronous (httpx + threading), so
+    the async ``_poll_tools_list_changed_sentinel`` coroutine must run in its
+    own event loop on a dedicated daemon thread. Daemon threads die when the
+    main process exits, so no explicit cancellation is needed — but we document
+    it here so it is never mistaken for a resource leak.
+    """
+    import threading
+
+    def _run() -> None:
+        import asyncio as _asyncio
+
+        try:
+            _asyncio.run(_poll_tools_list_changed_sentinel(lock_path, _emit_list_changed_to_stdout))
+        except Exception:  # noqa: BLE001
+            pass
+
+    t = threading.Thread(target=_run, daemon=True, name=f"sentinel-poller-{lock_path.stem}")
+    t.start()
+    return t
 
 
 def run_smart_stdio_proxy(
@@ -635,6 +664,15 @@ def run_smart_stdio_proxy(
     # 30-60s while the daemon's Python imports finish. The bridge to the
     # daemon still runs for `tools/call` and any other non-cacheable method.
     cache_lock_path = _find_newest_lock(server_name)
+
+    # D17.3: Start sentinel poller so Claude Code receives
+    # ``notifications/tools/list_changed`` within ~250ms of a credential
+    # save.  The poller runs in a dedicated daemon thread (this function is
+    # synchronous); daemon threads die automatically when the bridge exits so
+    # no explicit cancellation is needed.
+    if cache_lock_path is not None:
+        _start_poller_thread(cache_lock_path)
+
     pending_first_line: bytes | None = None
 
     while True:
