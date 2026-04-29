@@ -7,3 +7,6 @@
 ## 2025-04-26 - Optimize Polling Append-Only Arrays
 **Learning:** Native `Array.prototype.find` (or `.findLast`) incurs heavy O(N) overhead in hot polling loops when searching large, append-only response arrays repeatedly. The Bun runtime makes this overhead especially pronounced compared to raw indexed loops.
 **Action:** When polling an array that only ever grows (append-only), keep track of `lastSeenCount`. On subsequent polls, execute a manual `for` loop starting from the end of the array down to `lastSeenCount`. This prevents redundant O(N) scanning of older elements, making the total amortized cost O(N_total) rather than O(Polls * N).
+## 2025-05-18 - Optimize array scanning
+**Learning:** Native `Array.prototype.find` (or `.findLast`, `.filter`, `.map`) incurs measurable overhead due to intermediate array allocations and functional callback execution compared to standard `for` loops with early exits.
+**Action:** When searching an array inside utility functions like `getMachineId`, use a nested `for` loop with a labeled `break` instead of chained functional methods (e.g., `.flat().find(...)`) to avoid unnecessary memory allocations and improve execution speed.
