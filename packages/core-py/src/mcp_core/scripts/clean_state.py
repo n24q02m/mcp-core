@@ -7,9 +7,12 @@ By default preserves app data (SQLite, diskcache, SearXNG state).
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
+
+from platformdirs import user_config_dir
 
 ALL_SERVERS = [
     "wet-mcp",
@@ -27,17 +30,72 @@ def _home() -> Path:
     return Path.home()
 
 
+def _python_config_base() -> Path:
+    """Where Python core-py writes config.enc — platformdirs convention.
+
+    Linux: ``~/.config/mcp``. macOS: ``~/Library/Application Support/mcp``.
+    Windows: ``%LOCALAPPDATA%\\mcp``.
+    """
+    return Path(user_config_dir("mcp", appauthor=False))
+
+
+def _ts_config_base() -> Path | None:
+    """Where TS core-ts writes config.enc on Windows — Node electron convention.
+
+    On Windows: ``%APPDATA%\\mcp\\Config``. On POSIX, TS uses the same
+    ``~/.config/mcp`` dir as Python so we return None to avoid duplicate
+    enumeration.
+    """
+    if os.name != "nt":
+        return None
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return None
+    return Path(appdata) / "mcp" / "Config"
+
+
+def _legacy_posix_base() -> Path:
+    """Locks + tools cache are still hardcoded to ``~/.config/mcp/`` in
+    ``mcp_core.lifecycle.lock`` + ``mcp_core.transport.cache`` regardless
+    of platform (Linux convention even on Windows). Tracked separately
+    here so we keep covering them until those modules migrate to
+    platformdirs.
+    """
+    return _home() / ".config" / "mcp"
+
+
 def _config_paths() -> list[Path]:
-    base = _home() / ".config" / "mcp"
-    paths = []
-    if (base / "config.enc").exists():
-        paths.append(base / "config.enc")
-    locks = base / "locks"
+    paths: list[Path] = []
+    seen: set[Path] = set()
+
+    def _add(p: Path) -> None:
+        try:
+            key = p.resolve()
+        except OSError:
+            key = p
+        if key in seen:
+            return
+        seen.add(key)
+        paths.append(p)
+
+    # Python core-py + TS core-ts config.enc — platform-specific.
+    for base in (_python_config_base(), _ts_config_base(), _legacy_posix_base()):
+        if base is None:
+            continue
+        cfg = base / "config.enc"
+        if cfg.exists():
+            _add(cfg)
+
+    # Locks + tools cache still live under the legacy ~/.config/mcp/ tree.
+    legacy = _legacy_posix_base()
+    locks = legacy / "locks"
     if locks.exists():
-        paths.extend(locks.glob("*.lock"))
-    cache = base / "cache"
+        for p in locks.glob("*.lock"):
+            _add(p)
+    cache = legacy / "cache"
     if cache.exists():
-        paths.extend(cache.glob("*.tools.json"))
+        for p in cache.glob("*.tools.json"):
+            _add(p)
     return paths
 
 

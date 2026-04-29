@@ -102,3 +102,66 @@ def test_no_keep_data_wipes_app_data(tmp_path, monkeypatch):
 
     assert result.returncode == 0
     assert not (home / ".wet-mcp" / "data" / "search.sqlite").exists()
+
+
+def test_config_paths_includes_platformdirs_python_config(tmp_path, monkeypatch):
+    """Python core-py uses platformdirs (LOCALAPPDATA on Windows, ~/.config
+    on Linux). The clean script must enumerate that path, not just the
+    legacy ~/.config/mcp/ tree (which is only correct on POSIX).
+    """
+    from mcp_core.scripts import clean_state
+
+    fake = tmp_path / "platformdirs-mcp"
+    fake.mkdir()
+    (fake / "config.enc").write_text("encrypted")
+
+    monkeypatch.setattr(clean_state, "_python_config_base", lambda: fake)
+    monkeypatch.setattr(clean_state, "_legacy_posix_base", lambda: tmp_path / "_no_legacy")
+    monkeypatch.setattr(clean_state, "_ts_config_base", lambda: None)
+
+    paths = clean_state._config_paths()
+    assert any(str(p).endswith("config.enc") for p in paths), paths
+    assert (fake / "config.enc") in paths
+
+
+def test_config_paths_includes_appdata_ts_config(tmp_path, monkeypatch):
+    """TS core-ts (notion + email) writes to %APPDATA%\\mcp\\Config\\config.enc
+    on Windows. The clean script must enumerate that distinct path even
+    when Python's config.enc is also present.
+    """
+    from mcp_core.scripts import clean_state
+
+    py_base = tmp_path / "py-base"
+    py_base.mkdir()
+    (py_base / "config.enc").write_text("py-encrypted")
+
+    ts_base = tmp_path / "ts-base"
+    ts_base.mkdir()
+    (ts_base / "config.enc").write_text("ts-encrypted")
+
+    monkeypatch.setattr(clean_state, "_python_config_base", lambda: py_base)
+    monkeypatch.setattr(clean_state, "_ts_config_base", lambda: ts_base)
+    monkeypatch.setattr(clean_state, "_legacy_posix_base", lambda: tmp_path / "_no_legacy")
+
+    paths = clean_state._config_paths()
+    assert (py_base / "config.enc") in paths
+    assert (ts_base / "config.enc") in paths
+
+
+def test_config_paths_dedupes_when_legacy_equals_platformdirs(tmp_path, monkeypatch):
+    """On Linux, platformdirs returns ~/.config/mcp which equals the legacy
+    base — must not enumerate config.enc twice.
+    """
+    from mcp_core.scripts import clean_state
+
+    base = tmp_path / "shared"
+    base.mkdir()
+    (base / "config.enc").write_text("encrypted")
+
+    monkeypatch.setattr(clean_state, "_python_config_base", lambda: base)
+    monkeypatch.setattr(clean_state, "_legacy_posix_base", lambda: base)
+    monkeypatch.setattr(clean_state, "_ts_config_base", lambda: None)
+
+    paths = clean_state._config_paths()
+    config_paths = [p for p in paths if p.name == "config.enc"]
+    assert len(config_paths) == 1, paths
