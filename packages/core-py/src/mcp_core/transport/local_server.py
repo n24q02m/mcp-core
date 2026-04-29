@@ -291,6 +291,52 @@ async def _refresh_lock_timestamp_loop(lock_path: Path, interval_seconds: float 
             logger.opt(exception=True).debug("Failed to refresh lock timestamp at {}", lock_path)
 
 
+# Registry populated by run_local_server so _refresh_capabilities_cache_after_save
+# can locate the FastMCP instance by server name without receiving it as an arg
+# (the credential-save hook only receives credentials + context, not mcp).
+_mcp_registry: dict[str, Any] = {}
+
+
+def _get_mcp_for_server(name: str) -> Any:
+    """Return the registered FastMCP instance for *name*, or raise KeyError."""
+    return _mcp_registry[name]
+
+
+async def _refresh_capabilities_cache_after_save(server_name: str, lock_path: Path) -> None:
+    """Re-persist the tools/list cache after a credential write.
+
+    D17.2: When the relay form is submitted and credentials are saved, the
+    daemon's full tool surface becomes available (tools that were hidden during
+    unconfigured startup are now visible).  This helper refreshes the
+    ``<lock>.tools.json`` cache so Claude Code can immediately pick up the full
+    tool list via the next ``notifications/tools/list_changed`` notification
+    without restarting the bridge.
+
+    Best-effort: any failure is logged at DEBUG level and silently swallowed.
+    """
+    try:
+        from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
+        from mcp_core.transport.smart_stdio import persist_capabilities_cache
+
+        mcp = _get_mcp_for_server(server_name)
+        tools_list = await mcp.list_tools()
+        tools_payload = [t.model_dump() if hasattr(t, "model_dump") else dict(t) for t in tools_list]
+        try:
+            core_version = _pkg_version("n24q02m-mcp-core")
+        except PackageNotFoundError:
+            core_version = "0.0.0"
+        persist_capabilities_cache(
+            lock_path,
+            server_name,
+            core_version,
+            {"tools": {"listChanged": True}},
+            tools_payload,
+        )
+    except Exception:  # noqa: BLE001
+        logger.opt(exception=True).debug("Failed to refresh capabilities cache after credential save")
+
+
 async def run_local_server(
     mcp: FastMCP,
     *,
@@ -419,6 +465,10 @@ async def run_local_server(
 
     # Acquire lifecycle lock (stores pid, port, and proxy token)
     lock = LifecycleLock(name=server_name, port=actual_port, token=proxy_token)
+
+    # Register mcp instance so _refresh_capabilities_cache_after_save can find it
+    # by server_name when the credential-save hook fires.
+    _mcp_registry[server_name] = mcp
 
     with lock:
         # Decide whether to auto-open the relay form. Use schema-completeness
