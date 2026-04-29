@@ -429,14 +429,15 @@ async def run_local_server(
         credentials: dict,
         context: dict,
     ) -> dict | None:
-        result = None
+        result: dict | None = None
         if _original_on_credentials_saved is not None:
             import inspect as _inspect_creds
+            from typing import cast
 
             raw = _original_on_credentials_saved(credentials, context)
-            if _inspect_creds.iscoroutine(raw):
-                raw = await raw
-            result = raw
+            if _inspect_creds.isawaitable(raw):
+                raw = cast("dict | None", await raw)
+            result = cast("dict | None", raw)
         # Only refresh when the save succeeded (no error result).
         if not (isinstance(result, dict) and result.get("type") == "error"):
             if _lock_path_box:
