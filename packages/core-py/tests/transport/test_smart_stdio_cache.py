@@ -103,3 +103,26 @@ def test_cache_path_for_lock_handles_non_lock_suffix(tmp_path: Path):
     cache = cache_path_for_lock(lock)
     assert cache.suffix == ".json"
     assert cache.parent == lock.parent
+
+
+def test_persist_capabilities_cache_advertises_list_changed_true(tmp_path):
+    """D17.1 — server promises Claude Code that tool list may change."""
+    from mcp_core.transport.smart_stdio import (
+        load_capabilities_cache,
+        persist_capabilities_cache,
+    )
+
+    lock = tmp_path / "wet-mcp-12345.lock"
+    lock.write_text("123\n12345\ntoken\n2026-04-29T00:00:00\nconfigured\n2026-04-29T00:00:00\n")
+
+    persist_capabilities_cache(
+        lock,
+        "wet-mcp",
+        "1.11.1",
+        {"tools": {"listChanged": True}},
+        [{"name": "search"}],
+    )
+
+    cache = load_capabilities_cache(lock)
+    assert cache is not None
+    assert cache["capabilities"]["tools"]["listChanged"] is True
