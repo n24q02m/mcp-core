@@ -880,3 +880,48 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 </body>
 </html>`
 }
+
+/**
+ * Relay config field schema (D7).
+ *
+ * Each field supports:
+ *   name (string, required): config.enc key
+ *   label (string, required): UI label
+ *   required (boolean, required): server gate
+ *   secret (boolean, optional, default false): true = never re-render value to HTML
+ *   oauthField (boolean, optional, default false): true = managed by OAuth flow,
+ *     render as Re-authorize button instead of input
+ *   type (string, optional, default "text"): UI input type
+ *   description (string, optional): help text
+ *   default (unknown, optional): default value if user submits empty
+ *   pattern (string, optional): client-side regex validation
+ *
+ * Parity with core-py `RelayConfigField` (snake_case `oauth_field` -> camelCase
+ * `oauthField` per TS convention).
+ */
+export interface RelayConfigField {
+  name: string
+  label: string
+  required: boolean
+  secret?: boolean
+  oauthField?: boolean
+  type?: 'text' | 'password' | 'url' | 'email'
+  description?: string
+  default?: unknown
+  pattern?: string
+}
+
+/** Return true if field stores a credential that must not be re-rendered to HTML. */
+export function isSecretField(field: RelayConfigField): boolean {
+  return field.secret === true
+}
+
+/**
+ * Return true if field represents an OAuth-managed credential.
+ *
+ * OAuth fields render as "Re-authorize" buttons, not raw input boxes.
+ * Examples: refresh_token, access_token, id_token.
+ */
+export function isOAuthField(field: RelayConfigField): boolean {
+  return field.oauthField === true
+}

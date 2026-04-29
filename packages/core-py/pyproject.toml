@@ -35,12 +35,16 @@ dependencies = [
     "loguru>=0.7.3",
     "platformdirs>=4.9.6",
     "tomli-w>=1.2.0",
+    "filelock>=3.16.1",
 ]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
 Repository = "https://github.com/n24q02m/mcp-core"
 Issues = "https://github.com/n24q02m/mcp-core/issues"
+
+[project.scripts]
+mcp-clean-state = "mcp_core.scripts.clean_state:main"
 
 [dependency-groups]
 dev = [

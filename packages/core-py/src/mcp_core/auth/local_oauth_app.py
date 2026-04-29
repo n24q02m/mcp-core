@@ -26,7 +26,8 @@ import inspect
 import os
 import secrets
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
+from html import escape as _escape
 from typing import Any, Union, cast
 
 from loguru import logger
@@ -35,7 +36,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
-from mcp_core.auth.credential_form import render_credential_form
+from mcp_core.auth.credential_form import is_oauth_field, is_secret_field, render_credential_form
 from mcp_core.auth.well_known import (
     authorization_server_metadata,
     protected_resource_metadata,
@@ -750,3 +751,115 @@ def create_local_oauth_app(
     app.state.mark_setup_failed = mark_setup_failed  # type: ignore[attr-defined]
 
     return app, jwt_issuer
+
+
+# ---------------------------------------------------------------------------
+# D7 — Pre-fill renderer + form-submission merger.
+#
+# These helpers are exported as standalone primitives for consumers that build
+# their own ``customCredentialFormHtml`` renderer or POST handler. They are
+# intentionally NOT wired into the default ``authorize_get`` / ``authorize_post``
+# above — that path stays on ``render_credential_form`` for legacy parity. New
+# consumers (transparent-bridge Wave 1) compose ``render_field`` per field to
+# get secret-aware rendering and then call ``merge_submission`` to merge the
+# POST body with their stored ``config.enc`` so a missing secret in the body
+# preserves the previously stored value instead of clearing it.
+# ---------------------------------------------------------------------------
+
+_SECRET_PLACEHOLDER = "••••••••(configured)"
+
+
+def _field_name(field: dict) -> str:
+    """Return the canonical config key for a relay field.
+
+    Two schema styles coexist in the codebase:
+      * ``RelayConfigField`` (D7, ``credential_form.RelayConfigField``) uses
+        ``name`` per the new spec.
+      * Legacy ``ConfigField`` schemas (consumed by ``render_credential_form``)
+        use ``key``.
+
+    The helpers below accept both so a consumer can mix or migrate without
+    rewriting field dicts. ``name`` wins when both are present.
+    """
+    return str(field.get("name") or field.get("key") or "")
+
+
+def render_field(field: dict, current_value: Any) -> str:
+    """Render an HTML ``<label>+<input>`` for a single relay field.
+
+    Rules per D7:
+      - oauth_field: render Re-authorize button (no plaintext exposed)
+      - secret + value present: placeholder, empty input, "Replace" checkbox
+      - secret + no value: empty input with field label as placeholder
+      - non-secret: pre-fill with ``current_value`` as input ``value`` attr
+    """
+    name = _field_name(field)
+    label = field.get("label", name)
+    field_type = field.get("type", "text")
+
+    if is_oauth_field(field):
+        status = "Connected" if current_value else "Not connected"
+        return (
+            f'<div class="field oauth-field"><label>{_escape(label)}</label> '
+            f'<span class="oauth-status">{status}</span> '
+            f'<button type="button" class="oauth-reauth" data-field="{_escape(name)}">'
+            f"Re-authorize</button></div>"
+        )
+
+    if is_secret_field(field):
+        if current_value:
+            return (
+                f'<div class="field secret-field"><label>{_escape(label)}</label> '
+                f'<input type="password" name="{_escape(name)}" value="" '
+                f'placeholder="{_escape(_SECRET_PLACEHOLDER)}" '
+                f'data-secret-configured="true"> '
+                f'<label class="replace-toggle"><input type="checkbox" '
+                f'name="__replace_{_escape(name)}" value="1"> Replace this credential</label>'
+                f"</div>"
+            )
+        return (
+            f'<div class="field secret-field"><label>{_escape(label)}</label> '
+            f'<input type="password" name="{_escape(name)}" value="" '
+            f'placeholder="{_escape(label)}"></div>'
+        )
+
+    value_attr = _escape(str(current_value)) if current_value is not None else ""
+    return (
+        f'<div class="field"><label>{_escape(label)}</label> '
+        f'<input type="{_escape(field_type)}" name="{_escape(name)}" '
+        f'value="{value_attr}"></div>'
+    )
+
+
+def merge_submission(
+    current: dict[str, Any],
+    submitted: dict[str, Any],
+    schema_fields: Iterable[dict],
+) -> dict[str, Any]:
+    """Merge a form submission into the current config per D7 rules.
+
+    Behavior:
+      - Empty secret -> preserve the existing value (avoid clearing on a
+        re-submit where the user did not retype the credential).
+      - Non-empty secret -> replace.
+      - Non-secret -> always replace (including with an empty string, so the
+        user can intentionally blank a field).
+      - oauth_field -> ignored here; OAuth fields are managed by their own
+        Re-authorize flow, never by raw form input.
+    """
+    result = dict(current)
+    for field in schema_fields:
+        name = _field_name(field)
+        if not name:
+            continue
+        if is_oauth_field(field):
+            continue
+        new_value = submitted.get(name, "")
+        if is_secret_field(field):
+            if new_value == "" or new_value is None:
+                # Preserve old.
+                continue
+            result[name] = new_value
+        else:
+            result[name] = new_value
+    return result

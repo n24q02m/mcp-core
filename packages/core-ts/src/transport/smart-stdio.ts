@@ -4,7 +4,172 @@ import * as os from 'node:os'
 import { join } from 'node:path'
 import * as readline from 'node:readline'
 
+import { isAlive, lockDir, parseLock } from '../lifecycle/lock.js'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
+
+/**
+ * Return the relay form URL for the alive daemon of `serverName`.
+ *
+ * Walks the per-user lock directory, parses the first `<server>-*.lock`
+ * that contains valid 4/5/6-line metadata, and constructs
+ * `http://127.0.0.1:<port>/setup?token=<jwt>` so a Bridge can render a
+ * user-facing setup link without going through the OAuth handshake.
+ *
+ * Throws when no parseable lock file exists for the server. Callers that
+ * prefer a soft signal should call `daemonIsAlive` first.
+ */
+export function daemonRelayUrl(serverName: string): string {
+  const dir = lockDir()
+  if (!existsSync(dir)) throw new Error(`no alive daemon for ${serverName}`)
+  for (const filename of readdirSync(dir)) {
+    if (!filename.startsWith(`${serverName}-`) || !filename.endsWith('.lock')) continue
+    try {
+      const meta = parseLock(readFileSync(join(dir, filename), 'utf-8'))
+      return `http://127.0.0.1:${meta.port}/setup?token=${meta.token}`
+    } catch {
+      // Skip unparseable lock files; try the next match.
+    }
+  }
+  throw new Error(`no alive daemon for ${serverName}`)
+}
+
+/**
+ * Return `true` when at least one parseable lock file for `serverName`
+ * references a process the OS reports as alive. Used by the Bridge when
+ * deciding whether `need_setup` envelopes should bridge to a live daemon
+ * or trigger an auto-respawn.
+ */
+export function daemonIsAlive(serverName: string): boolean {
+  const dir = lockDir()
+  if (!existsSync(dir)) return false
+  for (const filename of readdirSync(dir)) {
+    if (!filename.startsWith(`${serverName}-`) || !filename.endsWith('.lock')) continue
+    try {
+      const meta = parseLock(readFileSync(join(dir, filename), 'utf-8'))
+      if (isAlive(meta)) return true
+    } catch {
+      // Skip unparseable lock files; try the next match.
+    }
+  }
+  return false
+}
+
+/**
+ * Return the latest known `credState` for `serverName`. Reads the first
+ * parseable lock file and returns its 5th line. Returns `"unconfigured"`
+ * if no lock exists, so callers can branch safely on a single string
+ * without nullable handling.
+ */
+export function daemonCredState(serverName: string): string {
+  const dir = lockDir()
+  if (!existsSync(dir)) return 'unconfigured'
+  for (const filename of readdirSync(dir)) {
+    if (!filename.startsWith(`${serverName}-`) || !filename.endsWith('.lock')) continue
+    try {
+      const meta = parseLock(readFileSync(join(dir, filename), 'utf-8'))
+      return meta.credState
+    } catch {
+      // Skip unparseable lock files; try the next match.
+    }
+  }
+  return 'unconfigured'
+}
+
+/**
+ * Bridge auto-respawn (D8, Task 1.12).
+ *
+ * When a tool call fails because the daemon backing a transparent bridge
+ * has died, the Bridge spawns a fresh daemon and retries -- but only once
+ * per `tool_call_id`, so a pathological caller can't infinite-loop the
+ * spawn path. ``BridgeAutoRespawn`` tracks the per-call cap; the helper
+ * functions below perform the actual spawn + wait-ready dance.
+ */
+export const MAX_RESPAWN_PER_CALL_ID = 1
+const RESPAWN_TRACK_TTL_MS = 5 * 60_000
+
+/**
+ * Per-bridge tracker capping respawn attempts per `tool_call_id`.
+ *
+ * A bridge instance keeps one of these for the lifetime of an MCP session.
+ * Each unique id is allowed exactly `MAX_RESPAWN_PER_CALL_ID` respawn
+ * attempt; subsequent attempts within `RESPAWN_TRACK_TTL_MS` are rejected
+ * so a buggy caller can't spawn-storm the daemon. Entries older than the
+ * TTL are dropped on read so the table doesn't grow without bound.
+ */
+export class BridgeAutoRespawn {
+  private respawned = new Map<string, number>()
+
+  canRespawn(callId: string): boolean {
+    const ts = this.respawned.get(callId)
+    if (ts === undefined) return true
+    if (Date.now() - ts > RESPAWN_TRACK_TTL_MS) {
+      this.respawned.delete(callId)
+      return true
+    }
+    return false
+  }
+
+  markRespawned(callId: string): void {
+    this.respawned.set(callId, Date.now())
+  }
+}
+
+/**
+ * Spawn `uvx <serverName>` detached from the parent process group.
+ *
+ * Production wiring intentionally minimal: the daemon publishes its lock
+ * file as part of normal startup, so callers poll `daemonIsAlive` /
+ * `daemonRelayUrl` to discover it. Tests stub this via `vi.spyOn` so the
+ * suite never spawns real subprocesses.
+ */
+function spawnDaemonDetached(serverName: string): void {
+  const child = spawn('uvx', [serverName], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true
+  })
+  child.unref()
+}
+
+/**
+ * Poll `daemonIsAlive` until alive or `timeoutMs` elapses. Mirrors
+ * the core-py `_wait_daemon_ready` helper.
+ */
+async function waitDaemonReady(serverName: string, timeoutMs = 60_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (daemonIsAlive(serverName)) return true
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  return false
+}
+
+/**
+ * Async respawn entry point. Production code should prefer this -- it
+ * waits for the daemon to come back up before resolving with the relay URL.
+ */
+export async function daemonRespawnAsync(serverName: string): Promise<string> {
+  if (daemonIsAlive(serverName)) return daemonRelayUrl(serverName)
+  spawnDaemonDetached(serverName)
+  if (!(await waitDaemonReady(serverName))) {
+    throw new Error(`daemon respawn timeout for ${serverName}`)
+  }
+  return daemonRelayUrl(serverName)
+}
+
+/**
+ * Synchronous respawn for callers that match the core-py signature.
+ *
+ * If a daemon is already alive we return its URL immediately. Otherwise we
+ * fire-and-forget the spawn and return an empty string -- the caller is
+ * expected to poll via `daemonIsAlive` / `daemonRelayUrl` (or use
+ * `daemonRespawnAsync` for the awaitable flow).
+ */
+export function daemonRespawn(serverName: string): string {
+  if (daemonIsAlive(serverName)) return daemonRelayUrl(serverName)
+  spawnDaemonDetached(serverName)
+  return ''
+}
 
 export interface ActiveDaemon {
   port: number

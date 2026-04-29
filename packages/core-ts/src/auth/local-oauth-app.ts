@@ -26,7 +26,13 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
 import { markSetupComplete as markConfigSetupComplete } from '../storage/config-file.js'
-import { type RelayConfigSchema, renderCredentialForm } from './credential-form.js'
+import {
+  isOAuthField,
+  isSecretField,
+  type RelayConfigField,
+  type RelayConfigSchema,
+  renderCredentialForm
+} from './credential-form.js'
 import {
   createRouter,
   htmlResponse,
@@ -794,4 +800,130 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
   ])
 
   return { handler, jwtIssuer, markSetupComplete, markSetupFailed }
+}
+
+// ---------------------------------------------------------------------------
+// D7 — Pre-fill renderer + form-submission merger.
+//
+// These helpers mirror the core-py exports of the same names. They are
+// intentionally NOT wired into the default ``authorizeGet`` / ``authorizePost``
+// above — that path stays on ``renderCredentialForm`` for legacy parity. New
+// consumers (transparent-bridge Wave 1) compose ``renderField`` per field for
+// secret-aware rendering, then call ``mergeSubmission`` to merge the POST body
+// with their stored ``config.enc`` so a missing secret in the body preserves
+// the previously stored value instead of clearing it.
+// ---------------------------------------------------------------------------
+
+const SECRET_PLACEHOLDER = '••••••••(configured)'
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
+ * Resolve the canonical config key for a relay field.
+ *
+ * Two schema styles coexist in the codebase: D7 ``RelayConfigField`` uses
+ * ``name``; legacy ``ConfigField`` (consumed by ``renderCredentialForm``)
+ * uses ``key``. ``renderField`` and ``mergeSubmission`` accept both so a
+ * consumer can mix or migrate without rewriting field dicts. ``name`` wins
+ * when both are present.
+ */
+function fieldName(field: RelayConfigField | Record<string, unknown>): string {
+  const raw = field as Record<string, unknown>
+  const name = typeof raw.name === 'string' ? raw.name : ''
+  if (name.length > 0) return name
+  const key = typeof raw.key === 'string' ? raw.key : ''
+  return key
+}
+
+/**
+ * Render an HTML ``<label>+<input>`` for a single relay field.
+ *
+ * Rules per D7:
+ *  - oauth_field: render Re-authorize button (no plaintext exposed)
+ *  - secret + value present: placeholder, empty input, "Replace" checkbox
+ *  - secret + no value: empty input with field label as placeholder
+ *  - non-secret: pre-fill with ``currentValue`` as input ``value`` attr
+ */
+export function renderField(field: RelayConfigField, currentValue: unknown): string {
+  const name = fieldName(field)
+  const label = field.label ?? name
+  const fieldType = field.type ?? 'text'
+
+  if (isOAuthField(field)) {
+    const status = currentValue ? 'Connected' : 'Not connected'
+    return (
+      `<div class="field oauth-field"><label>${escapeHtml(label)}</label> ` +
+      `<span class="oauth-status">${status}</span> ` +
+      `<button type="button" class="oauth-reauth" data-field="${escapeHtml(name)}">` +
+      `Re-authorize</button></div>`
+    )
+  }
+
+  if (isSecretField(field)) {
+    if (currentValue) {
+      return (
+        `<div class="field secret-field"><label>${escapeHtml(label)}</label> ` +
+        `<input type="password" name="${escapeHtml(name)}" value="" ` +
+        `placeholder="${escapeHtml(SECRET_PLACEHOLDER)}" ` +
+        `data-secret-configured="true"> ` +
+        `<label class="replace-toggle"><input type="checkbox" ` +
+        `name="__replace_${escapeHtml(name)}" value="1"> Replace this credential</label>` +
+        `</div>`
+      )
+    }
+    return (
+      `<div class="field secret-field"><label>${escapeHtml(label)}</label> ` +
+      `<input type="password" name="${escapeHtml(name)}" value="" ` +
+      `placeholder="${escapeHtml(label)}"></div>`
+    )
+  }
+
+  const valueAttr = currentValue !== null && currentValue !== undefined ? escapeHtml(String(currentValue)) : ''
+  return (
+    `<div class="field"><label>${escapeHtml(label)}</label> ` +
+    `<input type="${escapeHtml(fieldType)}" name="${escapeHtml(name)}" ` +
+    `value="${valueAttr}"></div>`
+  )
+}
+
+/**
+ * Merge a form submission into the current config per D7 rules.
+ *
+ * Behavior:
+ *  - Empty secret -> preserve the existing value (avoid clearing on a
+ *    re-submit where the user did not retype the credential).
+ *  - Non-empty secret -> replace.
+ *  - Non-secret -> always replace (including with an empty string, so the
+ *    user can intentionally blank a field).
+ *  - oauth_field -> ignored here; OAuth fields are managed by their own
+ *    Re-authorize flow, never by raw form input.
+ */
+export function mergeSubmission(
+  current: Record<string, unknown>,
+  submitted: Record<string, unknown>,
+  schemaFields: RelayConfigField[]
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...current }
+  for (const field of schemaFields) {
+    const name = fieldName(field)
+    if (!name) continue
+    if (isOAuthField(field)) continue
+    const newValue = submitted[name] ?? ''
+    if (isSecretField(field)) {
+      if (newValue === '' || newValue === null || newValue === undefined) {
+        continue
+      }
+      result[name] = newValue
+    } else {
+      result[name] = newValue
+    }
+  }
+  return result
 }
