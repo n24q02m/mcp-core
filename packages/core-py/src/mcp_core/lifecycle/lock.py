@@ -370,17 +370,19 @@ def sweep_stale_locks(
             try:
                 path.unlink()
                 removed += 1
-            except OSError:
-                pass
-            # D17.3: clean up companion sentinel + cache files so orphan
-            # .tools-list-changed / .tools.json files don't accumulate.
-            for suffix in (".tools-list-changed", ".tools.json"):
-                companion = path.with_suffix(suffix)
-                if companion.exists():
+                # D17.3: clean up companion sentinel + cache files so orphan
+                # .tools-list-changed / .tools.json files don't accumulate.
+                # Nested inside the successful unlink so companions are only
+                # removed when the lock itself is gone (avoids orphan-lock-
+                # pointing-to-deleted-cache state on OSError).
+                for suffix in (".tools-list-changed", ".tools.json"):
+                    companion = path.with_suffix(suffix)
                     try:
-                        companion.unlink()
+                        companion.unlink(missing_ok=True)
                     except OSError:
                         pass
+            except OSError:
+                pass
     return removed
 
 
