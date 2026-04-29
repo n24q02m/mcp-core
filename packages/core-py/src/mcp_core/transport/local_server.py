@@ -494,7 +494,7 @@ async def run_local_server(
                 lock.path,
                 server_name,
                 core_version,
-                {"tools": {"listChanged": False}},
+                {"tools": {"listChanged": True}},
                 tools_payload,
             )
         except Exception:  # noqa: BLE001
