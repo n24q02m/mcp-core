@@ -470,10 +470,7 @@ export async function runSmartStdioProxy(
 
         if (!isSse) {
           const bodyText = await res.text()
-          process.stdout.write(bodyText)
-          if (!bodyText.endsWith('\n')) {
-            process.stdout.write('\n')
-          }
+          await forwardDaemonMessageToBridge(bodyText, (s) => process.stdout.write(s))
           isStateless = true
           modeDetermined = true
           process.stderr.write(`[stdio-proxy] Stateless mode detected (plain JSON response)\n`)
@@ -504,10 +501,7 @@ export async function runSmartStdioProxy(
           const decoder = new TextDecoder()
 
           parser.onMessage((data) => {
-            process.stdout.write(data)
-            if (!data.endsWith('\n')) {
-              process.stdout.write('\n')
-            }
+            void forwardDaemonMessageToBridge(data, (s) => process.stdout.write(s))
           })
 
           const readSsePromise = (async () => {
@@ -561,20 +555,14 @@ export async function runSmartStdioProxy(
           process.stderr.write(`[stdio-proxy] Session endpoint: ${endpointUrl}\n`)
 
           parser.onMessage((data) => {
-            process.stdout.write(data)
-            if (!data.endsWith('\n')) {
-              process.stdout.write('\n')
-            }
+            void forwardDaemonMessageToBridge(data, (s) => process.stdout.write(s))
           })
 
           void readSsePromise
           modeDetermined = true
           continue
         } else {
-          process.stdout.write(firstEvent.data)
-          if (!firstEvent.data.endsWith('\n')) {
-            process.stdout.write('\n')
-          }
+          await forwardDaemonMessageToBridge(firstEvent.data, (s) => process.stdout.write(s))
           isStateless = true
           modeDetermined = true
           process.stderr.write(`[stdio-proxy] Stateless mode detected (SSE message event)\n`)
@@ -622,17 +610,11 @@ export async function runSmartStdioProxy(
           const bodyText = await res.text()
           const messages = parseSseMessages(bodyText)
           for (const msg of messages) {
-            process.stdout.write(msg)
-            if (!msg.endsWith('\n')) {
-              process.stdout.write('\n')
-            }
+            await forwardDaemonMessageToBridge(msg, (s) => process.stdout.write(s))
           }
         } else {
           const bodyText = await res.text()
-          process.stdout.write(bodyText)
-          if (!bodyText.endsWith('\n')) {
-            process.stdout.write('\n')
-          }
+          await forwardDaemonMessageToBridge(bodyText, (s) => process.stdout.write(s))
         }
       } catch (e: any) {
         process.stderr.write(`[stdio-proxy] Daemon '${serverName}' died unexpectedly.\n`)
