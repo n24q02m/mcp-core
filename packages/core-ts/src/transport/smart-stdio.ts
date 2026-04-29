@@ -76,14 +76,99 @@ export function daemonCredState(serverName: string): string {
 }
 
 /**
- * Respawn a dead daemon for `serverName` and return its relay URL.
+ * Bridge auto-respawn (D8, Task 1.12).
  *
- * Stub — replaced by Task 1.12 (auto-respawn). Tool helpers (D6, Task 1.8)
- * import this symbol so the closure can be wired now and exercised via
- * vi.spyOn mocks; production wiring lands in Task 1.12.
+ * When a tool call fails because the daemon backing a transparent bridge
+ * has died, the Bridge spawns a fresh daemon and retries -- but only once
+ * per `tool_call_id`, so a pathological caller can't infinite-loop the
+ * spawn path. ``BridgeAutoRespawn`` tracks the per-call cap; the helper
+ * functions below perform the actual spawn + wait-ready dance.
  */
-export function daemonRespawn(_serverName: string): string {
-  throw new Error('Implemented in Task 1.12')
+export const MAX_RESPAWN_PER_CALL_ID = 1
+const RESPAWN_TRACK_TTL_MS = 5 * 60_000
+
+/**
+ * Per-bridge tracker capping respawn attempts per `tool_call_id`.
+ *
+ * A bridge instance keeps one of these for the lifetime of an MCP session.
+ * Each unique id is allowed exactly `MAX_RESPAWN_PER_CALL_ID` respawn
+ * attempt; subsequent attempts within `RESPAWN_TRACK_TTL_MS` are rejected
+ * so a buggy caller can't spawn-storm the daemon. Entries older than the
+ * TTL are dropped on read so the table doesn't grow without bound.
+ */
+export class BridgeAutoRespawn {
+  private respawned = new Map<string, number>()
+
+  canRespawn(callId: string): boolean {
+    const ts = this.respawned.get(callId)
+    if (ts === undefined) return true
+    if (Date.now() - ts > RESPAWN_TRACK_TTL_MS) {
+      this.respawned.delete(callId)
+      return true
+    }
+    return false
+  }
+
+  markRespawned(callId: string): void {
+    this.respawned.set(callId, Date.now())
+  }
+}
+
+/**
+ * Spawn `uvx <serverName>` detached from the parent process group.
+ *
+ * Production wiring intentionally minimal: the daemon publishes its lock
+ * file as part of normal startup, so callers poll `daemonIsAlive` /
+ * `daemonRelayUrl` to discover it. Tests stub this via `vi.spyOn` so the
+ * suite never spawns real subprocesses.
+ */
+function spawnDaemonDetached(serverName: string): void {
+  const child = spawn('uvx', [serverName], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true
+  })
+  child.unref()
+}
+
+/**
+ * Poll `daemonIsAlive` until alive or `timeoutMs` elapses. Mirrors
+ * the core-py `_wait_daemon_ready` helper.
+ */
+async function waitDaemonReady(serverName: string, timeoutMs = 60_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (daemonIsAlive(serverName)) return true
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  return false
+}
+
+/**
+ * Async respawn entry point. Production code should prefer this -- it
+ * waits for the daemon to come back up before resolving with the relay URL.
+ */
+export async function daemonRespawnAsync(serverName: string): Promise<string> {
+  if (daemonIsAlive(serverName)) return daemonRelayUrl(serverName)
+  spawnDaemonDetached(serverName)
+  if (!(await waitDaemonReady(serverName))) {
+    throw new Error(`daemon respawn timeout for ${serverName}`)
+  }
+  return daemonRelayUrl(serverName)
+}
+
+/**
+ * Synchronous respawn for callers that match the core-py signature.
+ *
+ * If a daemon is already alive we return its URL immediately. Otherwise we
+ * fire-and-forget the spawn and return an empty string -- the caller is
+ * expected to poll via `daemonIsAlive` / `daemonRelayUrl` (or use
+ * `daemonRespawnAsync` for the awaitable flow).
+ */
+export function daemonRespawn(serverName: string): string {
+  if (daemonIsAlive(serverName)) return daemonRelayUrl(serverName)
+  spawnDaemonDetached(serverName)
+  return ''
 }
 
 export interface ActiveDaemon {
