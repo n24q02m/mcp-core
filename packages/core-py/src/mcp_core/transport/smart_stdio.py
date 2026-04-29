@@ -638,6 +638,27 @@ def run_smart_stdio_proxy(
     if effective_token:
         headers["Authorization"] = f"Bearer {effective_token}"
 
+    # Fast-handshake: a cache file written by a previous (or concurrent) daemon
+    # run lets us answer `initialize` and `tools/list` from disk immediately,
+    # before bridging to the live HTTP daemon. The user-visible win: tools
+    # appear in Claude Code's /mcp panel ~1s after session start instead of
+    # 30-60s while the daemon's Python imports finish. The bridge to the
+    # daemon still runs for `tools/call` and any other non-cacheable method.
+    #
+    # Re-find the lock NOW that the daemon is guaranteed alive (whether it was
+    # pre-existing or was just spawned above). Calling _find_newest_lock before
+    # the spawn/wait loop returned None for new daemons, leaving the sentinel
+    # poller (D17.3) unstarted for first-run users.
+    cache_lock_path = _find_newest_lock(server_name)
+
+    # D17.3: Start sentinel poller so Claude Code receives
+    # ``notifications/tools/list_changed`` within ~250ms of a credential
+    # save.  The poller runs in a dedicated daemon thread (this function is
+    # synchronous); daemon threads die automatically when the bridge exits so
+    # no explicit cancellation is needed.
+    if cache_lock_path is not None:
+        _start_poller_thread(cache_lock_path)
+
     # 3. Forward stdin <-> HTTP SSE <-> stdout
     line_queue: queue.Queue[bytes | None] = queue.Queue()
 
@@ -656,22 +677,6 @@ def run_smart_stdio_proxy(
     reader_thread.start()
 
     from urllib.parse import urljoin
-
-    # Fast-handshake: a cache file written by a previous (or concurrent) daemon
-    # run lets us answer `initialize` and `tools/list` from disk immediately,
-    # before bridging to the live HTTP daemon. The user-visible win: tools
-    # appear in Claude Code's /mcp panel ~1s after session start instead of
-    # 30-60s while the daemon's Python imports finish. The bridge to the
-    # daemon still runs for `tools/call` and any other non-cacheable method.
-    cache_lock_path = _find_newest_lock(server_name)
-
-    # D17.3: Start sentinel poller so Claude Code receives
-    # ``notifications/tools/list_changed`` within ~250ms of a credential
-    # save.  The poller runs in a dedicated daemon thread (this function is
-    # synchronous); daemon threads die automatically when the bridge exits so
-    # no explicit cancellation is needed.
-    if cache_lock_path is not None:
-        _start_poller_thread(cache_lock_path)
 
     pending_first_line: bytes | None = None
 
