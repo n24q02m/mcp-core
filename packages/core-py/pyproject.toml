@@ -42,6 +42,9 @@ Homepage = "https://github.com/n24q02m/mcp-core"
 Repository = "https://github.com/n24q02m/mcp-core"
 Issues = "https://github.com/n24q02m/mcp-core/issues"
 
+[project.scripts]
+mcp-clean-state = "mcp_core.scripts.clean_state:main"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
