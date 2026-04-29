@@ -608,6 +608,7 @@ async def run_local_server(
             await server.serve()
         finally:
             refresh_task.cancel()
+            _mcp_registry.pop(server_name, None)  # cleanup module-level state
             try:
                 await refresh_task
             except (_asyncio.CancelledError, Exception):  # noqa: BLE001
