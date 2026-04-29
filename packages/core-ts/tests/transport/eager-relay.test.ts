@@ -70,4 +70,55 @@ describe('runSmartStdioProxy eagerRelaySchema option (D18.1)', () => {
 
     expect(runLocalServer).not.toHaveBeenCalled()
   })
+
+  it('passes suppressLockFile:true to runLocalServer so OAuth AS lock is invisible to getActiveDaemon (C1 fix)', async () => {
+    // After eager spawn, the runLocalServer call must include suppressLockFile:true
+    // so the bootstrap OAuth AS does not write a <serverName>-<port>.lock file
+    // that getActiveDaemon would match and treat as the real daemon.
+    const { runSmartStdioProxy } = await import('../../src/transport/smart-stdio.js')
+    const { runLocalServer } = await import('../../src/transport/local-server.js')
+
+    vi.mocked(runLocalServer).mockClear()
+
+    const fakeSchema = {
+      server: 'better-notion-mcp',
+      fields: [{ key: 'TOKEN', label: 'Token', type: 'password' as const }]
+    }
+
+    await runSmartStdioProxy('better-notion-mcp', ['node', '--version'], {
+      env: {},
+      eagerRelaySchema: fakeSchema,
+      startupTimeout: 200,
+      _testProbeOverride: { credState: 'unconfigured' }
+    })
+
+    expect(runLocalServer).toHaveBeenCalledOnce()
+    const callOptions = vi.mocked(runLocalServer).mock.calls[0][1]
+    expect(callOptions).toMatchObject({ suppressLockFile: true })
+  })
+
+  it('opens browser at root URL ("/") not "/authorize" for PKCE bootstrap (C2 fix)', async () => {
+    // Opening /authorize directly returns 400 invalid_request because PKCE
+    // params (client_id, redirect_uri, state, code_challenge) are missing.
+    // The root URL ("/") auto-bootstraps PKCE and redirects to /authorize.
+    const { runSmartStdioProxy } = await import('../../src/transport/smart-stdio.js')
+    const { tryOpenBrowser } = await import('../../src/relay/browser.js')
+
+    vi.mocked(tryOpenBrowser).mockClear()
+
+    const fakeSchema = {
+      server: 'better-notion-mcp',
+      fields: [{ key: 'TOKEN', label: 'Token', type: 'password' as const }]
+    }
+
+    await runSmartStdioProxy('better-notion-mcp', ['node', '--version'], {
+      env: {},
+      eagerRelaySchema: fakeSchema,
+      startupTimeout: 200,
+      _testProbeOverride: { credState: 'unconfigured' }
+    })
+
+    expect(tryOpenBrowser).toHaveBeenCalledWith(expect.stringMatching(/\/$/))
+    expect(tryOpenBrowser).not.toHaveBeenCalledWith(expect.stringContaining('/authorize'))
+  })
 })
