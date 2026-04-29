@@ -500,6 +500,46 @@ def _spawn_daemon(daemon_cmd: list[str]) -> None:
         )
 
 
+async def _emit_list_changed_to_stdout() -> None:
+    """Write a JSON-RPC ``notifications/tools/list_changed`` notification to stdout.
+
+    The bridge's stdout is read by Claude Code as a JSON-RPC stream; emitting
+    this notification causes Claude Code to immediately re-fetch ``tools/list``
+    and show the full post-config tool surface without requiring a session restart.
+    """
+    payload = json.dumps({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+    sys.stdout.buffer.write((payload + "\n").encode("utf-8"))
+    sys.stdout.buffer.flush()
+
+
+async def _poll_tools_list_changed_sentinel(
+    lock_path: Path,
+    on_change,
+) -> None:
+    """Poll ``<lock>.tools-list-changed`` every 250ms; call ``on_change`` when mtime advances.
+
+    D17.3: The daemon touches this sentinel file after a credential write
+    (via ``_refresh_capabilities_cache_after_save``).  The bridge runs this
+    coroutine as a background task so Claude Code receives
+    ``notifications/tools/list_changed`` within ~250ms of the relay form submit.
+    """
+    import asyncio
+
+    sentinel = lock_path.with_suffix(".tools-list-changed")
+    last_mtime = sentinel.stat().st_mtime if sentinel.exists() else 0.0
+    while True:
+        await asyncio.sleep(0.25)
+        if not sentinel.exists():
+            continue
+        try:
+            current_mtime = sentinel.stat().st_mtime
+        except OSError:
+            continue
+        if current_mtime > last_mtime:
+            last_mtime = current_mtime
+            await on_change()
+
+
 def run_smart_stdio_proxy(
     server_name: str,
     daemon_cmd: list[str],

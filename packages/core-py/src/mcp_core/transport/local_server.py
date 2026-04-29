@@ -312,9 +312,16 @@ async def _refresh_capabilities_cache_after_save(server_name: str, lock_path: Pa
     tool list via the next ``notifications/tools/list_changed`` notification
     without restarting the bridge.
 
+    D17.3: Also touches ``<lock>.tools-list-changed`` so the smart-stdio bridge
+    poller detects the change and forwards ``notifications/tools/list_changed``
+    to Claude Code within ~250ms.
+
     Best-effort: any failure is logged at DEBUG level and silently swallowed.
     """
     try:
+        import os
+        import time as _time
+
         from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
         from mcp_core.transport.smart_stdio import persist_capabilities_cache
@@ -333,6 +340,11 @@ async def _refresh_capabilities_cache_after_save(server_name: str, lock_path: Pa
             {"tools": {"listChanged": True}},
             tools_payload,
         )
+        # D17.3 — touch sentinel so bridge poller detects change
+        sentinel = lock_path.with_suffix(".tools-list-changed")
+        sentinel.touch(exist_ok=True)
+        now = _time.time()
+        os.utime(sentinel, (now, now))
     except Exception:  # noqa: BLE001
         logger.opt(exception=True).debug("Failed to refresh capabilities cache after credential save")
 
