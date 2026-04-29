@@ -12,6 +12,12 @@ def _write_lock_with_age(path: Path, pid: int, port: int, age_hours: float = 0) 
     path.write_text(f"{pid}\n{port}\ntoken\n{ts}\n", encoding="utf-8")
 
 
+def _write_6line_lock(path: Path, pid: int, port: int, age_hours: float, cred_state: str = "configured") -> None:
+    """Write a 6-line D9 lock with spawned_at and last_activity_at both aged by age_hours."""
+    ts = (datetime.now(timezone.utc) - timedelta(hours=age_hours)).isoformat()
+    path.write_text(f"{pid}\n{port}\ntoken\n{ts}\n{cred_state}\n{ts}\n", encoding="utf-8")
+
+
 def test_sweep_removes_locks_with_dead_pid(tmp_path):
     p1 = tmp_path / "demo-1001.lock"
     p2 = tmp_path / "demo-1002.lock"
@@ -95,3 +101,49 @@ def test_sweep_eleven_stale_locks_clears_all(tmp_path):
 
     assert removed == 11
     assert list(tmp_path.glob("wet-mcp-*.lock")) == []
+
+
+def test_sweep_stale_locks_removes_companion_sentinel_and_cache(tmp_path):
+    """sweep_stale_locks cleans up .tools-list-changed and .tools.json next to a
+    TTL-expired lock file (D17.3 companion cleanup)."""
+    lock = tmp_path / "wet-mcp-12345.lock"
+    # Use current PID so the lock passes the liveness check and falls through
+    # to the TTL branch (configured + 25h old > 24h default TTL).
+    _write_6line_lock(lock, os.getpid(), 12345, age_hours=25)
+
+    sentinel = tmp_path / "wet-mcp-12345.tools-list-changed"
+    sentinel.touch()
+    cache = tmp_path / "wet-mcp-12345.tools.json"
+    cache.write_text("{}")
+
+    removed = sweep_stale_locks("wet-mcp", ttl_hours=24, root=tmp_path)
+
+    assert removed >= 1
+    assert not lock.exists()
+    assert not sentinel.exists()
+    assert not cache.exists()
+
+
+def test_sweep_keeps_companions_when_lock_unlink_fails(tmp_path, monkeypatch):
+    """When path.unlink() raises OSError on the lock file, companions are NOT
+    cleaned up (avoids orphan-lock-pointing-to-deleted-cache state)."""
+    lock = tmp_path / "wet-mcp-12346.lock"
+    _write_6line_lock(lock, os.getpid(), 12346, age_hours=25)
+
+    sentinel = tmp_path / "wet-mcp-12346.tools-list-changed"
+    sentinel.touch()
+
+    # Patch Path.unlink to fail only for .lock files.
+    real_unlink = Path.unlink
+
+    def _fail_lock_unlink(self: Path, missing_ok: bool = False) -> None:
+        if self.suffix == ".lock":
+            raise OSError("simulated unlink failure")
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", _fail_lock_unlink)
+
+    sweep_stale_locks("wet-mcp", ttl_hours=24, root=tmp_path)
+
+    # Lock unlink failed → companion must still exist (no dangling cache).
+    assert sentinel.exists()
