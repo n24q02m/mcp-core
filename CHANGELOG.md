@@ -2,6 +2,90 @@
 
 <!-- version list -->
 
+## v1.11.3 (2026-04-29)
+
+### Bug Fixes
+
+- 5 code-review issues in Wave 10 eager relay (C1 lock collision, C2 wrong URL, I1 EPIPE, I2 sort
+  order, I3 JSDoc) ([#133](https://github.com/n24q02m/mcp-core/pull/133),
+  [`c39ba5f`](https://github.com/n24q02m/mcp-core/commit/c39ba5f369cfad028037d06b645e7879679da1b7))
+
+- Add eagerRelaySchema option to runSmartStdioProxy in core-ts (D18.1)
+  ([#131](https://github.com/n24q02m/mcp-core/pull/131),
+  [`e2c003a`](https://github.com/n24q02m/mcp-core/commit/e2c003a5fc137afde432ed0245c62fe15b08ccce))
+
+- Add None guard for cache in test_smart_stdio_cache to satisfy ty
+  ([#128](https://github.com/n24q02m/mcp-core/pull/128),
+  [`e74cccd`](https://github.com/n24q02m/mcp-core/commit/e74cccdd029dba41c5a9b53ce92af695a752a6ef))
+
+- Advertise tools listChanged true in core-py capabilities cache
+  ([#128](https://github.com/n24q02m/mcp-core/pull/128),
+  [`e74cccd`](https://github.com/n24q02m/mcp-core/commit/e74cccdd029dba41c5a9b53ce92af695a752a6ef))
+
+- Align iscoroutine to isawaitable in d17 wiring test
+  ([#130](https://github.com/n24q02m/mcp-core/pull/130),
+  [`f82cd2f`](https://github.com/n24q02m/mcp-core/commit/f82cd2f2ba69d0a004c3fffdb9e6f714c5bcc491))
+
+- Cleanup _mcp_registry on run_local_server exit
+  ([#130](https://github.com/n24q02m/mcp-core/pull/130),
+  [`f82cd2f`](https://github.com/n24q02m/mcp-core/commit/f82cd2f2ba69d0a004c3fffdb9e6f714c5bcc491))
+
+- Code quality fixes for D17 (registry leak + poller spawn order + sweep guard)
+  ([#130](https://github.com/n24q02m/mcp-core/pull/130),
+  [`f82cd2f`](https://github.com/n24q02m/mcp-core/commit/f82cd2f2ba69d0a004c3fffdb9e6f714c5bcc491))
+
+- Core-ts eager relay + list_changed forwarding (D18.1 + D19)
+  ([#131](https://github.com/n24q02m/mcp-core/pull/131),
+  [`e2c003a`](https://github.com/n24q02m/mcp-core/commit/e2c003a5fc137afde432ed0245c62fe15b08ccce))
+
+- Emit notifications/tools/list_changed via sentinel polling in core-py bridge
+  ([#128](https://github.com/n24q02m/mcp-core/pull/128),
+  [`e74cccd`](https://github.com/n24q02m/mcp-core/commit/e74cccdd029dba41c5a9b53ce92af695a752a6ef))
+
+- Forward notifications/tools/list_changed through TS bridge (D19)
+  ([#131](https://github.com/n24q02m/mcp-core/pull/131),
+  [`e2c003a`](https://github.com/n24q02m/mcp-core/commit/e2c003a5fc137afde432ed0245c62fe15b08ccce))
+
+- Nest companion cleanup inside successful unlink in sweep_stale_locks
+  ([#130](https://github.com/n24q02m/mcp-core/pull/130),
+  [`f82cd2f`](https://github.com/n24q02m/mcp-core/commit/f82cd2f2ba69d0a004c3fffdb9e6f714c5bcc491))
+
+- Prevent eager relay OAuth AS lock from masking daemon discovery (C1)
+  ([#133](https://github.com/n24q02m/mcp-core/pull/133),
+  [`c39ba5f`](https://github.com/n24q02m/mcp-core/commit/c39ba5f369cfad028037d06b645e7879679da1b7))
+
+- Refresh capabilities cache after credential write in core-py
+  ([#128](https://github.com/n24q02m/mcp-core/pull/128),
+  [`e74cccd`](https://github.com/n24q02m/mcp-core/commit/e74cccdd029dba41c5a9b53ce92af695a752a6ef))
+
+- Refresh tools cache + emit list_changed in core-py bridge (D17)
+  ([#128](https://github.com/n24q02m/mcp-core/pull/128),
+  [`e74cccd`](https://github.com/n24q02m/mcp-core/commit/e74cccdd029dba41c5a9b53ce92af695a752a6ef))
+
+- Start sentinel poller after daemon ready in run_smart_stdio_proxy
+  ([#130](https://github.com/n24q02m/mcp-core/pull/130),
+  [`f82cd2f`](https://github.com/n24q02m/mcp-core/commit/f82cd2f2ba69d0a004c3fffdb9e6f714c5bcc491))
+
+- Test sweep companion cleanup behavior ([#130](https://github.com/n24q02m/mcp-core/pull/130),
+  [`f82cd2f`](https://github.com/n24q02m/mcp-core/commit/f82cd2f2ba69d0a004c3fffdb9e6f714c5bcc491))
+
+- Update forward-list-changed test for sync forwardDaemonMessageToBridge (I1)
+  ([#133](https://github.com/n24q02m/mcp-core/pull/133),
+  [`c39ba5f`](https://github.com/n24q02m/mcp-core/commit/c39ba5f369cfad028037d06b645e7879679da1b7))
+
+- Use isawaitable + cast to satisfy ty type checker in D17.2 wrapper
+  ([#129](https://github.com/n24q02m/mcp-core/pull/129),
+  [`9ee00c2`](https://github.com/n24q02m/mcp-core/commit/9ee00c2922705e4bac245fe7ce8b8c83bc80035d))
+
+- Wire D17.2 + D17.3 helpers into production paths
+  ([#129](https://github.com/n24q02m/mcp-core/pull/129),
+  [`9ee00c2`](https://github.com/n24q02m/mcp-core/commit/9ee00c2922705e4bac245fe7ce8b8c83bc80035d))
+
+- Wire forwardDaemonMessageToBridge into production stdout writes
+  ([#132](https://github.com/n24q02m/mcp-core/pull/132),
+  [`7c91a94`](https://github.com/n24q02m/mcp-core/commit/7c91a945324a556f8010c1653b42427aeb0e707f))
+
+
 ## v1.11.2 (2026-04-29)
 
 ### Bug Fixes
