@@ -122,6 +122,7 @@ function renderField(field: ConfigField, value = ''): string {
                 autocorrect="off"
                 autocapitalize="off"
                 spellcheck="false"${valueAttr}${requiredAttr}${ariaDescribedby}
+                aria-errormessage="status-box"
             />
             ${helpHtml}
         </div>`
@@ -597,6 +598,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     inputEl.setAttribute("autocapitalize", "off");
                     inputEl.setAttribute("spellcheck", "false");
                     inputEl.setAttribute("aria-labelledby", "step-prompt");
+                    inputEl.setAttribute("aria-errormessage", "step-error");
                     fieldGroup.appendChild(inputEl);
                     container.appendChild(fieldGroup);
 
@@ -654,6 +656,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     errorEl.textContent = "Please enter a value.";
                     errorEl.style.display = "block";
                     inputEl.setAttribute("aria-invalid", "true");
+                    inputEl.focus();
                     return;
                 }
                 errorEl.style.display = "none";
@@ -741,11 +744,15 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                 var inputs = form.querySelectorAll(".field-input");
                 var payload = {};
                 var valid = true;
+                var firstInvalid = null;
 
                 inputs.forEach(function (input) {
                     if (input.hasAttribute("required") && input.value.trim() === "") {
                         valid = false;
                         input.setAttribute("aria-invalid", "true");
+                        if (!firstInvalid) {
+                            firstInvalid = input;
+                        }
                     } else {
                         input.removeAttribute("aria-invalid");
                         payload[input.name] = input.value;
@@ -754,6 +761,9 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
                 if (!valid) {
                     showStatus("error", "Please fill in all required fields.");
+                    if (firstInvalid) {
+                        firstInvalid.focus();
+                    }
                     return;
                 }
 
