@@ -11,9 +11,9 @@ import { JWTIssuer } from '../oauth/jwt-issuer.js'
  * Return the relay form URL for the alive daemon of `serverName`.
  *
  * Walks the per-user lock directory, parses the first `<server>-*.lock`
- * that contains valid 4/5/6-line metadata, and constructs
- * `http://127.0.0.1:<port>/setup?token=<jwt>` so a Bridge can render a
- * user-facing setup link without going through the OAuth handshake.
+ * that contains valid 4/5/6-line metadata, and returns the daemon's root
+ * URL `http://127.0.0.1:<port>/`. The daemon's `local_oauth_app` serves a
+ * 302 from `/` to `/authorize?...` with a fresh PKCE challenge.
  *
  * Throws when no parseable lock file exists for the server. Callers that
  * prefer a soft signal should call `daemonIsAlive` first.
