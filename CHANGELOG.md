@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.2 (2026-04-30)
+
+### Bug Fixes
+
+- **audit**: Remove redundant list comprehension (C416)
+  ([#143](https://github.com/n24q02m/mcp-core/pull/143),
+  [`eba6c64`](https://github.com/n24q02m/mcp-core/commit/eba6c64d6f0ed8ebecc39b364d5eae0a196b3645))
+
+- **audit**: Ruff format multi_daemon_invariant.py
+  ([#145](https://github.com/n24q02m/mcp-core/pull/145),
+  [`fe76c44`](https://github.com/n24q02m/mcp-core/commit/fe76c44dd0a4512ef8922cf54f583bfdbd9cd210))
+
+### Features
+
+- **docs**: Canonical trust model doc ([#142](https://github.com/n24q02m/mcp-core/pull/142),
+  [`12603b5`](https://github.com/n24q02m/mcp-core/commit/12603b5f46d4c6486c4d15678b38d831cad0b32e))
+
+
 ## v1.13.0-beta.1 (2026-04-30)
 
 ### Bug Fixes
