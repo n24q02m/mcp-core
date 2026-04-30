@@ -2,6 +2,80 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.1 (2026-04-30)
+
+### Bug Fixes
+
+- Address security + race conditions in relay transient helper
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Drop listChanged key entirely in core-py bridge cache
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Escape </script> in JS-context server_name interpolation
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Strip null + listChanged=False core-py cache
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- **e2e**: Driver subprocess spawn cwd + pin :beta versions for stdio-direct
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- **storage**: Tampered-ciphertext test + dirname() + package re-export
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- **transport**: Daemon_relay_url returns root URL not /setup?token=
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- **transport**: Update TS JSDoc for daemonRelayUrl root URL behavior
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+### Features
+
+- Add --kill-daemons flag to mcp-clean-state CLI
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Add 2026-04-30 multi-mode migration document
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Add docker-compose template for shared embedding-daemon
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Add register_relay_form_tool transient HTTP helper for stdio mode
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Add run_http_daemon alias + deprecate smart_stdio for stdio path
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Add stdio-direct config type to E2E driver matrix
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- Trust model Phase 1 -- URL fix + PerPluginStore + multi-daemon CI
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- **audit**: Multi-daemon invariant CI check ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+- **storage**: Per-plugin encrypted credential store
+  ([#141](https://github.com/n24q02m/mcp-core/pull/141),
+  [`4419df5`](https://github.com/n24q02m/mcp-core/commit/4419df503a96b7faf61225ead6caaa39e3827beb))
+
+
 ## v1.12.0 (2026-04-30)
 
 
