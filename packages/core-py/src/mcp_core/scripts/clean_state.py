@@ -2,6 +2,11 @@
 
 Removes MCP server credentials, locks, tools cache, and per-server token caches.
 By default preserves app data (SQLite, diskcache, SearXNG state).
+
+The ``--kill-daemons`` flag (added 2026-04-30) terminates any alive smart_stdio
+bridge daemons before removing their lock files. Required after upgrading from
+mcp-core <=1.11.x to 1.12.0+ where the stdio bridge layer is deprecated in
+favor of FastMCP stdio direct mode. See ``docs/migration-2026-04-30.md``.
 """
 
 from __future__ import annotations
@@ -10,6 +15,7 @@ import argparse
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from platformdirs import user_config_dir
@@ -149,6 +155,122 @@ def _confirm() -> bool:
     return line in ("y", "yes")
 
 
+def _lock_dir() -> Path:
+    """Lock files directory — same legacy location used by lifecycle.lock."""
+    return _legacy_posix_base() / "locks"
+
+
+def _parse_lock_pid(lock_path: Path) -> int | None:
+    """Parse PID from a lock file. Returns None on malformed or missing file.
+
+    Lock format (per ``lifecycle.lock.LockMetadata``)::
+
+        line 0: {pid}
+        line 1: {port}
+        line 2: {token}
+        line 3: {spawned_at_iso8601_utc}
+        line 4: {cred_state}             # optional (D9+)
+        line 5: {last_activity_at}       # optional (D9+)
+    """
+    try:
+        text = lock_path.read_text()
+    except OSError:
+        return None
+    lines = text.splitlines()
+    if not lines:
+        return None
+    try:
+        pid = int(lines[0].strip())
+    except (ValueError, IndexError):
+        return None
+    if pid <= 0:
+        return None
+    return pid
+
+
+def kill_daemons(verbose: bool = False) -> tuple[int, int]:
+    """Terminate alive MCP daemons and remove their lock + companion files.
+
+    For each ``*.lock`` file under ``~/.config/mcp/locks/``:
+
+    1. Parse PID from line 0.
+    2. If PID alive, terminate it (SIGKILL on POSIX, TerminateProcess on Windows)
+       via ``mcp_core.lifecycle.lock._terminate_daemon`` (cross-platform helper).
+    3. Remove the lock file.
+    4. Remove companion ``<lock-stem>*.tools.json`` cache file under
+       ``~/.config/mcp/cache/`` if present.
+    5. Remove sibling ``<lock>.tools-list-changed`` sentinel if present.
+
+    Returns ``(killed_count, removed_lock_count)``. Missing lock dir returns
+    ``(0, 0)`` after a no-op message.
+    """
+    # Local import — keeps clean_state module light + avoids pulling in
+    # lifecycle.lock at import time for the common case (--help, --dry-run).
+    from mcp_core.lifecycle.lock import _is_pid_alive, _terminate_daemon
+
+    lock_dir = _lock_dir()
+    if not lock_dir.exists():
+        print("No lock directory; nothing to clean.")
+        return (0, 0)
+
+    locks = sorted(lock_dir.glob("*.lock"))
+    if not locks:
+        print("No lock files; nothing to clean.")
+        return (0, 0)
+
+    cache_dir = _legacy_posix_base() / "cache"
+
+    killed = 0
+    removed = 0
+    for lock in locks:
+        pid = _parse_lock_pid(lock)
+        if pid is not None and _is_pid_alive(pid):
+            _terminate_daemon(pid)
+            # Brief pause to let the OS reap the process so subsequent lock
+            # writes by mcp-core do not collide with the old PID's handle.
+            for _ in range(20):
+                if not _is_pid_alive(pid):
+                    break
+                time.sleep(0.05)
+            killed += 1
+            if verbose:
+                print(f"killed: pid={pid} ({lock.name})")
+
+        try:
+            lock.unlink()
+            removed += 1
+            if verbose:
+                print(f"removed: {lock}")
+        except OSError as exc:
+            print(f"failed to remove {lock}: {exc}", file=sys.stderr)
+
+        # Companion tools cache lives at:
+        #   ~/.config/mcp/cache/<server>-<pid>-<protocol>-<core>.tools.json
+        # We match by server+pid prefix since protocol/core suffix varies.
+        if cache_dir.exists() and pid is not None:
+            stem_prefix = f"{lock.stem}-"  # e.g. "wet-mcp-1234-"
+            for cache_file in cache_dir.glob(f"{stem_prefix}*.tools.json"):
+                try:
+                    cache_file.unlink()
+                    if verbose:
+                        print(f"removed: {cache_file}")
+                except OSError as exc:
+                    print(f"failed to remove {cache_file}: {exc}", file=sys.stderr)
+
+        # Sibling sentinel ``<lock>.tools-list-changed`` (if used by future code).
+        sentinel = lock.with_suffix(lock.suffix + ".tools-list-changed")
+        if sentinel.exists():
+            try:
+                sentinel.unlink()
+                if verbose:
+                    print(f"removed: {sentinel}")
+            except OSError as exc:
+                print(f"failed to remove {sentinel}: {exc}", file=sys.stderr)
+
+    print(f"Killed {killed} daemons; cleaned {removed} lock files.")
+    return (killed, removed)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="mcp-clean-state",
@@ -165,7 +287,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--server", default=None, help="Limit to one server name. Default: all 8.")
     parser.add_argument("--dry-run", action="store_true", help="List paths that would be removed.")
     parser.add_argument("--verbose", action="store_true", help="Print each removed path.")
+    parser.add_argument(
+        "--kill-daemons",
+        action="store_true",
+        help=(
+            "Terminate alive MCP daemons and remove their lock + tools cache + sentinel files. "
+            "Required after upgrading from mcp-core <=1.11.x to 1.12.0+ "
+            "(see docs/migration-2026-04-30.md). Runs before any other cleanup."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.kill_daemons:
+        kill_daemons(verbose=args.verbose)
+        return 0
 
     servers = [args.server] if args.server else list(ALL_SERVERS)
     if args.server and args.server not in ALL_SERVERS:

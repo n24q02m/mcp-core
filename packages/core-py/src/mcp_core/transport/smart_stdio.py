@@ -593,6 +593,16 @@ def run_smart_stdio_proxy(
     Returns:
         Exit code (0 = success, 1 = daemon failed to start, 2 = HTTP error).
     """
+    import warnings
+
+    warnings.warn(
+        "run_smart_stdio_proxy is deprecated as of mcp-core 1.12.0. "
+        "Use FastMCP.run(transport='stdio') directly for stdio mode. "
+        "Will be removed in 2.0.0.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     import os
     import queue
     import threading

@@ -1,4 +1,4 @@
-"""Schema validation for matrix.yaml. Locks the 16-config taxonomy.
+"""Schema validation for matrix.yaml. Locks the 16+5 config taxonomy.
 
 History:
 - 2026-04-27: 16 → 15 by reclassifying notion-oauth out of T2 (Notion app
@@ -9,6 +9,14 @@ History:
   ``feedback_no_out_of_band_test_setup`` while still preserving E2E
   coverage. See ``feedback_notion_oauth_staging_flow`` for the release
   cascade rule (beta CD → deploy staging → E2E → stable CD).
+- 2026-04-30: 16 → 21 by adding 5 stdio-direct configs (Task 6 of the
+  multi-mode stdio/HTTP architecture refactor). stdio-direct configs
+  carry ``type: stdio-direct`` and run on a parallel axis to the
+  ``tier`` taxonomy — they drive Python plugins via the MCP SDK
+  ``stdio_client`` instead of HTTP, verifying that the stdio entry
+  point loads tools without an HTTP daemon. They have no ``tier`` /
+  ``auth`` / ``skret_namespace`` field (tier-less + no upstream
+  identity surface required).
 """
 
 from pathlib import Path
@@ -17,22 +25,38 @@ import yaml
 
 MATRIX_PATH = Path(__file__).parent.parent / "matrix.yaml"
 
+STDIO_DIRECT_IDS = {
+    "wet-stdio-direct",
+    "mnemo-stdio-direct",
+    "crg-stdio-direct",
+    "imagine-stdio-direct",
+    "telegram-stdio-direct",
+}
+
 
 def _load() -> dict:
     return yaml.safe_load(MATRIX_PATH.read_text(encoding="utf-8"))
 
 
-def test_matrix_has_16_configs() -> None:
+def _tiered(configs: list[dict]) -> list[dict]:
+    """Return only tier-axis configs (drops stdio-direct parallel axis)."""
+    return [c for c in configs if c.get("type") != "stdio-direct"]
+
+
+def test_matrix_has_21_configs() -> None:
     data = _load()
-    assert len(data["configs"]) == 16
+    # 16 tier-axis (5 t0-only + 6 t2-non-interaction + 4 t2-interaction
+    # + 1 t3-staging) + 5 stdio-direct = 21.
+    assert len(data["configs"]) == 21
 
 
 def test_matrix_tier_distribution() -> None:
     data = _load()
-    t0_only = [c for c in data["configs"] if c["tier"] == "t0-only"]
-    t2_non = [c for c in data["configs"] if c["tier"] == "t2-non-interaction"]
-    t2_int = [c for c in data["configs"] if c["tier"] == "t2-interaction"]
-    t3_staging = [c for c in data["configs"] if c["tier"] == "t3-staging"]
+    tiered = _tiered(data["configs"])
+    t0_only = [c for c in tiered if c["tier"] == "t0-only"]
+    t2_non = [c for c in tiered if c["tier"] == "t2-non-interaction"]
+    t2_int = [c for c in tiered if c["tier"] == "t2-interaction"]
+    t3_staging = [c for c in tiered if c["tier"] == "t3-staging"]
     # 2026-04-28 final: 5 t0-only + 6 t2-non-interaction + 4 t2-interaction
     # + 1 t3-staging (notion-oauth via beta CD → staging deploy → E2E gate).
     assert len(t0_only) == 5
@@ -46,10 +70,11 @@ def test_matrix_auth_modes_in_documented_superset() -> None:
 
     ``oauth`` re-enters the matrix on 2026-04-28 with the t3-staging
     notion-oauth config; the test now asserts the full superset rather
-    than the post-reclassification subset.
+    than the post-reclassification subset. stdio-direct configs are on
+    a parallel axis and have no ``auth`` field (no upstream identity).
     """
     data = _load()
-    auths = {c["auth"] for c in data["configs"]}
+    auths = {c["auth"] for c in _tiered(data["configs"])}
     assert auths <= {"none", "oauth", "relay"}, (
         f"unexpected auth modes outside documented superset: {auths}"
     )
@@ -80,7 +105,7 @@ def test_matrix_ids_unique() -> None:
 
 def test_t2_configs_have_skret_namespace_when_auth_present() -> None:
     data = _load()
-    for c in data["configs"]:
+    for c in _tiered(data["configs"]):
         if c["tier"] == "t0-only":
             continue
         if c["auth"] == "none":
@@ -96,8 +121,33 @@ def test_t2_configs_have_skret_namespace_when_auth_present() -> None:
 
 def test_t2_interaction_configs_have_user_gate() -> None:
     data = _load()
-    for c in data["configs"]:
+    for c in _tiered(data["configs"]):
         if c["tier"] != "t2-interaction":
             continue
         assert "user_gate" in c, f"{c['id']} missing user_gate"
         assert c["user_gate"], f"{c['id']} user_gate empty"
+
+
+def test_stdio_direct_configs_present_with_required_fields() -> None:
+    """5 stdio-direct configs (wet/mnemo/crg/imagine/telegram), each with
+    cmd/env/expected_tools_min and no tier/auth (parallel axis)."""
+    data = _load()
+    stdio_configs = [c for c in data["configs"] if c.get("type") == "stdio-direct"]
+    assert {c["id"] for c in stdio_configs} == STDIO_DIRECT_IDS
+    for c in stdio_configs:
+        assert isinstance(c.get("cmd"), list) and len(c["cmd"]) >= 1, (
+            f"{c['id']} cmd must be a non-empty list"
+        )
+        assert c["cmd"][0] == "uvx", (
+            f"{c['id']} cmd[0] must be 'uvx' (PyPI uvx-installable plugin)"
+        )
+        assert c.get("env", {}).get("MCP_TRANSPORT") == "stdio", (
+            f"{c['id']} env must set MCP_TRANSPORT=stdio"
+        )
+        assert (
+            isinstance(c.get("expected_tools_min"), int)
+            and c["expected_tools_min"] >= 1
+        ), f"{c['id']} expected_tools_min must be a positive int"
+        # stdio-direct sits on a parallel axis: no tier / no auth.
+        assert "tier" not in c, f"{c['id']} stdio-direct must not declare tier"
+        assert "auth" not in c, f"{c['id']} stdio-direct must not declare auth"

@@ -4,6 +4,7 @@ from mcp_core.transport.local_server import (
     BearerMCPApp,
     LocalServerHandle,
     build_local_app,
+    run_http_daemon,
     run_local_server,
     start_local_server_background,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "OAuthMiddleware",
     "StreamableHTTPServer",
     "build_local_app",
+    "run_http_daemon",
     "run_local_server",
     "run_smart_stdio_proxy",
     "start_local_server_background",
