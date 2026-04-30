@@ -25,7 +25,11 @@ export function daemonRelayUrl(serverName: string): string {
     if (!filename.startsWith(`${serverName}-`) || !filename.endsWith('.lock')) continue
     try {
       const meta = parseLock(readFileSync(join(dir, filename), 'utf-8'))
-      return `http://127.0.0.1:${meta.port}/setup?token=${meta.token}`
+      // Daemon's local_oauth_app serves a 302 from `/` to `/authorize?...` with a
+      // fresh PKCE challenge — the canonical entry point for the relay form.
+      // The earlier `/setup?token=` shape pointed to a transient-relay-only route
+      // that the daemon does NOT register, returning 404 (2026-04-30 Test B).
+      return `http://127.0.0.1:${meta.port}/`
     } catch {
       // Skip unparseable lock files; try the next match.
     }
