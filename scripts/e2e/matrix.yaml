@@ -230,11 +230,18 @@ configs:
   # the +2 are guaranteed by the standard).
   # ============================================================
 
+  # NOTE: Pinned :beta versions per
+  # `~/.claude/skills/mcp-dev/references/e2e-full-matrix.md` BETA-first
+  # invariants. `@latest` would resolve to OLD :latest PyPI tag and miss
+  # the :beta code path under test. Bump these as new :beta dispatches.
   - id: wet-stdio-direct
     type: stdio-direct
     repo: wet-mcp
     plugin: wet-mcp
-    cmd: ["uvx", "--python", "3.13", "wet-mcp@latest"]
+    # NOTE: wet-mcp PyPI has ghost 3.x.0bN versions from old test publishes
+    # that sort HIGHER than current 2.29.0b1 — `--pre` resolution would
+    # pick the ghost. Always pin current GH release exactly.
+    cmd: ["uvx", "--python", "3.13", "--from", "wet-mcp==2.29.0b1", "wet-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 5
 
@@ -242,7 +249,7 @@ configs:
     type: stdio-direct
     repo: mnemo-mcp
     plugin: mnemo-mcp
-    cmd: ["uvx", "--python", "3.13", "mnemo-mcp@latest"]
+    cmd: ["uvx", "--python", "3.13", "--from", "mnemo-mcp==1.25.0b1", "mnemo-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 3
 
@@ -250,7 +257,7 @@ configs:
     type: stdio-direct
     repo: better-code-review-graph
     plugin: better-code-review-graph
-    cmd: ["uvx", "--python", "3.13", "better-code-review-graph@latest"]
+    cmd: ["uvx", "--python", "3.13", "--from", "better-code-review-graph==3.13.0b3", "better-code-review-graph"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 4
 
@@ -258,7 +265,7 @@ configs:
     type: stdio-direct
     repo: imagine-mcp
     plugin: imagine-mcp
-    cmd: ["uvx", "--python", "3.13", "imagine-mcp@latest"]
+    cmd: ["uvx", "--python", "3.13", "--from", "imagine-mcp==1.2.0b1", "imagine-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 3
 
@@ -266,6 +273,6 @@ configs:
     type: stdio-direct
     repo: better-telegram-mcp
     plugin: better-telegram-mcp
-    cmd: ["uvx", "--python", "3.13", "better-telegram-mcp@latest"]
+    cmd: ["uvx", "--python", "3.13", "--from", "better-telegram-mcp==4.9.0b3", "better-telegram-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 5
