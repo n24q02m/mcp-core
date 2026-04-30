@@ -342,7 +342,7 @@ async def _refresh_capabilities_cache_after_save(server_name: str, lock_path: Pa
             lock_path,
             server_name,
             core_version,
-            {"tools": {"listChanged": False}},
+            {"tools": {}},
             tools_payload,
         )
         # D17.3 — touch sentinel so bridge poller detects change
@@ -607,7 +607,7 @@ async def run_local_server(
                 lock.path,
                 server_name,
                 core_version,
-                {"tools": {"listChanged": False}},
+                {"tools": {}},
                 tools_payload,
             )
         except Exception:  # noqa: BLE001
