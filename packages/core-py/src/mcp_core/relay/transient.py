@@ -163,9 +163,14 @@ def _build_relay_app(
     response can flush before uvicorn closes the connection.
     """
     fields_html, form_mode = _render_form_fields(relay_schema)
+    # ``json.dumps`` produces a valid JS string literal but does NOT escape
+    # ``</script>``, which the HTML parser closes regardless of JS syntax.
+    # Replace ``</`` with ``<\/`` (still a valid JS string, but the HTML
+    # tokenizer no longer sees a script-closing tag).
+    server_name_js = json.dumps(server_name).replace("</", "<\\/")
     body_template = (
         _HTML_FORM_TEMPLATE.replace("__SERVER_NAME_HTML__", html.escape(server_name))
-        .replace("__SERVER_NAME_JS__", json.dumps(server_name))
+        .replace("__SERVER_NAME_JS__", server_name_js)
         .replace("__FORM_FIELDS__", fields_html)
     )
     # Inject the form-mode marker as a ``data-mode`` attribute on the
