@@ -43,11 +43,12 @@ def main() -> int:
         for plugin in PLUGINS:
             if plugin not in cmd:
                 continue
-            # Match HTTP daemon by transport flag (env or arg)
+            # Match HTTP daemon by transport flag (env or arg). Substring
+            # check on joined cmd catches both inlined env (`MCP_TRANSPORT=http
+            # uvx ...`) and standalone token forms; --http catches CLI flag.
             is_http = (
                 "MCP_TRANSPORT=http" in cmd
                 or "--http" in cmdline_list
-                or "MCP_TRANSPORT=http" in [v for v in cmdline_list]
             )
             if is_http:
                 counts[plugin] += 1
