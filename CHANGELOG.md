@@ -2,6 +2,60 @@
 
 <!-- version list -->
 
+## v1.12.0 (2026-04-30)
+
+
+## v1.12.0-beta.1 (2026-04-30)
+
+### Bug Fixes
+
+- Address security + race conditions in relay transient helper
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Drop listChanged key entirely in core-py bridge cache
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Escape </script> in JS-context server_name interpolation
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Strip null + listChanged=False core-py cache
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+### Features
+
+- Add --kill-daemons flag to mcp-clean-state CLI
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Add 2026-04-30 multi-mode migration document
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Add docker-compose template for shared embedding-daemon
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Add register_relay_form_tool transient HTTP helper for stdio mode
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Add run_http_daemon alias + deprecate smart_stdio for stdio path
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Add stdio-direct config type to E2E driver matrix
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+- Multi-mode stdio direct architecture + relay helper
+  ([#140](https://github.com/n24q02m/mcp-core/pull/140),
+  [`4531ec3`](https://github.com/n24q02m/mcp-core/commit/4531ec36b7b8eac1f6ba7db16f89bf782593337a))
+
+
 ## v1.11.5 (2026-04-29)
 
 ### Bug Fixes
