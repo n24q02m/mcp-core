@@ -217,3 +217,55 @@ configs:
     deployment: [staging]
     staging_url: https://notion-mcp-staging.n24q02m.com
     user_gate: "Click 'Allow' on the Notion consent screen"
+
+  # ============================================================
+  # stdio-direct (Task 6 — drives plugin via Python MCP SDK
+  # ``stdio_client`` instead of HTTP. One per default-stdio
+  # Python plugin. Tier-less: this is a parallel axis verifying
+  # that the plugin's stdio entry point loads tools without an
+  # HTTP daemon. Tools are listed via ``tools/list`` over stdio
+  # and asserted ``>= expected_tools_min`` (uses the matrix-wide
+  # N+2 layout where N domain tools + ``config`` + ``help``;
+  # ``expected_tools_min`` here counts only domain tools, since
+  # the +2 are guaranteed by the standard).
+  # ============================================================
+
+  - id: wet-stdio-direct
+    type: stdio-direct
+    repo: wet-mcp
+    plugin: wet-mcp
+    cmd: ["uvx", "--python", "3.13", "wet-mcp@latest"]
+    env: {MCP_TRANSPORT: stdio}
+    expected_tools_min: 5
+
+  - id: mnemo-stdio-direct
+    type: stdio-direct
+    repo: mnemo-mcp
+    plugin: mnemo-mcp
+    cmd: ["uvx", "--python", "3.13", "mnemo-mcp@latest"]
+    env: {MCP_TRANSPORT: stdio}
+    expected_tools_min: 3
+
+  - id: crg-stdio-direct
+    type: stdio-direct
+    repo: better-code-review-graph
+    plugin: better-code-review-graph
+    cmd: ["uvx", "--python", "3.13", "better-code-review-graph@latest"]
+    env: {MCP_TRANSPORT: stdio}
+    expected_tools_min: 4
+
+  - id: imagine-stdio-direct
+    type: stdio-direct
+    repo: imagine-mcp
+    plugin: imagine-mcp
+    cmd: ["uvx", "--python", "3.13", "imagine-mcp@latest"]
+    env: {MCP_TRANSPORT: stdio}
+    expected_tools_min: 3
+
+  - id: telegram-stdio-direct
+    type: stdio-direct
+    repo: better-telegram-mcp
+    plugin: better-telegram-mcp
+    cmd: ["uvx", "--python", "3.13", "better-telegram-mcp@latest"]
+    env: {MCP_TRANSPORT: stdio}
+    expected_tools_min: 5

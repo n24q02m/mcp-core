@@ -427,7 +427,70 @@ def run_t2_config(config: dict, deployment: str) -> None:
             )
 
 
+async def run_stdio_direct_config(config: dict) -> dict:
+    """Drive a default-stdio plugin via Python MCP SDK ``stdio_client``.
+
+    Spawns the plugin entry point in a child process with stdio piped, runs
+    the standard MCP handshake (``initialize`` + ``tools/list``), and
+    asserts the tool count meets ``expected_tools_min``. Used for the 5
+    Python plugins shipped via uvx (wet/mnemo/crg/imagine/telegram). No
+    HTTP daemon, no relay, no upstream identity — verifies the stdio entry
+    point loads tools cleanly. Returns a result dict (rather than raising
+    on failure) so callers can collect aggregate state, but the dispatch
+    wrapper raises ``RuntimeError`` on failure to keep parity with the
+    HTTP path's all-or-nothing semantics.
+    """
+    from mcp.client.session import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    server_params = StdioServerParameters(
+        command=config["cmd"][0],
+        args=list(config["cmd"][1:]),
+        env={**os.environ, **config.get("env", {})},
+    )
+
+    results: dict = {"config_id": config["id"], "passed": False, "errors": []}
+
+    try:
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                init_result = await session.initialize()
+                results["protocol_version"] = init_result.protocolVersion
+                results["server_name"] = init_result.serverInfo.name
+
+                tools_result = await session.list_tools()
+                results["tool_count"] = len(tools_result.tools)
+                results["tool_names"] = [t.name for t in tools_result.tools]
+
+                if results["tool_count"] >= config["expected_tools_min"]:
+                    results["passed"] = True
+                else:
+                    results["errors"].append(
+                        f"tool count {results['tool_count']} < expected "
+                        f"{config['expected_tools_min']}"
+                    )
+    except Exception as e:
+        results["errors"].append(str(e))
+
+    return results
+
+
 def run_config(config: dict, deployment: str = "local") -> None:
+    if config.get("type") == "stdio-direct":
+        print(f"\n[driver] === {config['id']} (stdio-direct) ===", file=sys.stderr)
+        results = asyncio.run(run_stdio_direct_config(config))
+        if not results["passed"]:
+            raise RuntimeError(
+                f"stdio-direct FAIL {config['id']}: {results['errors']} "
+                f"(tool_count={results.get('tool_count')}, "
+                f"tool_names={results.get('tool_names')})"
+            )
+        print(
+            f"[driver] PASS {config['id']} (stdio-direct, "
+            f"{results['tool_count']} tools)",
+            file=sys.stderr,
+        )
+        return
     if config["tier"] == "t0-only":
         run_t0_config(config)
     else:
@@ -449,11 +512,11 @@ def main() -> None:
     target_configs = (
         matrix
         if args.target == "all"
-        else [c for c in matrix if c["tier"] == "t0-only"]
+        else [c for c in matrix if c.get("tier") == "t0-only"]
         if args.target == "t0"
         else [c for c in matrix if c["id"] == args.target]
     )
-    if any(c["tier"] == "t2-interaction" for c in target_configs):
+    if any(c.get("tier") == "t2-interaction" for c in target_configs):
         _print_t2_interaction_checklist()
 
     # Aggregate targets ('t0', 'all') re-invoke ourselves per config so each
@@ -462,7 +525,7 @@ def main() -> None:
     # observed 2026-04-26 when chaining mcp-core-ci into the t0 sweep).
     if args.target in {"t0", "all"}:
         if args.target == "t0":
-            ids = [c["id"] for c in matrix if c["tier"] == "t0-only"]
+            ids = [c["id"] for c in matrix if c.get("tier") == "t0-only"]
         else:
             ids = [c["id"] for c in matrix]
         failed: list[str] = []
