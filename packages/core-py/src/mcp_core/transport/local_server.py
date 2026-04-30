@@ -659,6 +659,17 @@ class LocalServerHandle:
                     pass
 
 
+async def run_http_daemon(*args: Any, **kwargs: Any) -> None:
+    """HTTP daemon mode entry point. Renamed from ``run_local_server`` in 2026-04-30.
+
+    Identical behavior; the new name clarifies intent (HTTP daemon serving
+    Streamable HTTP + OAuth on 127.0.0.1) versus the original ambiguous
+    "local server" name. Use this for new code; ``run_local_server`` is kept
+    as the original symbol for backward compatibility.
+    """
+    return await run_local_server(*args, **kwargs)
+
+
 async def start_local_server_background(
     mcp: FastMCP,
     *,
