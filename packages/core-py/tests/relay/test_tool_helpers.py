@@ -42,7 +42,7 @@ def test_register_passes_explicit_description():
 def test_handler_returns_url_when_alive(monkeypatch):
     monkeypatch.setattr(
         "mcp_core.relay.tool_helpers._daemon_relay_url",
-        lambda srv: "http://127.0.0.1:55317/setup?token=abc",
+        lambda srv: "http://127.0.0.1:55317/",
     )
     monkeypatch.setattr("mcp_core.relay.tool_helpers._daemon_is_alive", lambda srv: True)
     monkeypatch.setattr("mcp_core.relay.tool_helpers._is_session_active_for_server", lambda srv: False)
@@ -56,16 +56,16 @@ def test_handler_returns_url_when_alive(monkeypatch):
     handler = _build_open_relay_handler("demo", SCHEMA)
     result = handler()
 
-    assert result["url"] == "http://127.0.0.1:55317/setup?token=abc"
+    assert result["url"] == "http://127.0.0.1:55317/"
     assert result["browser_opened"] is True
     assert result["status"] == "configured"
-    assert opened == ["http://127.0.0.1:55317/setup?token=abc"]
+    assert opened == ["http://127.0.0.1:55317/"]
 
 
 def test_handler_session_active(monkeypatch):
     monkeypatch.setattr(
         "mcp_core.relay.tool_helpers._daemon_relay_url",
-        lambda srv: "http://127.0.0.1:55317/setup",
+        lambda srv: "http://127.0.0.1:55317/",
     )
     monkeypatch.setattr("mcp_core.relay.tool_helpers._daemon_is_alive", lambda srv: True)
     monkeypatch.setattr("mcp_core.relay.tool_helpers._is_session_active_for_server", lambda srv: True)
@@ -85,7 +85,7 @@ def test_handler_respawns_when_dead(monkeypatch):
 
     def respawn(srv: str) -> str:
         state["alive"] = True
-        return "http://127.0.0.1:55320/setup?token=new"
+        return "http://127.0.0.1:55320/"
 
     monkeypatch.setattr("mcp_core.relay.tool_helpers._daemon_is_alive", lambda srv: state["alive"])
     monkeypatch.setattr("mcp_core.relay.tool_helpers._daemon_respawn", respawn)
@@ -96,6 +96,21 @@ def test_handler_respawns_when_dead(monkeypatch):
     handler = _build_open_relay_handler("demo", SCHEMA)
     result = handler()
 
-    assert result["url"] == "http://127.0.0.1:55320/setup?token=new"
+    assert result["url"] == "http://127.0.0.1:55320/"
     assert result["status"] == "unconfigured"
     assert state["alive"] is True
+
+
+def test_daemon_relay_url_returns_root_not_setup(tmp_path, monkeypatch):
+    """Regression: daemon_relay_url must NOT return /setup?token= (404 in daemon's local_oauth_app)."""
+    from mcp_core.transport.smart_stdio import daemon_relay_url
+
+    monkeypatch.setattr("mcp_core.lifecycle.lock._lock_dir", lambda: tmp_path)
+    lock = tmp_path / "test-server-12345.lock"
+    lock.write_text(
+        "12345\n55432\nstest-jwt-token\n2026-04-30T00:00:00+00:00\nconfigured\n2026-04-30T00:00:00+00:00\n",
+        encoding="utf-8",
+    )
+    url = daemon_relay_url("test-server")
+    assert "/setup?token=" not in url, f"daemon_relay_url returned legacy URL: {url}"
+    assert url == "http://127.0.0.1:55432/"

@@ -1,0 +1,79 @@
+"""Per-plugin encrypted credential store tests."""
+
+import os
+import pytest
+
+from mcp_core.storage.per_plugin_store import PerPluginStore
+
+
+@pytest.fixture
+def store_factory(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    return lambda plugin, sub=None: PerPluginStore(plugin, sub)
+
+
+def test_save_and_load_stdio_mode(store_factory):
+    store = store_factory("test-plugin")
+    payload = {"GEMINI_API_KEY": "sk-fake-key"}
+    store.save(payload)
+    assert store.load() == payload
+
+
+def test_save_and_load_multi_user(store_factory, monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_SECRET", "test-master-secret")
+    store_a = store_factory("test-plugin", sub="user-uuid-a")
+    store_b = store_factory("test-plugin", sub="user-uuid-b")
+    store_a.save({"key": "value-a"})
+    store_b.save({"key": "value-b"})
+    assert store_a.load() == {"key": "value-a"}
+    assert store_b.load() == {"key": "value-b"}
+
+
+def test_path_layout(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    store_stdio = PerPluginStore("foo")
+    store_multi = PerPluginStore("foo", sub="abc-123")
+    assert store_stdio.cred_path == tmp_path / ".foo-mcp" / "config.json"
+    assert store_multi.cred_path == tmp_path / ".foo-mcp" / "subs" / "abc-123" / "config.json"
+
+
+def test_clear(store_factory):
+    store = store_factory("test-plugin")
+    store.save({"x": 1})
+    store.clear()
+    assert store.load() is None
+
+
+def test_file_perm_0600(store_factory, tmp_path):
+    if os.name == "nt":
+        pytest.skip("perm test posix-only")
+    store = store_factory("test-plugin")
+    store.save({"x": 1})
+    mode = store.cred_path.stat().st_mode & 0o777
+    assert mode == 0o600
+
+
+def test_cross_sub_no_read(store_factory, monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_SECRET", "test-master-secret")
+    store_a = store_factory("plugin", sub="sub-a")
+    store_a.save({"secret": "for-a"})
+    store_b = store_factory("plugin", sub="sub-b")
+    assert store_b.load() is None
+
+
+def test_multi_user_requires_credential_secret(store_factory, monkeypatch):
+    monkeypatch.delenv("CREDENTIAL_SECRET", raising=False)
+    store = store_factory("plugin", sub="some-sub")
+    with pytest.raises(RuntimeError, match="CREDENTIAL_SECRET"):
+        store.save({"k": "v"})
+
+
+def test_load_returns_none_on_tampered_ciphertext(store_factory):
+    """Tampered or corrupt file -> load() returns None (defensive UX)."""
+    store = store_factory("test-plugin")
+    store.save({"key": "value"})
+    # Corrupt the ciphertext: flip last byte
+    blob = store.cred_path.read_bytes()
+    tampered = blob[:-1] + bytes([blob[-1] ^ 0xFF])
+    store.cred_path.write_bytes(tampered)
+    assert store.load() is None

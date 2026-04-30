@@ -533,9 +533,12 @@ def main() -> None:
             print(
                 f"\n[driver] >>> spawning fresh subprocess for {cid}", file=sys.stderr
             )
+            # cwd MUST be scripts/ (parent of e2e/ package) so `python -m
+            # e2e.driver` resolves the package; cwd = scripts/e2e/ would
+            # require nested e2e/e2e/ layout which doesn't exist.
             r = subprocess.run(
                 [sys.executable, "-m", "e2e.driver", cid],
-                cwd=Path(__file__).parent,
+                cwd=Path(__file__).parent.parent,
             )
             if r.returncode != 0:
                 failed.append(cid)

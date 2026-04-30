@@ -71,12 +71,12 @@ def test_daemon_respawn_acquires_lock_then_spawns(monkeypatch: pytest.MonkeyPatc
     )
     monkeypatch.setattr(
         "mcp_core.transport.smart_stdio.daemon_relay_url",
-        lambda srv: "http://127.0.0.1:55321/setup?token=t",
+        lambda srv: "http://127.0.0.1:55321/",
     )
 
     url = daemon_respawn("demo")
 
-    assert url == "http://127.0.0.1:55321/setup?token=t"
+    assert url == "http://127.0.0.1:55321/"
     assert spawned == ["demo"]
     assert fake_lock.acquire_calls == [10]
 

@@ -197,11 +197,16 @@ def daemon_relay_url(server_name: str) -> str:
     """Return the relay form URL for the alive daemon of ``server_name``.
 
     Walks the per-user lock directory, parses the first ``<server>-*.lock``
-    that contains valid 4/5/6-line metadata, and constructs
-    ``http://127.0.0.1:<port>/setup?token=<jwt>`` so a Bridge can render a
-    user-facing setup link without going through the OAuth handshake. Used
-    by D9 ``need_setup_envelope`` (Task 1.7) and by the auto-respawn flow
-    in Task 1.11.
+    that contains valid 4/5/6-line metadata, and returns the daemon's root
+    URL ``http://127.0.0.1:<port>/``. The daemon's ``local_oauth_app``
+    serves a 302 from ``/`` to ``/authorize?...`` with a fresh PKCE
+    challenge, which is the canonical entry point for the relay form.
+
+    The earlier shape ``/setup?token=<jwt>`` pointed to a route that exists
+    only in the transient-relay app (``mcp_core.relay.transient``); the
+    daemon's ``local_oauth_app`` does not register ``/setup`` and returns
+    404, breaking ``config__open_relay`` for every consumer plugin in
+    daemon-based stdio mode (2026-04-30 Test B).
 
     Raises ``RuntimeError`` when no parseable lock file exists for the
     server. Callers that prefer a soft signal should call
@@ -217,7 +222,7 @@ def daemon_relay_url(server_name: str) -> str:
             meta = parse_lock(lock_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        return f"http://127.0.0.1:{meta.port}/setup?token={meta.token}"
+        return f"http://127.0.0.1:{meta.port}/"
     raise RuntimeError(f"no alive daemon for {server_name}")
 
 

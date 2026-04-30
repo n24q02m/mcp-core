@@ -187,6 +187,28 @@ jobs:
           comment-summary-in-pr: always
 
   # ============================================================================
+  # Multi-daemon Invariant
+  # ============================================================================
+  multi-daemon-invariant:
+    name: Multi-daemon Invariant
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Run invariant audit
+        run: cd scripts/audit && uv run python multi_daemon_invariant.py
+
+  # ============================================================================
   email-notify:
     name: Email Notification
     if: >-
