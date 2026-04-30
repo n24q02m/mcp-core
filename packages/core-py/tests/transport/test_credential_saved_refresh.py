@@ -30,9 +30,9 @@ async def test_authorize_post_refreshes_capabilities_cache(tmp_path, monkeypatch
     fake_mcp = MagicMock()
     fake_mcp.list_tools = AsyncMock(
         return_value=[
-            MagicMock(model_dump=lambda: {"name": "search"}),
-            MagicMock(model_dump=lambda: {"name": "fact_check"}),
-            MagicMock(model_dump=lambda: {"name": "config__open_relay"}),
+            MagicMock(model_dump=lambda **kwargs: {"name": "search"}),
+            MagicMock(model_dump=lambda **kwargs: {"name": "fact_check"}),
+            MagicMock(model_dump=lambda **kwargs: {"name": "config__open_relay"}),
         ]
     )
     monkeypatch.setattr(local_server, "_get_mcp_for_server", lambda name: fake_mcp)

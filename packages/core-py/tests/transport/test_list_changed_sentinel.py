@@ -20,7 +20,7 @@ async def test_refresh_touches_list_changed_sentinel(tmp_path, monkeypatch):
     fake_mcp = MagicMock()
     fake_mcp.list_tools = AsyncMock(
         return_value=[
-            MagicMock(model_dump=lambda: {"name": "search"}),
+            MagicMock(model_dump=lambda **kwargs: {"name": "search"}),
         ]
     )
     monkeypatch.setattr(local_server, "_get_mcp_for_server", lambda name: fake_mcp)

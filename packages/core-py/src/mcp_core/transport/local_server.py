@@ -328,16 +328,21 @@ async def _refresh_capabilities_cache_after_save(server_name: str, lock_path: Pa
 
         mcp = _get_mcp_for_server(server_name)
         tools_list = await mcp.list_tools()
-        tools_payload = [t.model_dump() if hasattr(t, "model_dump") else dict(t) for t in tools_list]
+        # exclude_none=True strips null fields (title, icons, meta, execution) that
+        # Claude Code's MCP harness rejects as schema-invalid (verified 2026-04-30).
+        tools_payload = [t.model_dump(exclude_none=True) if hasattr(t, "model_dump") else dict(t) for t in tools_list]
         try:
             core_version = _pkg_version("n24q02m-mcp-core")
         except PackageNotFoundError:
             core_version = "0.0.0"
+        # listChanged: False matches TS bridge advertise pattern. D17.1 set True for
+        # post-config refresh notifications, but Claude Code defers tools/list query
+        # for plugins advertising True, leaving deferred tools registry empty.
         persist_capabilities_cache(
             lock_path,
             server_name,
             core_version,
-            {"tools": {"listChanged": True}},
+            {"tools": {"listChanged": False}},
             tools_payload,
         )
         # D17.3 — touch sentinel so bridge poller detects change
@@ -589,16 +594,20 @@ async def run_local_server(
             from mcp_core.transport.smart_stdio import persist_capabilities_cache
 
             tools_list = await mcp.list_tools()
-            tools_payload = [t.model_dump() if hasattr(t, "model_dump") else dict(t) for t in tools_list]
+            # exclude_none=True strips null fields rejected by Claude Code's MCP harness.
+            tools_payload = [
+                t.model_dump(exclude_none=True) if hasattr(t, "model_dump") else dict(t) for t in tools_list
+            ]
             try:
                 core_version = _pkg_version("n24q02m-mcp-core")
             except PackageNotFoundError:
                 core_version = "0.0.0"
+            # listChanged: False matches TS bridge advertise pattern (see line 340 comment).
             persist_capabilities_cache(
                 lock.path,
                 server_name,
                 core_version,
-                {"tools": {"listChanged": True}},
+                {"tools": {"listChanged": False}},
                 tools_payload,
             )
         except Exception:  # noqa: BLE001
