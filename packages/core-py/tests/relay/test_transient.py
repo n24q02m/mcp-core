@@ -36,7 +36,8 @@ async def test_register_creates_open_relay_tool(monkeypatch):
     from mcp.server.fastmcp import FastMCP
 
     mcp = FastMCP(name="test-server")
-    register_relay_form_tool(mcp, "test-server", lambda *a: None)
+    # Short timeout so the watchdog thread doesn't linger 600s past test exit.
+    register_relay_form_tool(mcp, "test-server", lambda *a: None, timeout_seconds=2)
 
     tools = await mcp.list_tools()
     tool_names = [t.name for t in tools]
@@ -76,8 +77,10 @@ async def test_relay_form_save_callback_fires_on_submit(monkeypatch):
 
     # Allow the on_save callback to fire (it's invoked synchronously inside
     # the request handler, but the callback list is populated on a separate
-    # uvicorn worker thread).
-    await asyncio.sleep(0.5)
+    # uvicorn worker thread). The submit handler also schedules a 0.5s
+    # delayed shutdown so the response can flush — wait long enough to see
+    # the callback's side effect.
+    await asyncio.sleep(0.7)
 
     assert ("test-server", {"api_key": "test-key-123"}) in saved
 
@@ -88,7 +91,7 @@ async def test_invalid_token_rejected(monkeypatch):
     from mcp.server.fastmcp import FastMCP
 
     mcp = FastMCP(name="test-server")
-    register_relay_form_tool(mcp, "test-server", lambda *a: None)
+    register_relay_form_tool(mcp, "test-server", lambda *a: None, timeout_seconds=2)
 
     monkeypatch.setattr("webbrowser.open", lambda url: None)
     result = await mcp.call_tool("config__open_relay", {})
@@ -106,3 +109,56 @@ async def test_invalid_token_rejected(monkeypatch):
             json={"api_key": "fake"},
         )
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_relay_schema_renders_labeled_inputs(monkeypatch):
+    """When ``relay_schema`` is provided, GET /setup renders labeled inputs.
+
+    Restores UX parity with HTTP-daemon mode (``feedback_relay_mode_ui_parity.md``):
+    the user sees one input per credential field with the schema's label as
+    the visible text, not a generic JSON paste textarea.
+    """
+    from mcp.server.fastmcp import FastMCP
+
+    mcp = FastMCP(name="test-server")
+    schema = {
+        "fields": [
+            {"name": "api_key", "label": "API Key", "type": "password", "required": True},
+            {"name": "workspace_id", "label": "Workspace", "type": "text"},
+        ]
+    }
+    register_relay_form_tool(
+        mcp,
+        "test-server",
+        lambda *a: None,
+        relay_schema=schema,
+        timeout_seconds=2,
+    )
+
+    monkeypatch.setattr("webbrowser.open", lambda url: None)
+    result = await mcp.call_tool("config__open_relay", {})
+
+    match = re.search(r"http://127\.0\.0\.1:(\d+)/setup\?token=([A-Za-z0-9_\-]+)", str(result))
+    assert match, f"expected setup URL in result, got: {result!r}"
+    port, token = match.groups()
+
+    await asyncio.sleep(0.5)
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"http://127.0.0.1:{port}/setup",
+            params={"token": token},
+        )
+    assert resp.status_code == 200
+    body = resp.text
+
+    # Expect the schema-driven path: one labeled input per field, with the
+    # generic JSON textarea absent (form mode is "fields", not "json").
+    assert "name='api_key'" in body
+    assert "name='workspace_id'" in body
+    assert "API Key" in body
+    assert "Workspace" in body
+    assert "data-mode='fields'" in body
+    # Generic JSON textarea fallback must NOT be rendered when a schema is given.
+    assert "name='json'" not in body

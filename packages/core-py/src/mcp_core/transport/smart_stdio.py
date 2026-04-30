@@ -598,7 +598,7 @@ def run_smart_stdio_proxy(
     warnings.warn(
         "run_smart_stdio_proxy is deprecated as of mcp-core 1.12.0. "
         "Use FastMCP.run(transport='stdio') directly for stdio mode. "
-        "See: https://github.com/n24q02m/mcp-core/blob/main/docs/migration-2026-04-30.md",
+        "Will be removed in 2.0.0.",
         DeprecationWarning,
         stacklevel=2,
     )

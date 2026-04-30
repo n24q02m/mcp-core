@@ -15,6 +15,8 @@ single-form server.
 from __future__ import annotations
 
 import asyncio
+import html
+import json
 import secrets
 import socket
 import threading
@@ -49,33 +51,49 @@ def _generate_token() -> str:
 
 
 # Form HTML uses ``textContent`` only — no ``innerHTML`` with untrusted
-# content. The placeholder ``SERVER_NAME`` is interpolated server-side from a
-# value the plugin author controls, so it is safe; everything else is set via
-# DOM APIs in the inline script.
+# content. Two distinct placeholders for two contexts:
+#   * ``__SERVER_NAME_HTML__`` rendered into HTML markup (escaped via
+#     ``html.escape``).
+#   * ``__SERVER_NAME_JS__`` rendered into a JS string literal slot
+#     (encoded via ``json.dumps`` which produces a valid JS string).
+# A plugin author who picks a malicious server name (e.g.
+# ``"</script><script>alert(1)</script>"``) cannot escape either context.
 _HTML_FORM_TEMPLATE = (
-    "<!DOCTYPE html><html><head><title>SERVER_NAME setup</title></head>"
+    "<!DOCTYPE html><html><head><title>__SERVER_NAME_HTML__ setup</title></head>"
     "<body><h1 id='title'></h1>"
     "<p>Paste a JSON object containing your credentials below, then click "
     "Submit. The form auto-closes after a successful save.</p>"
     "<form id='relayForm'>"
-    "<textarea name='json' rows='10' cols='60' "
-    "placeholder='{&quot;api_key&quot;: &quot;...&quot;}'></textarea><br>"
+    "__FORM_FIELDS__"
     "<button type='submit'>Submit</button>"
     "</form>"
     "<div id='status'></div>"
     "<script>"
-    "document.getElementById('title').textContent = 'SERVER_NAME credentials';"
+    "document.getElementById('title').textContent = __SERVER_NAME_JS__ + ' credentials';"
     "document.getElementById('relayForm').onsubmit = async function(e) {"
     "  e.preventDefault();"
     "  var token = new URLSearchParams(window.location.search).get('token');"
-    "  var jsonText = e.target.json.value;"
+    "  var form = e.target;"
+    "  var body;"
+    "  if (form.dataset.mode === 'json') {"
+    "    body = form.elements['json'].value;"
+    "  } else {"
+    "    var obj = {};"
+    "    var inputs = form.querySelectorAll('input[name], textarea[name], select[name]');"
+    "    for (var i = 0; i < inputs.length; i++) {"
+    "      var el = inputs[i];"
+    "      if (el.name === 'json') continue;"
+    "      obj[el.name] = el.value;"
+    "    }"
+    "    body = JSON.stringify(obj);"
+    "  }"
     "  var resp = await fetch('/setup/submit', {"
     "    method: 'POST',"
     "    headers: {"
     "      'Authorization': 'Bearer ' + token,"
     "      'Content-Type': 'application/json'"
     "    },"
-    "    body: jsonText"
+    "    body: body"
     "  });"
     "  var statusDiv = document.getElementById('status');"
     "  if (resp.ok) {"
@@ -90,29 +108,86 @@ _HTML_FORM_TEMPLATE = (
 )
 
 
+def _render_form_fields(relay_schema: dict[str, Any] | None) -> tuple[str, str]:
+    """Render form-field markup for the form body.
+
+    Returns a tuple ``(fields_html, mode)`` where ``mode`` is ``"json"`` for
+    the generic textarea fallback and ``"fields"`` for the schema-driven
+    labeled-inputs path. The mode is set as a ``data-mode`` attribute on the
+    ``<form>`` element so the inline submit script knows whether to read a
+    raw JSON textarea or to collect named inputs into an object.
+    """
+    if relay_schema is None or not relay_schema.get("fields"):
+        # Fallback: generic JSON paste textarea. Uses ``name="json"`` so the
+        # inline script's ``form.dataset.mode === 'json'`` branch reads it.
+        textarea = (
+            "<textarea name='json' rows='10' cols='60' "
+            "placeholder='{&quot;api_key&quot;: &quot;...&quot;}'></textarea><br>"
+        )
+        return textarea, "json"
+
+    parts: list[str] = []
+    for field in relay_schema["fields"]:
+        # Each field dict: ``{"name": str, "label": str, "type": str?,
+        # "placeholder": str?, "required": bool?}``. Every value rendered into
+        # HTML markup is run through ``html.escape`` to defuse a malicious
+        # plugin author choosing weird strings.
+        raw_name = str(field.get("name", ""))
+        if not raw_name:
+            continue
+        name_attr = html.escape(raw_name, quote=True)
+        label_text = html.escape(str(field.get("label", raw_name)))
+        input_type = html.escape(str(field.get("type", "text")), quote=True)
+        placeholder = html.escape(str(field.get("placeholder", "")), quote=True)
+        required_attr = " required" if field.get("required") else ""
+        parts.append(
+            f"<label>{label_text}<br>"
+            f"<input type='{input_type}' name='{name_attr}' "
+            f"placeholder='{placeholder}'{required_attr}></label><br>"
+        )
+    return "".join(parts), "fields"
+
+
 def _build_relay_app(
     server_name: str,
     expected_token: str,
     on_save: Callable[[str, dict], None],
     shutdown_event: threading.Event,
+    relay_schema: dict[str, Any] | None = None,
 ) -> Starlette:
     """Build a Starlette app exposing ``GET /setup`` and ``POST /setup/submit``.
 
-    The token is validated on both endpoints. Successful POST invokes
-    ``on_save`` synchronously and signals ``shutdown_event`` so the watchdog
-    thread can stop uvicorn.
+    The token is validated on both endpoints with ``secrets.compare_digest`` to
+    avoid timing-based extraction. Successful POST invokes ``on_save``
+    synchronously, then schedules a brief delayed shutdown signal so the HTTP
+    response can flush before uvicorn closes the connection.
     """
+    fields_html, form_mode = _render_form_fields(relay_schema)
+    body_template = (
+        _HTML_FORM_TEMPLATE.replace("__SERVER_NAME_HTML__", html.escape(server_name))
+        .replace("__SERVER_NAME_JS__", json.dumps(server_name))
+        .replace("__FORM_FIELDS__", fields_html)
+    )
+    # Inject the form-mode marker as a ``data-mode`` attribute on the
+    # ``<form>`` element so the inline JS knows whether to read the
+    # ``json`` textarea or assemble an object from named inputs.
+    body_template = body_template.replace(
+        "<form id='relayForm'>",
+        f"<form id='relayForm' data-mode='{html.escape(form_mode, quote=True)}'>",
+    )
 
     async def setup_form(request: Request) -> HTMLResponse:
         token = request.query_params.get("token", "")
-        if token != expected_token:
+        if not secrets.compare_digest(token, expected_token):
             return HTMLResponse("invalid token", status_code=401)
-        body = _HTML_FORM_TEMPLATE.replace("SERVER_NAME", server_name)
-        return HTMLResponse(body)
+        return HTMLResponse(body_template)
 
     async def submit(request: Request) -> JSONResponse:
         auth = request.headers.get("authorization", "")
-        if not auth.startswith("Bearer ") or auth[len("Bearer ") :] != expected_token:
+        if not auth.startswith("Bearer "):
+            return JSONResponse({"error": "invalid token"}, status_code=401)
+        provided = auth[len("Bearer ") :]
+        if not secrets.compare_digest(provided, expected_token):
             return JSONResponse({"error": "invalid token"}, status_code=401)
         try:
             creds = await request.json()
@@ -124,7 +199,20 @@ def _build_relay_app(
             on_save(server_name, creds)
         except Exception as exc:  # noqa: BLE001
             return JSONResponse({"error": f"on_save failed: {exc}"}, status_code=500)
-        shutdown_event.set()
+
+        # Delay the shutdown signal so uvicorn can flush this response before
+        # the watchdog flips ``server.should_exit`` and closes the socket.
+        # 0.5s is generous for a localhost JSON response.
+        def _delayed_shutdown() -> None:
+            time.sleep(0.5)
+            shutdown_event.set()
+
+        threading.Thread(
+            target=_delayed_shutdown,
+            daemon=True,
+            name=f"relay-shutdown-{server_name}",
+        ).start()
+
         return JSONResponse({"status": "saved"})
 
     return Starlette(
@@ -140,6 +228,7 @@ def register_relay_form_tool(
     server_name: str,
     on_save: Callable[[str, dict], None],
     *,
+    relay_schema: dict[str, Any] | None = None,
     timeout_seconds: int = 600,
 ) -> None:
     """Register a ``config__open_relay`` tool on the given FastMCP server.
@@ -158,9 +247,16 @@ def register_relay_form_tool(
         mcp: A FastMCP instance to register the tool on.
         server_name: Plugin server name (e.g. ``"wet-mcp"``). Passed to
             ``on_save`` so a single callback can multiplex over plugins.
+            HTML- and JS-escaped before being interpolated into the form.
         on_save: Callback invoked with ``(server_name, credentials_dict)``
             when the user submits the form. The caller is responsible for
             persisting the credentials (e.g. writing ``config.enc``).
+        relay_schema: Optional schema describing the credential fields.
+            Shape: ``{"fields": [{"name": str, "label": str, "type": str?,
+            "placeholder": str?, "required": bool?}, ...]}``. When provided
+            the form renders labeled inputs (UX parity with HTTP-daemon mode
+            per ``feedback_relay_mode_ui_parity.md``); when ``None`` the
+            form falls back to a generic JSON-paste textarea.
         timeout_seconds: Auto-shutdown after this many seconds of idleness
             (default 600 = 10 minutes).
     """
@@ -177,7 +273,7 @@ def register_relay_form_tool(
         url = f"http://127.0.0.1:{port}/setup?token={token}"
 
         shutdown_event = threading.Event()
-        app = _build_relay_app(server_name, token, on_save, shutdown_event)
+        app = _build_relay_app(server_name, token, on_save, shutdown_event, relay_schema)
 
         config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
         server = uvicorn.Server(config)
@@ -196,16 +292,20 @@ def register_relay_form_tool(
         watchdog_thread.start()
 
         # Wait briefly for the server to be listening so the URL we hand back
-        # is immediately usable. Bound the wait at ~2s.
+        # is immediately usable. Bound the wait at ~2s, yielding to the event
+        # loop between probes so we don't block the host MCP server.
         for _ in range(20):
             try:
                 with socket.create_connection(("127.0.0.1", port), timeout=0.1):
                     break
             except OSError:
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
 
         try:
-            webbrowser.open(url)
+            # ``webbrowser.open`` may block briefly on Windows while it spawns
+            # the OS handler; run it in a worker thread to keep the asyncio
+            # loop responsive.
+            await asyncio.to_thread(webbrowser.open, url)
         except Exception:  # noqa: BLE001
             # The browser may be unavailable (headless CI, locked-down user
             # session). The caller can still copy the URL manually from the
