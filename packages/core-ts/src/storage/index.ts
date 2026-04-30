@@ -10,6 +10,7 @@ export {
 export { decryptData, deriveFileKey, derivePassphraseKey, encryptData } from './encryption.js'
 export { getMachineId, getUsername } from './machine-id.js'
 export { clearMode, getMode, type ServerMode, setLocalMode } from './mode.js'
+export { credPath, PerPluginStore, setHomeDirForTesting } from './per-plugin-store.js'
 export { type ConfigSource, type ResolvedConfig, resolveConfig } from './resolver.js'
 export {
   acquireSessionLock,

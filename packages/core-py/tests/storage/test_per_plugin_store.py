@@ -66,3 +66,14 @@ def test_multi_user_requires_credential_secret(store_factory, monkeypatch):
     store = store_factory("plugin", sub="some-sub")
     with pytest.raises(RuntimeError, match="CREDENTIAL_SECRET"):
         store.save({"k": "v"})
+
+
+def test_load_returns_none_on_tampered_ciphertext(store_factory):
+    """Tampered or corrupt file -> load() returns None (defensive UX)."""
+    store = store_factory("test-plugin")
+    store.save({"key": "value"})
+    # Corrupt the ciphertext: flip last byte
+    blob = store.cred_path.read_bytes()
+    tampered = blob[:-1] + bytes([blob[-1] ^ 0xFF])
+    store.cred_path.write_bytes(tampered)
+    assert store.load() is None

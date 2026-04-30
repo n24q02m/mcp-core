@@ -18,7 +18,7 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 // Module-level override for testing.
 let homeDirOverride: string | null = null
@@ -98,7 +98,7 @@ export class PerPluginStore {
   }
 
   async save(payload: Record<string, unknown>): Promise<void> {
-    await mkdir(join(this.credPath, '..'), { recursive: true, mode: 0o700 })
+    await mkdir(dirname(this.credPath), { recursive: true, mode: 0o700 })
     const iv = randomBytes(12)
     const cipher = createCipheriv('aes-256-gcm', await this.key(), iv)
     const plaintext = Buffer.from(JSON.stringify(payload), 'utf-8')

@@ -59,4 +59,15 @@ describe('PerPluginStore', () => {
     const store = new PerPluginStore('plugin', 'some-sub')
     await expect(store.save({ k: 'v' })).rejects.toThrow(/CREDENTIAL_SECRET/)
   })
+
+  it('load returns null on tampered ciphertext', async () => {
+    const store = new PerPluginStore('test-plugin')
+    await store.save({ key: 'value' })
+    const { readFileSync, writeFileSync } = await import('node:fs')
+    const blob = readFileSync(store.credPath)
+    const tampered = Buffer.from(blob)
+    tampered[tampered.length - 1] ^= 0xff // flip last byte
+    writeFileSync(store.credPath, tampered)
+    expect(await store.load()).toBeNull()
+  })
 })
