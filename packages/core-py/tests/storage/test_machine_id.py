@@ -26,7 +26,7 @@ class TestGetMachineId:
         # Clear cache before test
         get_machine_id.cache_clear()
 
-        with patch("platform.system", return_value="Linux") as mock_system:
+        with patch("mcp_core.storage.machine_id.sys.platform", "linux"):
             # We also need to mock the file open since it's Linux
             with patch("builtins.open", create=True) as mock_open:
                 mock_open.return_value.__enter__.return_value.read.return_value = "test-machine-id"
@@ -34,12 +34,12 @@ class TestGetMachineId:
                 # First call
                 id1 = get_machine_id()
                 assert id1 == "test-machine-id"
-                assert mock_system.call_count == 1
+                assert mock_open.call_count == 1
 
                 # Second call - should use cache
                 id2 = get_machine_id()
                 assert id2 == "test-machine-id"
-                assert mock_system.call_count == 1
+                assert mock_open.call_count == 1
 
 
 class TestGetUsername:
