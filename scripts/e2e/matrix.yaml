@@ -234,7 +234,7 @@ configs:
     type: stdio-direct
     repo: wet-mcp
     plugin: wet-mcp
-    cmd: ["uvx", "--python", "3.13", "wet-mcp@latest"]
+    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "wet-mcp==2.29.0b3", "wet-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 5
 
@@ -242,7 +242,7 @@ configs:
     type: stdio-direct
     repo: mnemo-mcp
     plugin: mnemo-mcp
-    cmd: ["uvx", "--python", "3.13", "mnemo-mcp@latest"]
+    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "mnemo-mcp==1.25.0b3", "mnemo-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 3
 
@@ -250,7 +250,7 @@ configs:
     type: stdio-direct
     repo: better-code-review-graph
     plugin: better-code-review-graph
-    cmd: ["uvx", "--python", "3.13", "better-code-review-graph@latest"]
+    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "better-code-review-graph==3.13.0b4", "better-code-review-graph"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 4
 
@@ -258,7 +258,7 @@ configs:
     type: stdio-direct
     repo: imagine-mcp
     plugin: imagine-mcp
-    cmd: ["uvx", "--python", "3.13", "imagine-mcp@latest"]
+    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "imagine-mcp==1.2.0b2", "imagine-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 3
 
@@ -266,6 +266,6 @@ configs:
     type: stdio-direct
     repo: better-telegram-mcp
     plugin: better-telegram-mcp
-    cmd: ["uvx", "--python", "3.13", "better-telegram-mcp@latest"]
+    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "better-telegram-mcp==4.9.0b4", "better-telegram-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 5
