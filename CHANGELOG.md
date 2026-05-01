@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.3 (2026-05-01)
+
+### Bug Fixes
+
+- **e2e**: Add --prerelease=allow to stdio-direct uvx commands
+  ([#147](https://github.com/n24q02m/mcp-core/pull/147),
+  [`e928a45`](https://github.com/n24q02m/mcp-core/commit/e928a459e659c0faeb796dcf451c7d2c5ea0c48a))
+
+- **e2e**: Add --prerelease=allow to stdio-direct uvx commands
+  ([#146](https://github.com/n24q02m/mcp-core/pull/146),
+  [`9f3554d`](https://github.com/n24q02m/mcp-core/commit/9f3554dad9fe34517059612a6f3fcee7d338a62a))
+
+- **storage**: Use sys.platform instead of platform.system() (avoid WMI hang)
+  ([#147](https://github.com/n24q02m/mcp-core/pull/147),
+  [`e928a45`](https://github.com/n24q02m/mcp-core/commit/e928a459e659c0faeb796dcf451c7d2c5ea0c48a))
+
+
 ## v1.13.0-beta.2 (2026-04-30)
 
 ### Bug Fixes
