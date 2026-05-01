@@ -2,10 +2,10 @@
 
 import getpass
 import os
-import platform
 import re
 import socket
 import subprocess
+import sys
 import uuid
 from functools import lru_cache
 
@@ -21,16 +21,20 @@ def get_machine_id() -> str:
 
     Falls back to hostname + first MAC address.
 
+    Uses ``sys.platform`` (string compare, no syscall) instead of
+    ``platform.system()`` which on Windows triggers WMI via
+    ``platform.win32_ver()``; degraded WMI services hang the process.
+
     Returns:
         Machine identifier string.
     """
-    system = platform.system()
+    plat = sys.platform
     try:
-        if system == "Linux":
+        if plat.startswith("linux"):
             with open("/etc/machine-id") as f:
                 return f.read().strip()
 
-        if system == "Darwin":
+        if plat == "darwin":
             result = subprocess.run(
                 ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
                 capture_output=True,
@@ -41,7 +45,7 @@ def get_machine_id() -> str:
             if match:
                 return match.group(1)
 
-        if system == "Windows":
+        if plat == "win32":
             result = subprocess.run(
                 [
                     "reg",
