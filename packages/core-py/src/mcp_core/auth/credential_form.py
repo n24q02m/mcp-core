@@ -706,6 +706,7 @@ def render_credential_form(
             form.addEventListener("input", function (event) {{
                 if (event.target.classList.contains("field-input")) {{
                     event.target.removeAttribute("aria-invalid");
+                    event.target.removeAttribute("aria-errormessage");
                     statusBox.style.display = "none";
                 }}
             }});
@@ -716,19 +717,28 @@ def render_credential_form(
                 var inputs = form.querySelectorAll(".field-input");
                 var payload = {{}};
                 var valid = true;
+                var firstInvalid = null;
 
                 inputs.forEach(function (input) {{
                     if (input.hasAttribute("required") && input.value.trim() === "") {{
                         valid = false;
                         input.setAttribute("aria-invalid", "true");
+                        input.setAttribute("aria-errormessage", "status-box");
+                        if (!firstInvalid) {{
+                            firstInvalid = input;
+                        }}
                     }} else {{
                         input.removeAttribute("aria-invalid");
+                        input.removeAttribute("aria-errormessage");
                         payload[input.name] = input.value;
                     }}
                 }});
 
                 if (!valid) {{
                     showStatus("error", "Please fill in all required fields.");
+                    if (firstInvalid) {{
+                        firstInvalid.focus();
+                    }}
                     return;
                 }}
 
