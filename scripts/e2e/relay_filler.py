@@ -26,7 +26,11 @@ def fill_relay_form(
     """Fill ``/authorize`` form once. Returns the JSON response body when the
     server returns JSON, otherwise ``{"status_code": int, "text": str}``.
     """
-    with httpx.Client(timeout=timeout, follow_redirects=False) as client:
+    # Follow redirects on GET: mcp-core's /authorize without OAuth params
+    # 302-redirects to the bootstrapped /authorize?<PKCE-params> URL where
+    # the form HTML is actually served. Without follow_redirects=True,
+    # httpx raises HTTPStatusError on the 302.
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
         r = client.get(f"{base_url}/authorize")
         r.raise_for_status()
         action_m = _FORM_RE.search(r.text)
@@ -39,6 +43,8 @@ def fill_relay_form(
         input_names = set(_INPUT_RE.findall(r.text))
         payload = {k: v for k, v in creds.items() if k in input_names}
 
+        # POST stays follow_redirects=True — server may 303 to /callback-done
+        # after credential save (relay completion path).
         post = client.post(action_url, data=payload)
         post.raise_for_status()
         try:
