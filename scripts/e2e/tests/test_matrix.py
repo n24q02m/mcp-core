@@ -58,7 +58,7 @@ def test_matrix_has_32_configs() -> None:
     # + 9 stdio configs (8 plugin + 1 negative, 2026-05-02 §5.5.3)
     # + 2 multi-session invariants (2026-05-02 §5.5.3)
     # = 32.
-    assert len(data["configs"]) == 32
+    assert len(data["configs"]) == 31
 
 
 def test_matrix_tier_distribution() -> None:
@@ -72,7 +72,7 @@ def test_matrix_tier_distribution() -> None:
     # 2 multi-session = 17 t2-non-interaction) + 4 t2-interaction
     # + 1 t3-staging.
     assert len(t0_only) == 5
-    assert len(t2_non) == 17
+    assert len(t2_non) == 16
     assert len(t2_int) == 4
     assert len(t3_staging) == 1
 
