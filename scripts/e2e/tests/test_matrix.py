@@ -17,13 +17,22 @@ History:
   point loads tools without an HTTP daemon. They have no ``tier`` /
   ``auth`` / ``skret_namespace`` field (tier-less + no upstream
   identity surface required).
-- 2026-05-02: 21 → 32 per spec ``2026-05-01-stdio-pure-http-multiuser.md``
+- 2026-05-02: 21 → 31 per spec ``2026-05-01-stdio-pure-http-multiuser.md``
   §5.5: dropped the ``deployment: [local, remote]`` matrix axis from T2
   configs (HTTP is always multi-user, single deployment shape) and added
   9 ``<plugin>-stdio`` configs (skret-pulled env + uvx + tools/call) plus
   2 ``multi-session-{stdio,http}`` runtime-invariant configs. Introduces
   the ``auth: env`` value (pure env-var stdio) on top of the original
   ``{none, oauth, relay}`` superset.
+- 2026-05-02 (hardening): 31 → 32 by adding the new
+  ``stdio-pure-strict-no-fallback`` config that wipes EVERY persistent
+  credential surface (``config.enc`` TS+Py legacy paths +
+  ``~/.<plugin>-mcp/{config.json, users/, subs/, tokens.json}``)
+  BEFORE each spawn so the env-only assertion is meaningful. The
+  original ``stdio-no-env-negative`` config silently became a positive
+  whenever a prior real-plugin Test B left those artefacts behind; the
+  new config folds the Test B constraint back into the driver. See
+  ``feedback_test_a_not_test_b.md``.
 """
 
 from pathlib import Path
@@ -57,8 +66,9 @@ def test_matrix_has_32_configs() -> None:
     # + 5 stdio-direct (parallel axis, 2026-04-30)
     # + 9 stdio configs (8 plugin + 1 negative, 2026-05-02 §5.5.3)
     # + 2 multi-session invariants (2026-05-02 §5.5.3)
+    # + 1 stdio-pure-strict-no-fallback (2026-05-02 hardening)
     # = 32.
-    assert len(data["configs"]) == 31
+    assert len(data["configs"]) == 32
 
 
 def test_matrix_tier_distribution() -> None:
@@ -69,10 +79,10 @@ def test_matrix_tier_distribution() -> None:
     t2_int = [c for c in tiered if c["tier"] == "t2-interaction"]
     t3_staging = [c for c in tiered if c["tier"] == "t3-staging"]
     # 2026-05-02 final: 5 t0-only + (6 relay/none non-int + 9 stdio +
-    # 2 multi-session = 17 t2-non-interaction) + 4 t2-interaction
-    # + 1 t3-staging.
+    # 2 multi-session + 1 strict-no-fallback = 18 t2-non-interaction)
+    # + 4 t2-interaction + 1 t3-staging.
     assert len(t0_only) == 5
-    assert len(t2_non) == 16
+    assert len(t2_non) == 17
     assert len(t2_int) == 4
     assert len(t3_staging) == 1
 
@@ -124,6 +134,7 @@ def test_t2_configs_have_skret_namespace_when_auth_present() -> None:
     # entry. The aggregate config itself has no single namespace to declare.
     multi_plugin_ids = {
         "stdio-no-env-negative",
+        "stdio-pure-strict-no-fallback",
         "multi-session-stdio",
         "multi-session-http",
     }
@@ -164,8 +175,10 @@ def test_no_deployment_axis_on_t2_configs() -> None:
 
 
 def test_stdio_pure_configs_present() -> None:
-    """8 plugin stdio configs + 1 negative + 2 multi-session = 11 entries
-    added 2026-05-02 per spec §5.5.3."""
+    """8 plugin stdio configs + 1 negative + 2 multi-session +
+    1 strict-no-fallback = 12 entries added 2026-05-02 (negative +
+    strict-no-fallback per spec §5.5.3 + hardening
+    feedback_test_a_not_test_b.md)."""
     data = _load()
     expected = {
         "notion-stdio",
@@ -177,6 +190,7 @@ def test_stdio_pure_configs_present() -> None:
         "imagine-stdio",
         "godot-stdio",
         "stdio-no-env-negative",
+        "stdio-pure-strict-no-fallback",
         "multi-session-stdio",
         "multi-session-http",
     }

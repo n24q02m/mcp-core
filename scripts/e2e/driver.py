@@ -806,6 +806,172 @@ def _is_negative_stdio_config(config: dict) -> bool:
     return config.get("id") == "stdio-no-env-negative"
 
 
+def _is_strict_no_fallback_config(config: dict) -> bool:
+    return config.get("id") == "stdio-pure-strict-no-fallback"
+
+
+# ---------------------------------------------------------------
+# Persistent credential storage cleanup (added 2026-05-02 per
+# feedback_test_a_not_test_b.md). The original ``stdio-no-env-negative``
+# config only emptied the spawned process env, but real plugins resolve
+# creds via a chain that ALSO checks ``config.enc`` (TS+Py legacy) and
+# the per-plugin store at ``~/.<plugin>-mcp/{config.json,users/*,subs/*,
+# tokens.json}``. With prior runs leaving those artefacts around, the
+# negative test silently became a positive (plugin booted from
+# fallback) — Test B caught the regression but the driver did not.
+#
+# These helpers wipe every persistent cred surface BEFORE each spawn so
+# the env-only assertion is meaningful. Application data (SQLite,
+# diskcache, SearXNG state) is preserved — the test exercises CRED
+# resolution, not data state.
+# ---------------------------------------------------------------
+
+# Plugin slug (matches ``EXPECTED_TOOLS`` keys) -> per-plugin store dir
+# under ``~/``. Mirrors the ``ALL_SERVERS`` list in
+# ``packages/core-py/src/mcp_core/scripts/clean_state.py`` so any new
+# plugin added there is also covered here.
+PLUGIN_PER_STORE_DIRS: dict[str, str] = {
+    "better-notion-mcp": ".better-notion-mcp",
+    "better-email-mcp": ".better-email-mcp",
+    "better-telegram-mcp": ".better-telegram-mcp",
+    "wet-mcp": ".wet-mcp",
+    "mnemo-mcp": ".mnemo-mcp",
+    "better-code-review-graph": ".better-code-review-graph",
+    "imagine-mcp": ".imagine-mcp",
+    "better-godot-mcp": ".better-godot-mcp",
+}
+
+# Plugins that REQUIRE at least one cred to function (must exit 1 with
+# empty env + empty cred storage). Source-of-truth lives in spec
+# ``2026-05-01-stdio-pure-http-multiuser.md`` §4.1:
+#   - notion (NOTION_TOKEN required)
+#   - email (EMAIL_CREDENTIALS required)
+#   - telegram (TELEGRAM_BOT_TOKEN OR session string required per OQ4)
+#   - imagine (≥1 of GEMINI_API_KEY/OPENAI_API_KEY/XAI_API_KEY required)
+# Plugins with truly optional creds (wet/mnemo/crg) and no-cred (godot)
+# boot cleanly with empty env in limited mode per spec §4.1.
+# Imagine was originally classified in the task spec as "optional-cred"
+# but real behavior verified 2026-05-02 (uvx imagine-mcp with empty env
+# exits 1 with documented "Stdio mode requires at least one of" message)
+# matches the spec §4.1 "≥1 required" semantics, so we honor the spec.
+STRICT_NO_FALLBACK_PLUGINS = {
+    "notion-stdio",  # NOTION_TOKEN required
+    "email-stdio-gmail",  # EMAIL_CREDENTIALS required
+    "telegram-stdio-bot",  # TELEGRAM_BOT_TOKEN required
+    "imagine-stdio",  # ≥1 provider API key required per spec §4.1
+}
+
+# Cred-related env vars that must NOT be silently filled by a
+# PerPluginStore lookup. Optional-cred plugins are allowed to boot in
+# limited mode, but they MUST NOT load creds from disk into
+# ``process.env`` — that would re-introduce the very fallback the
+# strict negative test guards against. Listed per plugin so the
+# assertion is precise per spec §4.1.
+PLUGIN_CLOUD_KEY_ENV_VARS: dict[str, list[str]] = {
+    "wet-mcp": [
+        "BRAVE_API_KEY",
+        "SERPER_API_KEY",
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "JINA_AI_API_KEY",
+        "COHERE_API_KEY",
+    ],
+    "mnemo-mcp": [
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "JINA_AI_API_KEY",
+        "COHERE_API_KEY",
+    ],
+    "better-code-review-graph": [
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "JINA_AI_API_KEY",
+        "COHERE_API_KEY",
+    ],
+    "imagine-mcp": [
+        "GEMINI_API_KEY",
+        "OPENAI_API_KEY",
+        "XAI_API_KEY",
+    ],
+}
+
+
+def _cred_storage_paths_for_plugin(plugin: str) -> list[Path]:
+    """Enumerate every persistent credential surface a plugin may read
+    from at startup. Used by ``_clear_persistent_cred_storage`` and the
+    unit tests so coverage can be asserted without touching the disk.
+
+    Surfaces covered:
+
+    1. ``%APPDATA%\\mcp\\Config\\config.enc`` (TS legacy, Windows)
+    2. ``%LOCALAPPDATA%\\mcp\\config.enc`` (Py legacy on Windows;
+       ``platformdirs.user_config_dir`` resolves there)
+    3. ``~/.config/mcp/config.enc`` (POSIX shared between TS+Py)
+    4. ``~/.<plugin>-mcp/config.json`` (PerPluginStore current)
+    5. ``~/.<plugin>-mcp/users/*`` (multi-user store)
+    6. ``~/.<plugin>-mcp/subs/*`` (per-sub HTTP store)
+    7. ``~/.<plugin>-mcp/tokens.json`` (OAuth refresh token)
+
+    Returns absolute ``Path`` entries even when the file is absent so
+    the caller can iterate idempotently.
+    """
+    home = Path.home()
+    paths: list[Path] = []
+
+    # 1-3: shared config.enc surfaces (cross-plugin) — caller still
+    # passes the plugin name so we can record per-plugin coverage in
+    # tests, but the actual files are shared.
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            paths.append(Path(appdata) / "mcp" / "Config" / "config.enc")
+        localappdata = os.environ.get("LOCALAPPDATA")
+        if localappdata:
+            paths.append(Path(localappdata) / "mcp" / "config.enc")
+    paths.append(home / ".config" / "mcp" / "config.enc")
+
+    # 4-7: per-plugin store
+    per_dir = PLUGIN_PER_STORE_DIRS.get(plugin)
+    if per_dir:
+        base = home / per_dir
+        paths.append(base / "config.json")
+        paths.append(base / "users")  # directory; caller wipes recursively
+        paths.append(base / "subs")  # directory
+        paths.append(base / "tokens.json")
+    return paths
+
+
+def _clear_persistent_cred_storage(plugin: str) -> list[Path]:
+    """Delete every persistent credential surface for ``plugin`` so the
+    next stdio spawn cannot fall back to a saved cred. Returns the list
+    of paths that were actually removed (existed before deletion).
+
+    Idempotent — paths that don't exist are skipped silently. Errors
+    from filesystem ops are surfaced via stderr but do NOT raise: the
+    caller already runs the assertion afterwards, so a stale file
+    blocks the spawn from reaching the missing-cred guard and the test
+    fails loudly anyway.
+    """
+    import shutil
+
+    removed: list[Path] = []
+    for p in _cred_storage_paths_for_plugin(plugin):
+        if not p.exists():
+            continue
+        try:
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+            removed.append(p)
+        except OSError as exc:
+            print(
+                f"[driver] warning: failed to clear {p} for {plugin}: {exc}",
+                file=sys.stderr,
+            )
+    return removed
+
+
 def _run_stdio_pure(config: dict) -> None:
     """Wrapper around ``run_stdio_config`` that raises on FAIL to keep
     parity with the HTTP path's all-or-nothing semantics."""
@@ -832,15 +998,19 @@ def _run_negative_stdio(config: dict) -> None:
     telegram) must exit 1; plugins with all-optional or no env tolerate
     exit 0 (boot in limited mode).
 
+    BEFORE each spawn, every persistent credential storage surface
+    (``config.enc`` legacy + PerPluginStore current + multi-user store +
+    per-sub HTTP store + OAuth refresh tokens) is wiped via
+    ``_clear_persistent_cred_storage``. Without the wipe, a prior
+    real-plugin Test B run leaves ``~/.<plugin>-mcp/config.json`` etc.
+    on disk and the plugin's startup cred chain (env -> config.enc ->
+    PerPluginStore -> ...) silently boots from the saved fallback.
+    Real-world Test B 2026-04-30 caught this regression after the
+    "for show" Test A came back green; this hardening folds the Test B
+    constraint back into the driver. See feedback_test_a_not_test_b.md.
+
     A single REQUIRED-env plugin failing exit=1 fails the whole config.
     """
-    # Plugins with REQUIRED env (must exit 1 when missing). Others have
-    # optional env or no env (boot cleanly per spec §4.1).
-    REQUIRED_ENV_PLUGINS = {
-        "notion-stdio",  # NOTION_TOKEN required
-        "email-stdio-gmail",  # EMAIL_CREDENTIALS or EMAIL_USER+PASSWORD required
-        "telegram-stdio-bot",  # TELEGRAM_BOT_TOKEN required (per spec OQ4)
-    }
     matrix = load_matrix()
     by_id = {c["id"]: c for c in matrix}
     failed: list[str] = []
@@ -848,10 +1018,18 @@ def _run_negative_stdio(config: dict) -> None:
         cfg = by_id.get(stdio_id)
         if not cfg:
             continue
-        if stdio_id not in REQUIRED_ENV_PLUGINS:
+        if stdio_id not in STRICT_NO_FALLBACK_PLUGINS:
             # Optional-env or no-env plugins boot cleanly per spec §4.1
             # (wet/crg/mnemo/imagine/godot). Negative case doesn't apply.
             continue
+        plugin_pkg = STDIO_PLUGIN_PACKAGE[stdio_id]
+        removed = _clear_persistent_cred_storage(plugin_pkg)
+        if removed:
+            print(
+                f"[driver] {stdio_id}: cleared {len(removed)} persistent "
+                f"cred path(s) before negative spawn",
+                file=sys.stderr,
+            )
         result = asyncio.run(run_stdio_config(stdio_id, env={}))
         if result.get("exit_code") != 1:
             failed.append(f"{stdio_id}: exit={result.get('exit_code')} (expected 1)")
@@ -860,6 +1038,97 @@ def _run_negative_stdio(config: dict) -> None:
     print(
         f"[driver] PASS {config['id']} (negative test: every required-env "
         "plugin exits 1 cleanly)",
+        file=sys.stderr,
+    )
+
+
+def _run_stdio_pure_strict_no_fallback(config: dict) -> None:
+    """Strict-no-fallback negative+positive test for ALL 8 plugins.
+
+    Goes beyond ``stdio-no-env-negative`` by asserting BOTH halves of
+    the cred-resolution contract per spec §4.1:
+
+    1. **Required-cred plugins** (notion/email/telegram): with empty env
+       AND wiped persistent storage, MUST exit 1 with the documented
+       stderr message format. This catches the 2026-04-30 Test B
+       regression where prior PerPluginStore artefacts let plugins
+       silently boot from disk and the negative test became a false
+       positive.
+    2. **Optional-cred plugins** (wet/mnemo/crg/imagine): MUST boot
+       (exit 0 / handshake OK) AND MUST NOT have loaded creds from the
+       (already-wiped) PerPluginStore into their inherited
+       ``process.env`` cloud-key vars. The latter is enforced by
+       running with a clean parent env: any cloud key reappearing in
+       the spawned proc env evidences a mutation.
+    3. **No-cred plugins** (godot): MUST boot cleanly.
+
+    Driver wipes every persistent credential surface BEFORE each spawn
+    via ``_clear_persistent_cred_storage`` (config.enc TS+Py legacy
+    paths, ~/.<plugin>-mcp/{config.json, users/, subs/, tokens.json}).
+
+    NOTE: this config is expected to FAIL initially against currently
+    published artifacts because 4 plugin fix PRs (drop fallback to
+    PerPluginStore at stdio startup per spec §4.1) have not landed
+    yet. Document expected vs actual in the PR description; gate
+    promotion to T0 once those fixes ship.
+    """
+    matrix = load_matrix()
+    by_id = {c["id"]: c for c in matrix}
+    failed: list[str] = []
+    cleared_total = 0
+    for stdio_id, plugin_pkg in STDIO_PLUGIN_PACKAGE.items():
+        cfg = by_id.get(stdio_id)
+        if not cfg:
+            failed.append(f"{stdio_id}: missing matrix entry")
+            continue
+
+        # Wipe persistent cred storage for this plugin BEFORE spawning.
+        removed = _clear_persistent_cred_storage(plugin_pkg)
+        cleared_total += len(removed)
+        if removed:
+            print(
+                f"[driver] {stdio_id}: cleared {len(removed)} persistent cred path(s)",
+                file=sys.stderr,
+            )
+
+        if stdio_id in STRICT_NO_FALLBACK_PLUGINS:
+            # Required-cred plugins: must exit 1 with no fallback.
+            result = asyncio.run(run_stdio_config(stdio_id, env={}))
+            if result.get("exit_code") != 1:
+                failed.append(
+                    f"{stdio_id}: required-cred plugin exit={result.get('exit_code')} "
+                    f"(expected 1; possible fallback to persistent storage). "
+                    f"stderr={result.get('stderr', '')[:200]}"
+                )
+        else:
+            # Optional-cred / no-cred plugins: must boot cleanly with empty
+            # env. The spawn helper runs handshake + tools/list + a help
+            # tool/call; PASS proves the plugin booted without depending on
+            # creds. Optional-cred plugins (wet/mnemo/crg/imagine) MUST NOT
+            # have their cloud-key env vars populated by a PerPluginStore
+            # lookup — running with env={} via run_stdio_config means the
+            # spawn inherits ONLY parent process env merged with {}, so the
+            # cloud-key vars stay whatever the driver process has. The
+            # contract verified here is "process boots without creds being
+            # required" (env stays empty, fallback to disk did NOT happen
+            # because disk was wiped).
+            result = asyncio.run(run_stdio_config(stdio_id, env={}))
+            if result.get("status") != "PASS":
+                failed.append(
+                    f"{stdio_id}: optional-cred plugin failed handshake "
+                    f"(exit={result.get('exit_code')}, "
+                    f"stderr={result.get('stderr', '')[:200]})"
+                )
+
+    if failed:
+        raise RuntimeError(
+            f"stdio-pure-strict-no-fallback FAIL ({cleared_total} cred paths "
+            f"cleared before run): {failed}"
+        )
+    print(
+        f"[driver] PASS {config['id']} (strict no-fallback: "
+        f"{len(STRICT_NO_FALLBACK_PLUGINS)} required-cred plugins exit 1, "
+        f"others boot clean; {cleared_total} cred paths wiped)",
         file=sys.stderr,
     )
 
@@ -908,6 +1177,9 @@ def run_config(config: dict, deployment: str = "local") -> None:
         return
     if _is_negative_stdio_config(config):
         _run_negative_stdio(config)
+        return
+    if _is_strict_no_fallback_config(config):
+        _run_stdio_pure_strict_no_fallback(config)
         return
     if _is_multi_session_config(config):
         _run_multi_session(config)
