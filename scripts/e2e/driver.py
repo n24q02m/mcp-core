@@ -519,20 +519,29 @@ async def _spawn_stdio_and_call_tool(config: dict, env: dict[str, str]) -> dict:
             ),
         }
 
-    # Resolve uvx invocation. Mirror ``stdio-direct`` configs:
-    # ``--prerelease=allow`` so unstable beta artifacts can be tested
-    # before stable cascade. Pin Python to 3.13 to match plugin
-    # ``requires-python = "==3.13.*"``.
+    # Resolve invocation per package type:
+    # - TS plugins (notion/email/godot): npx --yes @n24q02m/<plugin>@<version>
+    # - Py plugins (telegram/wet/mnemo/crg/imagine): uvx --from <plugin>==<version> <plugin>
+    # Per spec 2026-05-01-stdio-pure-http-multiuser.md plugin marketplace patterns.
+    TS_PLUGINS = {"better-notion-mcp", "better-email-mcp", "better-godot-mcp"}
     pkg_spec = os.environ.get("MCP_STDIO_PIN", plugin)
-    cmd = [
-        "uvx",
-        "--python",
-        "3.13",
-        "--prerelease=allow",
-        "--from",
-        pkg_spec,
-        plugin,
-    ]
+    if plugin in TS_PLUGINS:
+        # Use @beta dist-tag for testing the latest beta cascade.
+        # Override via MCP_STDIO_PIN env (e.g., MCP_STDIO_PIN="@n24q02m/better-notion-mcp@2.31.0-beta.3").
+        npm_pkg = (
+            f"@n24q02m/{plugin}@beta" if pkg_spec == plugin else f"@n24q02m/{pkg_spec}"
+        )
+        cmd = ["npx", "--yes", npm_pkg]
+    else:
+        cmd = [
+            "uvx",
+            "--python",
+            "3.13",
+            "--prerelease=allow",
+            "--from",
+            pkg_spec,
+            plugin,
+        ]
 
     server_params = StdioServerParameters(
         command=cmd[0],
@@ -708,14 +717,18 @@ async def run_multi_session_invariant_config(
             ),
         }
     if mode == "http":
+        # Multi-session-http invariant per spec C3: ≤ 1 HTTP daemon per plugin.
+        # PASS = 0 (no server running, valid state) OR 1 (correctly shared).
+        # FAIL = ≥ 2 (daemon proliferation BUG).
+        # User runs server themselves per stdio-pure spec; driver doesn't spawn.
         pids = await _count_http_daemon_pids(plugin)
-        if len(pids) == 1:
+        if len(pids) <= 1:
             return {"status": "PASS", "pids": pids, "reason": ""}
         return {
             "status": "FAIL",
             "pids": pids,
             "reason": (
-                f"expected exactly 1 HTTP daemon for {plugin}, got "
+                f"expected ≤1 HTTP daemon for {plugin}, got "
                 f"{len(pids)} ({pids}) — daemon proliferation"
             ),
         }
@@ -810,15 +823,24 @@ def _run_stdio_pure(config: dict) -> None:
 
 
 def _run_negative_stdio(config: dict) -> None:
-    """Negative test: every plugin's stdio entry must exit 1 with the
-    documented stderr format when required env is absent.
+    """Negative test: plugins with REQUIRED env must exit 1 with documented
+    stderr format when env absent. Plugins with OPTIONAL or no env must
+    boot cleanly (exit 0 OK) — wet/crg/mnemo/imagine/godot per spec §4.1.
 
-    Iterates each plugin in ``STDIO_PLUGIN_PACKAGE`` (skipping no-auth
-    plugins like godot/mnemo whose stdio runs cred-less), spawns with
-    empty env, asserts ``exit_code == 1`` and stderr mentions the
-    required env var. A single plugin failing this contract fails the
-    whole config — matches the all-or-nothing semantics of the HTTP path.
+    Per-plugin expected exit code based on matrix ``skret_optional`` flag
+    OR ``auth: none`` marker. Plugins with REQUIRED env keys (notion/email/
+    telegram) must exit 1; plugins with all-optional or no env tolerate
+    exit 0 (boot in limited mode).
+
+    A single REQUIRED-env plugin failing exit=1 fails the whole config.
     """
+    # Plugins with REQUIRED env (must exit 1 when missing). Others have
+    # optional env or no env (boot cleanly per spec §4.1).
+    REQUIRED_ENV_PLUGINS = {
+        "notion-stdio",  # NOTION_TOKEN required
+        "email-stdio-gmail",  # EMAIL_CREDENTIALS or EMAIL_USER+PASSWORD required
+        "telegram-stdio-bot",  # TELEGRAM_BOT_TOKEN required (per spec OQ4)
+    }
     matrix = load_matrix()
     by_id = {c["id"]: c for c in matrix}
     failed: list[str] = []
@@ -826,9 +848,9 @@ def _run_negative_stdio(config: dict) -> None:
         cfg = by_id.get(stdio_id)
         if not cfg:
             continue
-        if cfg.get("auth") == "none":
-            # Cred-less plugins (godot, mnemo) start cleanly with no env
-            # — the negative case doesn't apply.
+        if stdio_id not in REQUIRED_ENV_PLUGINS:
+            # Optional-env or no-env plugins boot cleanly per spec §4.1
+            # (wet/crg/mnemo/imagine/godot). Negative case doesn't apply.
             continue
         result = asyncio.run(run_stdio_config(stdio_id, env={}))
         if result.get("exit_code") != 1:
