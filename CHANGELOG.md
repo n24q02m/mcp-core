@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.4 (2026-05-02)
+
+### Features
+
+- Stdio-pure + http-multi-user foundation ([#149](https://github.com/n24q02m/mcp-core/pull/149),
+  [`6d0e62a`](https://github.com/n24q02m/mcp-core/commit/6d0e62a040cc4bca73605219d2a668131b9a8ebb))
+
+
 ## v1.13.0-beta.3 (2026-05-01)
 
 ### Bug Fixes
