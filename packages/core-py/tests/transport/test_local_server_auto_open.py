@@ -1,4 +1,4 @@
-"""Tests for the auto-open browser gate in ``run_local_server``.
+"""Tests for the auto-open browser gate in ``run_http_server``.
 
 The gate uses ``is_schema_complete`` (not the legacy ``existing_config is None``)
 so peer-share paths writing partial entries do not suppress the relay form.
@@ -61,7 +61,7 @@ def test_gate_falls_back_to_null_check_when_no_schema():
     """Some servers (e.g. godot) have no relay_schema. The gate must still
     work — fall back to ``existing_config is not None``."""
 
-    # In run_local_server, the actual logic is:
+    # In run_http_server, the actual logic is:
     #   config_complete = (
     #       is_schema_complete(existing_config, relay_schema)
     #       if relay_schema is not None

@@ -65,7 +65,7 @@ jobs:
         uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6
 
   # ============================================================================
-  # Lint & Test Python (core-py, embedding-daemon, stdio-proxy)
+  # Lint & Test Python (core-py, embedding-daemon)
   # ============================================================================
   lint-and-test-py:
     name: Lint & Test (Python, ${{ matrix.package }}, ${{ matrix.os }})
@@ -74,7 +74,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        package: [core-py, embedding-daemon, stdio-proxy]
+        package: [core-py, embedding-daemon]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Harden Runner

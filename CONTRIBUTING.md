@@ -17,7 +17,6 @@ This installs all tool versions (Node 24, Python 3.13, bun, uv), Python/TS depen
 - `packages/core-py` — Python library (PyPI: `n24q02m-mcp-core`)
 - `packages/core-ts` — TypeScript library (npm: `@n24q02m/mcp-core`)
 - `packages/embedding-daemon` — Shared ONNX/GGUF embedding server
-- `packages/stdio-proxy` — Thin stdio-to-HTTP forwarder
 
 ## Commit Messages
 

@@ -19,10 +19,9 @@ for the rename table.
 | [`packages/core-py`](packages/core-py) | Python 3.13 | PyPI: [`n24q02m-mcp-core`](https://pypi.org/project/n24q02m-mcp-core/) | `pip install n24q02m-mcp-core` |
 | [`packages/core-ts`](packages/core-ts) | TypeScript / Node 24 | npm: [`@n24q02m/mcp-core`](https://www.npmjs.com/package/@n24q02m/mcp-core) | `bun add @n24q02m/mcp-core` |
 | [`packages/embedding-daemon`](packages/embedding-daemon) | Python 3.13 | PyPI: [`mcp-embedding-daemon`](https://pypi.org/project/mcp-embedding-daemon/) | `pip install mcp-embedding-daemon` |
-| [`packages/stdio-proxy`](packages/stdio-proxy) | Python 3.13 | PyPI: [`mcp-stdio-proxy`](https://pypi.org/project/mcp-stdio-proxy/) | `pip install mcp-stdio-proxy` |
 
-All four packages share the same version (`semantic-release.toml` bumps all
-three Python `pyproject.toml` files plus the npm `package.json` in lockstep).
+All three packages share the same version (`semantic-release.toml` bumps both
+Python `pyproject.toml` files plus the npm `package.json` in lockstep).
 
 ## What you get
 
@@ -63,16 +62,6 @@ backend. Currently exposes:
 - `POST /rerank` — returns 501 with a roadmap link
 
 CLI entry point: `mcp-embedding-daemon --host 127.0.0.1 --port 9800`.
-
-### `mcp-stdio-proxy`
-
-Thin stdio-to-HTTP forwarder for agents that only support stdio MCP transport
-(e.g., Antigravity). Reads JSON-RPC frames from stdin, POSTs them to a remote
-MCP server, writes responses to stdout.
-
-CLI entry point: `mcp-stdio-proxy --url https://my-mcp.example.com/mcp`.
-Falls back to `MCP_CORE_SERVER_URL` env var when flag is not supplied.
-For authentication, you must provide the token via the `MCP_CORE_SERVER_TOKEN` environment variable.
 
 ## Quick start (Python)
 

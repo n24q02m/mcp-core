@@ -2,24 +2,20 @@
 
 from mcp_core.transport.local_server import (
     BearerMCPApp,
-    LocalServerHandle,
+    HttpServerHandle,
     build_local_app,
-    run_http_daemon,
-    run_local_server,
-    start_local_server_background,
+    run_http_server,
+    start_http_server_background,
 )
 from mcp_core.transport.oauth_middleware import OAuthMiddleware
-from mcp_core.transport.smart_stdio import run_smart_stdio_proxy
 from mcp_core.transport.streamable_http import StreamableHTTPServer
 
 __all__ = [
     "BearerMCPApp",
-    "LocalServerHandle",
+    "HttpServerHandle",
     "OAuthMiddleware",
     "StreamableHTTPServer",
     "build_local_app",
-    "run_http_daemon",
-    "run_local_server",
-    "run_smart_stdio_proxy",
-    "start_local_server_background",
+    "run_http_server",
+    "start_http_server_background",
 ]

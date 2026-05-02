@@ -6,7 +6,7 @@ The server self-shutdowns after credentials are submitted, after a 10-minute
 idle timeout, or when the plugin process exits.
 
 This is the stdio-mode counterpart to the HTTP-mode persistent ``/setup``
-endpoint served by ``mcp_core.transport.local_server.run_http_daemon``. It
+endpoint served by ``mcp_core.transport.local_server.run_http_server``. It
 intentionally uses Starlette (already a transitive dependency via FastMCP)
 rather than FastAPI to avoid pulling a new top-level dependency for a
 single-form server.

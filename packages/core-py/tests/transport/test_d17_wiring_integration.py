@@ -1,76 +1,16 @@
 """D17 wiring integration tests — helpers wired into production paths.
 
-These tests verify the two critical integration points that were identified as
-dead code gaps in the Wave 9 review:
+These tests verify the credential-save refresh wiring:
 
 - D17.2: _refresh_capabilities_cache_after_save is called via the
-  on_credentials_saved production path in run_local_server.
-- D17.3: _start_poller_thread is called from run_smart_stdio_proxy.
+  on_credentials_saved production path in run_http_server.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-
-
-def test_run_smart_stdio_proxy_starts_sentinel_poller_thread(tmp_path, monkeypatch):
-    """D17.3 — run_smart_stdio_proxy must start the sentinel poller thread.
-
-    Verifies that _start_poller_thread is called exactly once with the
-    resolved cache_lock_path when a lock file exists for the server.
-    """
-    import io
-    import sys
-
-    from mcp_core.transport import smart_stdio
-
-    lock = tmp_path / "wet-mcp-55317.lock"
-    lock.write_text("123\n55317\ntok\n2026-04-29T00:00:00\nconfigured\n2026-04-29T00:00:00\n")
-
-    poller_calls: list[Path] = []
-
-    def fake_start_poller_thread(lock_path: Path):
-        poller_calls.append(lock_path)
-        # Return a mock thread object (run_smart_stdio_proxy does not join it).
-        t = MagicMock()
-        t.is_alive.return_value = True
-        return t
-
-    # Patch _find_newest_lock to return our tmp lock, _start_poller_thread to
-    # capture calls, and get_active_daemon so the function exits cleanly
-    # without touching the network.
-    monkeypatch.setattr(smart_stdio, "_find_newest_lock", lambda name: lock)
-    monkeypatch.setattr(smart_stdio, "_start_poller_thread", fake_start_poller_thread)
-    # Return a daemon result so we skip the spawn path entirely.
-    monkeypatch.setattr(smart_stdio, "get_active_daemon", lambda name: (55317, "tok"))
-
-    # Replace sys.stdin / sys.stdout entirely with fake objects whose .buffer
-    # attribute has a setter (pytest's DontReadFromInput.buffer has no setter).
-    class _FakeStdin:
-        buffer = io.BytesIO(b"")  # immediate EOF
-
-    class _FakeStdout:
-        buffer = io.BytesIO()
-
-    monkeypatch.setattr(
-        smart_stdio,
-        "sys",
-        MagicMock(
-            stdin=_FakeStdin(),
-            stdout=_FakeStdout(),
-            # keep platform so Windows flag checks work
-            platform=sys.platform,
-        ),
-    )
-
-    # run_smart_stdio_proxy is synchronous; drive it directly.
-    smart_stdio.run_smart_stdio_proxy("wet-mcp", ["uvx", "wet-mcp"])
-
-    assert len(poller_calls) == 1, f"Expected 1 poller start, got {len(poller_calls)}"
-    assert poller_calls[0] == lock
 
 
 @pytest.mark.asyncio
@@ -95,7 +35,7 @@ async def test_authorize_post_calls_refresh_cache(tmp_path, monkeypatch):
 
     monkeypatch.setattr(local_server, "_refresh_capabilities_cache_after_save", fake_refresh)
 
-    # Simulate what run_local_server does when building the wrapper.
+    # Simulate what run_http_server does when building the wrapper.
     original_saved_calls: list[dict] = []
 
     async def original_on_credentials_saved(credentials: dict, context: dict) -> dict | None:
@@ -124,7 +64,7 @@ async def test_authorize_post_calls_refresh_cache(tmp_path, monkeypatch):
                     pass
         return result
 
-    # Populate the box (as run_local_server does after LifecycleLock is constructed).
+    # Populate the box (as run_http_server does after LifecycleLock is constructed).
     _lock_path_box.append(lock)
 
     # Invoke the wrapper as authorize_post would.

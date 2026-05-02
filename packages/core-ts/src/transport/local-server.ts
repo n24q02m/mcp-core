@@ -46,7 +46,7 @@ import { readConfig } from '../storage/config-file.js'
 /** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
 export type JWTClaims = JWTPayload
 
-export interface RunLocalServerOptions {
+export interface RunHttpServerOptions {
   /** Identifier used for JWT iss/aud and credential storage. */
   serverName: string
   /** If undefined, server has NO auth (e.g., godot). */
@@ -99,7 +99,7 @@ export interface RunLocalServerOptions {
   authScope?: (claims: JWTClaims, next: () => Promise<void>) => Promise<void>
 }
 
-export interface LocalServerHandle {
+export interface HttpServerHandle {
   /** Actual TCP port bound. Non-zero even when ``options.port`` was 0. */
   port: number
   /** Host bound. */
@@ -120,10 +120,10 @@ export interface LocalServerHandle {
  *  - Returns a handle for lifecycle management; the server runs in the
  *    background until ``close()`` is called.
  */
-export async function runLocalServer(
+export async function runHttpServer(
   serverFactory: () => McpServer,
-  options: RunLocalServerOptions
-): Promise<LocalServerHandle> {
+  options: RunHttpServerOptions
+): Promise<HttpServerHandle> {
   const host = options.host ?? '127.0.0.1'
   const wantedPort = options.port ?? 0
 
@@ -278,11 +278,10 @@ export async function runLocalServer(
 
   // Sweep stale locks for our server name BEFORE writing our own. Without
   // this, abnormal-exit residue (Windows OOM, taskkill, signal) can pile up
-  // dozens of `<server>-<port>.lock` files that confuse smart-stdio probing
-  // — see 2026-04-28 wet-mcp 11-stale-lock incident.
+  // dozens of `<server>-<port>.lock` files — see 2026-04-28 wet-mcp 11-stale-lock incident.
   const swept = sweepStaleLocks(options.serverName)
   if (swept > 0) {
-    console.error(`[runLocalServer] cleaned ${swept} stale lock(s) for ${options.serverName}`)
+    console.error(`[runHttpServer] cleaned ${swept} stale lock(s) for ${options.serverName}`)
   }
 
   const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
@@ -298,12 +297,9 @@ export async function runLocalServer(
   }
 
   // Auto-open the credential form in the user's browser when no creds exist
-  // yet. The daemon stderr URL is hidden from the user (stdio-proxy redirects
-  // it to ~/daemon_stderr.log), so without this the relay form is unreachable
-  // unless the user calls a tool that triggers credential_state's lazy
-  // browser-open path. We open the root URL ("/") which auto-bootstraps PKCE
-  // and redirects to /authorize with valid params; opening /authorize directly
-  // returns invalid_request because it requires client_id/redirect_uri/state/
+  // yet. We open the root URL ("/") which auto-bootstraps PKCE and redirects
+  // to /authorize with valid params; opening /authorize directly returns
+  // invalid_request because it requires client_id/redirect_uri/state/
   // code_challenge. See `local-oauth-app.ts` root handler docstring.
   // Best-effort: any failure surfaces via tryOpenBrowser's ASCII fallback banner.
   if (oauthApp) {

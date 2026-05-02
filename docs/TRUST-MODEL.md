@@ -50,17 +50,17 @@ This doc tells you, per plugin and per mode, exactly where credentials live and 
 | `better-code-review-graph` | stdio | TC-Local | `~/.better-code-review-graph-mcp/config.json` |
 | `imagine-mcp` | stdio | TC-Local | `~/.imagine-mcp/config.json` |
 | `better-godot-mcp` | stdio | TC-Local (no auth required) | N/A (no credentials) |
-| `better-notion-mcp` | HTTP n24q02m-hosted | TC-NearZK | In-memory `Map<sub, OAuthToken>` |
-| `better-email-mcp` | HTTP n24q02m-hosted | TC-NearZK | In-memory `Map<sub, OAuthToken>` |
-| `better-telegram-mcp` | HTTP n24q02m-hosted | TC-NearZK | In-memory `dict[sub] = MTProtoSession` |
+| `better-notion-mcp` | stdio | TC-Local | `~/.better-notion-mcp/config.json` |
+| `better-email-mcp` | stdio | TC-Local | `~/.better-email-mcp/config.json` |
+| `better-telegram-mcp` | stdio | TC-Local | `~/.better-telegram-mcp/config.json` |
 
 ## Self-host vs hosted
 
 For each plugin, you can choose:
 
-- **Hosted** (default for `better-notion-mcp`, `better-email-mcp`, `better-telegram-mcp`): connect to `https://<plugin>.n24q02m.com/mcp`. Credentials stay in the hosted server's memory. Zero local credential storage on your machine.
-- **Self-host**: deploy your own instance via `docker compose up`. Same TC-NearZK behavior -- credentials stay in YOUR server's memory. You-as-admin = you-as-user trust collapse, equivalent to TC-Local for single-user use.
-- **Stdio direct** (default for `wet-mcp`, `mnemo-mcp`, `better-code-review-graph`, `imagine-mcp`, `better-godot-mcp`): plugin runs as a subprocess of your MCP client (Claude Code, Cursor, Copilot, etc.). Credentials stored at `~/.<plugin>-mcp/config.json` per TC-Local.
+- **Stdio direct** (default for ALL credentialed plugins): the plugin runs as a subprocess of your MCP client (Claude Code, Cursor, Copilot, etc.). Credentials stored at `~/.<plugin>-mcp/config.json` per TC-Local. No network egress, no shared servers, no per-user web setup form.
+- **HTTP self-host (multi-user)**: deploy your own instance via `docker compose up` and expose `https://<your-host>/mcp`. Per-user credentials are namespaced by JWT `sub` (TC-NearZK in-memory map). You operate the server, you set the trust boundary.
+- **HTTP self-host (single-user)**: run the plugin on your own machine in HTTP mode (`--http`). The relay form on `/authorize` writes to `~/.<plugin>-mcp/config.json` per TC-Local; useful when an MCP client supports only HTTP transport.
 
 ## Migration notes (v0.x to v1.0)
 

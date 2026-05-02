@@ -46,8 +46,8 @@ export {
 } from './relay/client.js'
 export {
   buildOpenRelayHandler,
+  type OpenRelayHandlerOptions,
   type OpenRelayResult,
-  type OpenRelaySchema,
   registerOpenRelayTool,
   type ToolRegistrar
 } from './relay/tool-helpers.js'
@@ -69,9 +69,9 @@ export {
   type SessionInfo,
   writeSessionLock
 } from './storage/session-lock.js'
-// Local MCP server entry point (OAuth AS + /mcp transport on 127.0.0.1)
+// HTTP MCP server entry point (OAuth AS + /mcp transport on 127.0.0.1)
 export {
-  type LocalServerHandle,
-  type RunLocalServerOptions,
-  runLocalServer
+  type HttpServerHandle,
+  type RunHttpServerOptions,
+  runHttpServer
 } from './transport/local-server.js'
