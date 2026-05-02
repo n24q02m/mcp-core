@@ -121,7 +121,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [core-py, embedding-daemon, stdio-proxy]
+        package: [core-py, embedding-daemon]
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner

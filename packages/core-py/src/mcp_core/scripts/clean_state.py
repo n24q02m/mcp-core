@@ -3,10 +3,11 @@
 Removes MCP server credentials, locks, tools cache, and per-server token caches.
 By default preserves app data (SQLite, diskcache, SearXNG state).
 
-The ``--kill-daemons`` flag (added 2026-04-30) terminates any alive smart_stdio
-bridge daemons before removing their lock files. Required after upgrading from
-mcp-core <=1.11.x to 1.12.0+ where the stdio bridge layer is deprecated in
-favor of FastMCP stdio direct mode. See ``docs/migration-2026-04-30.md``.
+The ``--kill-daemons`` flag terminates any alive legacy bridge daemons before
+removing their lock files. Required after upgrading from mcp-core <=1.11.x to
+2.0.0+ where the stdio bridge / smart-stdio layer was removed in favor of
+direct FastMCP stdio mode and pure HTTP servers. See
+``docs/migration-2026-04-30.md``.
 """
 
 from __future__ import annotations
@@ -188,6 +189,51 @@ def _parse_lock_pid(lock_path: Path) -> int | None:
     return pid
 
 
+def _is_pid_alive(pid: int) -> bool:
+    """Cross-platform PID liveness check used by the legacy ``kill_daemons``
+    migration helper. Best-effort; may have false positives when a long-running
+    host reuses PIDs (the lock TTL guards against that)."""
+    if pid <= 0:
+        return False
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if handle:
+                ctypes.windll.kernel32.CloseHandle(handle)
+                return True
+            return False
+        else:
+            os.kill(pid, 0)
+            return True
+    except (OSError, PermissionError):
+        return False
+
+
+def _terminate_daemon(pid: int) -> None:
+    """Kill a legacy daemon process. Used only by ``kill_daemons`` migration
+    helper for users upgrading from mcp-core <=1.11.x."""
+    if pid <= 0:
+        return
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            PROCESS_TERMINATE = 0x0001
+            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_TERMINATE, False, pid)
+            if handle:
+                ctypes.windll.kernel32.TerminateProcess(handle, 1)
+                ctypes.windll.kernel32.CloseHandle(handle)
+        else:
+            import signal as _signal
+
+            os.kill(pid, _signal.SIGKILL)
+    except (OSError, PermissionError):
+        pass
+
+
 def kill_daemons(verbose: bool = False) -> tuple[int, int]:
     """Terminate alive MCP daemons and remove their lock + companion files.
 
@@ -195,7 +241,7 @@ def kill_daemons(verbose: bool = False) -> tuple[int, int]:
 
     1. Parse PID from line 0.
     2. If PID alive, terminate it (SIGKILL on POSIX, TerminateProcess on Windows)
-       via ``mcp_core.lifecycle.lock._terminate_daemon`` (cross-platform helper).
+       via the local ``_terminate_daemon`` helper (cross-platform).
     3. Remove the lock file.
     4. Remove companion ``<lock-stem>*.tools.json`` cache file under
        ``~/.config/mcp/cache/`` if present.
@@ -204,10 +250,6 @@ def kill_daemons(verbose: bool = False) -> tuple[int, int]:
     Returns ``(killed_count, removed_lock_count)``. Missing lock dir returns
     ``(0, 0)`` after a no-op message.
     """
-    # Local import — keeps clean_state module light + avoids pulling in
-    # lifecycle.lock at import time for the common case (--help, --dry-run).
-    from mcp_core.lifecycle.lock import _is_pid_alive, _terminate_daemon
-
     lock_dir = _lock_dir()
     if not lock_dir.exists():
         print("No lock directory; nothing to clean.")

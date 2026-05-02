@@ -1,68 +1,44 @@
 /**
- * Helper to register `config__open_relay` MCP tool — D6 (Task 1.8).
+ * Helper to register `config__open_relay` MCP tool — HTTP-only mode.
  *
- * Each consumer server calls `registerOpenRelayTool(mcp, SERVER_NAME, SCHEMA)`
- * to get the standard tool registered into its MCP server instance. The tool,
- * when invoked by the LLM, returns the relay form URL and attempts to open
- * the user's browser. If the daemon is dead it auto-respawns; if a relay
- * session is already active in another Claude Code window, the handler
- * returns `session_active` status without auto-opening a second browser tab.
+ * After the stdio-pure + http-multi-user split, the relay config form is
+ * served by the HTTP server itself at ``<PUBLIC_URL>/authorize``. The
+ * ``config__open_relay`` tool simply returns that URL and best-effort opens
+ * the user's default browser. There is no daemon-bridge discovery, no
+ * respawn, and no session deduplication — the HTTP server's own session
+ * tracking handles concurrent setup attempts.
+ *
+ * In stdio mode, the relay form does not exist; the tool returns
+ * ``stdio_unsupported`` so plugin code can render a "switch to HTTP mode"
+ * message instead of misleading the user with an unreachable URL.
  */
 
-import { daemonCredState, daemonIsAlive, daemonRelayUrl, daemonRespawn } from '../transport/smart-stdio.js'
 import { tryOpenBrowser } from './browser.js'
-import { isSessionActive } from './session.js'
 
 export interface OpenRelayResult {
   url: string
   browserOpened: boolean
-  status: 'configured' | 'unconfigured' | 'expired' | 'session_active'
+  status: 'configured' | 'unconfigured' | 'expired' | 'session_active' | 'stdio_unsupported'
 }
 
-export interface OpenRelaySchema {
-  server: string
-  fields: Array<{
-    name: string
-    label?: string
-    required?: boolean
-    secret?: boolean
-    [key: string]: unknown
-  }>
-  [key: string]: unknown
+export interface OpenRelayHandlerOptions {
+  serverName: string
+  publicUrl: string | null
 }
 
 /**
- * Per-server session probe.
- *
- * The current session module tracks one global active form session at a
- * time (Task 1.5), so the server name is currently ignored. Kept as a
- * one-arg helper to give vi.spyOn hooks a single, server-aware seam that
- * future per-server session tracking can implement without refactoring
- * callers.
- */
-function isSessionActiveForServer(_serverName: string): boolean {
-  return isSessionActive()
-}
-
-/**
- * Build the `open_relay` handler closure. Separated out for testability —
- * tests can call `buildOpenRelayHandler('demo', SCHEMA)` directly without
+ * Build the `open_relay` handler closure. Tests can call
+ * ``buildOpenRelayHandler({ serverName, publicUrl })`` directly without
  * needing a real MCP server instance.
  */
-export function buildOpenRelayHandler(
-  serverName: string,
-  _schema: OpenRelaySchema | unknown
-): () => Promise<OpenRelayResult> {
+export function buildOpenRelayHandler(options: OpenRelayHandlerOptions): () => Promise<OpenRelayResult> {
   return async function openRelay(): Promise<OpenRelayResult> {
-    const url = daemonIsAlive(serverName) ? daemonRelayUrl(serverName) : daemonRespawn(serverName)
-    const credState = daemonCredState(serverName) as OpenRelayResult['status']
-
-    if (isSessionActiveForServer(serverName)) {
-      return { url, browserOpened: false, status: 'session_active' }
+    if (!options.publicUrl) {
+      return { url: '', browserOpened: false, status: 'stdio_unsupported' }
     }
-
+    const url = `${options.publicUrl.replace(/\/$/, '')}/authorize`
     const opened = await tryOpenBrowser(url)
-    return { url, browserOpened: !!opened, status: credState }
+    return { url, browserOpened: !!opened, status: 'unconfigured' }
   }
 }
 
@@ -83,11 +59,15 @@ export interface ToolRegistrar {
  *
  * ```ts
  * import { registerOpenRelayTool } from '@n24q02m/mcp-core'
- * registerOpenRelayTool(mcp, SERVER_NAME, RELAY_SCHEMA)
+ * registerOpenRelayTool(mcp, SERVER_NAME, PUBLIC_URL)
  * ```
+ *
+ * Pass ``null`` for ``publicUrl`` when the server is running in stdio mode;
+ * the tool will return ``status: 'stdio_unsupported'`` so the caller can
+ * surface a clear "switch to HTTP mode" message.
  */
-export function registerOpenRelayTool(mcp: ToolRegistrar, serverName: string, schema: OpenRelaySchema | unknown): void {
-  const handler = buildOpenRelayHandler(serverName, schema)
+export function registerOpenRelayTool(mcp: ToolRegistrar, serverName: string, publicUrl: string | null): void {
+  const handler = buildOpenRelayHandler({ serverName, publicUrl })
   mcp.tool(
     {
       name: 'config__open_relay',

@@ -1,5 +1,5 @@
 /**
- * Integration tests for the ``runLocalServer`` entry point.
+ * Integration tests for the ``runHttpServer`` entry point.
  *
  * Starts a real HTTP server per test and drives requests via ``fetch``.
  * Covers both the OAuth-enabled path (relaySchema provided) and the
@@ -14,7 +14,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
-import { type LocalServerHandle, runLocalServer } from '../../src/transport/local-server.js'
+import { type HttpServerHandle, runHttpServer } from '../../src/transport/local-server.js'
 
 const SCHEMA: RelayConfigSchema = {
   server: 'test-server',
@@ -45,9 +45,9 @@ afterEach(() => {
   else process.env.MCP_CORE_KEYS_DIR = originalKeysEnv
 })
 
-describe('runLocalServer with relaySchema (OAuth enabled)', () => {
+describe('runHttpServer with relaySchema (OAuth enabled)', () => {
   it('serves /authorize form and requires Bearer on /mcp', async () => {
-    const handle: LocalServerHandle = await runLocalServer(makeMcpServer, {
+    const handle: HttpServerHandle = await runHttpServer(makeMcpServer, {
       serverName: `test-oauth-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -81,7 +81,7 @@ describe('runLocalServer with relaySchema (OAuth enabled)', () => {
   })
 
   it('returns 401 with invalid_token for malformed Bearer', async () => {
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-invalid-token-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -104,7 +104,7 @@ describe('runLocalServer with relaySchema (OAuth enabled)', () => {
 
   it('invokes setupCompleteHook with a markComplete function', async () => {
     let receivedMark: ((key?: string) => void) | null = null
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-hook-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -137,7 +137,7 @@ describe('runLocalServer with relaySchema (OAuth enabled)', () => {
     // in /setup-status so the browser poll stops spinning.
     let receivedComplete: ((key?: string) => void) | null = null
     let receivedFailed: ((key?: string, error?: string) => void) | null = null
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-hook-2arg-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -160,9 +160,9 @@ describe('runLocalServer with relaySchema (OAuth enabled)', () => {
   })
 })
 
-describe('runLocalServer — root bootstrap UX', () => {
+describe('runHttpServer — root bootstrap UX', () => {
   it('GET / redirects to /authorize with valid PKCE params', async () => {
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-root-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -183,7 +183,7 @@ describe('runLocalServer — root bootstrap UX', () => {
   })
 
   it('GET / followed produces credential form', async () => {
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-root-follow-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -199,7 +199,7 @@ describe('runLocalServer — root bootstrap UX', () => {
   })
 
   it('GET /callback-done returns terminal success page', async () => {
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-callback-done-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -215,9 +215,9 @@ describe('runLocalServer — root bootstrap UX', () => {
   })
 })
 
-describe('runLocalServer without relaySchema (godot-style)', () => {
+describe('runHttpServer without relaySchema (godot-style)', () => {
   it('serves /mcp without auth and returns 404 for /authorize', async () => {
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-no-auth-${Date.now()}`,
       port: 0
     })
@@ -241,7 +241,7 @@ describe('runLocalServer without relaySchema (godot-style)', () => {
 
   it('does not invoke setupCompleteHook when relaySchema absent', async () => {
     let called = false
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-no-hook-${Date.now()}`,
       port: 0,
       setupCompleteHook: () => {
@@ -264,7 +264,7 @@ describe('runLocalServer without relaySchema (godot-style)', () => {
     //  - V3 (current): per-session map keyed by Mcp-Session-Id, sessionId
     //    minted on initialize, reused on subsequent POSTs. Mirrors Python
     //    StreamableHTTPSessionManager + the SDK's stateful-mode example.
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-sequential-${Date.now()}`,
       port: 0
     })
@@ -328,10 +328,10 @@ describe('runLocalServer without relaySchema (godot-style)', () => {
   })
 })
 
-describe('runLocalServer — delegated mode', () => {
+describe('runHttpServer — delegated mode', () => {
   it('serves /authorize via delegated redirect flow when delegatedOAuth set', async () => {
     const tokens: Array<Record<string, unknown>> = []
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: 'test-notion',
       delegatedOAuth: {
         flow: 'redirect',
@@ -357,7 +357,7 @@ describe('runLocalServer — delegated mode', () => {
 
   it('rejects when both relaySchema and delegatedOAuth are set', async () => {
     await expect(
-      runLocalServer(makeMcpServer, {
+      runHttpServer(makeMcpServer, {
         serverName: 'test-conflict',
         relaySchema: SCHEMA,
         delegatedOAuth: {
@@ -370,10 +370,10 @@ describe('runLocalServer — delegated mode', () => {
   })
 })
 
-describe('runLocalServer — authScope middleware', () => {
+describe('runHttpServer — authScope middleware', () => {
   it('invokes authScope middleware with JWT claims on authenticated /mcp request', async () => {
     const seen: Array<unknown> = []
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-scope-${Date.now()}`,
       relaySchema: SCHEMA,
       authScope: async (claims, next) => {
@@ -396,9 +396,9 @@ describe('runLocalServer — authScope middleware', () => {
   })
 })
 
-describe('runLocalServer lifecycle', () => {
+describe('runHttpServer lifecycle', () => {
   it('port 0 auto-assigns a non-zero port', async () => {
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-autoport-${Date.now()}`,
       port: 0
     })
@@ -411,7 +411,7 @@ describe('runLocalServer lifecycle', () => {
   })
 
   it('/health responds with ok status regardless of auth config', async () => {
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-health-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -430,7 +430,7 @@ describe('runLocalServer lifecycle', () => {
     const customRenderer = (_schema: RelayConfigSchema, opts: { submitUrl: string }): string =>
       `<!DOCTYPE html><html><body><h1>Custom Forwarded</h1><a href="${opts.submitUrl}">x</a></body></html>`
 
-    const handle: LocalServerHandle = await runLocalServer(makeMcpServer, {
+    const handle: HttpServerHandle = await runHttpServer(makeMcpServer, {
       serverName: `test-custom-form-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -456,7 +456,7 @@ describe('runLocalServer lifecycle', () => {
   })
 
   it('close() cleanly shuts down the HTTP server', async () => {
-    const handle = await runLocalServer(makeMcpServer, {
+    const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-close-${Date.now()}`,
       port: 0
     })

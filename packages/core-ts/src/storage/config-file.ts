@@ -173,7 +173,7 @@ export async function deleteConfig(serverName: string): Promise<void> {
 
 /**
  * Metadata flag set by `markSetupComplete` after a successful relay-form
- * submission (POST /authorize). `runLocalServer`/`isSchemaComplete` read this
+ * submission (POST /authorize). `runHttpServer`/`isSchemaComplete` read this
  * to distinguish "user has submitted the form" from "config.enc has values
  * written by a peer-share or partial bootstrap path". Lives alongside the
  * user's normal credential keys in the same per-server config dict.

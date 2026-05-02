@@ -17,10 +17,10 @@ from starlette.testclient import TestClient
 
 from mcp_core.transport.local_server import (
     BearerMCPApp,
-    LocalServerHandle,
+    HttpServerHandle,
     build_local_app,
     find_free_port,
-    start_local_server_background,
+    start_http_server_background,
 )
 
 
@@ -218,7 +218,7 @@ class TestBearerMCPApp:
 
 
 # ---------------------------------------------------------------------------
-# run_local_server (smoke test -- only verifiable parts)
+# run_http_server (smoke test -- only verifiable parts)
 # ---------------------------------------------------------------------------
 
 
@@ -283,7 +283,7 @@ class TestRunLocalServer:
     def test_forwards_custom_credential_form_html_to_build_local_app(
         self, mcp: FastMCP, relay_schema: dict, tmp_path: Path
     ) -> None:
-        """run_local_server must pass custom_credential_form_html through to build_local_app."""
+        """run_http_server must pass custom_credential_form_html through to build_local_app."""
         mock_server = _mock_uvicorn_server()
         captured: dict = {}
 
@@ -307,10 +307,10 @@ class TestRunLocalServer:
 
             import asyncio
 
-            from mcp_core.transport.local_server import run_local_server
+            from mcp_core.transport.local_server import run_http_server
 
             asyncio.run(
-                run_local_server(
+                run_http_server(
                     mcp,
                     server_name="test",
                     relay_schema=relay_schema,
@@ -470,10 +470,10 @@ async def _run_server_for_test(
     jwt_keys_dir: Path | None = None,
     setup_complete_hook=None,
 ) -> None:
-    """Wrapper that calls run_local_server with test-friendly params."""
-    from mcp_core.transport.local_server import run_local_server
+    """Wrapper that calls run_http_server with test-friendly params."""
+    from mcp_core.transport.local_server import run_http_server
 
-    await run_local_server(
+    await run_http_server(
         mcp,
         server_name=server_name,
         relay_schema=relay_schema,
@@ -609,19 +609,19 @@ def test_build_local_app_delegated_mode_produces_app(tmp_path: Path):
 
 
 class TestStartLocalServerBackground:
-    """``start_local_server_background`` must bind a real port, stay non-blocking, and close cleanly."""
+    """``start_http_server_background`` must bind a real port, stay non-blocking, and close cleanly."""
 
     async def test_returns_handle_and_serves_authorize(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         import httpx
 
-        handle = await start_local_server_background(
+        handle = await start_http_server_background(
             mcp,
             server_name="test-bg",
             relay_schema=relay_schema,
             jwt_keys_dir=tmp_path / "jwt-keys",
         )
         try:
-            assert isinstance(handle, LocalServerHandle)
+            assert isinstance(handle, HttpServerHandle)
             assert handle.host == "127.0.0.1"
             assert handle.port > 0
 
@@ -636,7 +636,7 @@ class TestStartLocalServerBackground:
             await handle.close()
 
     async def test_close_is_idempotent(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
-        handle = await start_local_server_background(
+        handle = await start_http_server_background(
             mcp,
             server_name="test-bg-close",
             relay_schema=relay_schema,
@@ -664,7 +664,7 @@ class TestStartLocalServerBackground:
 
         with patch("uvicorn.Server", side_effect=lambda cfg: NeverStartsServer()):
             with pytest.raises(RuntimeError, match="did not start"):
-                await start_local_server_background(
+                await start_http_server_background(
                     mcp,
                     server_name="test-bg-timeout",
                     relay_schema=relay_schema,

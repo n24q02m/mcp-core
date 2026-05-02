@@ -291,7 +291,7 @@ async def _refresh_lock_timestamp_loop(lock_path: Path, interval_seconds: float 
             logger.opt(exception=True).debug("Failed to refresh lock timestamp at {}", lock_path)
 
 
-# Registry populated by run_local_server so _refresh_capabilities_cache_after_save
+# Registry populated by run_http_server so _refresh_capabilities_cache_after_save
 # can locate the FastMCP instance by server name without receiving it as an arg
 # (the credential-save hook only receives credentials + context, not mcp).
 _mcp_registry: dict[str, Any] = {}
@@ -303,58 +303,27 @@ def _get_mcp_for_server(name: str) -> Any:
 
 
 async def _refresh_capabilities_cache_after_save(server_name: str, lock_path: Path) -> None:
-    """Re-persist the tools/list cache after a credential write.
+    """No-op stub kept for wiring back-compat after the daemon-bridge removal.
 
-    D17.2: When the relay form is submitted and credentials are saved, the
-    daemon's full tool surface becomes available (tools that were hidden during
-    unconfigured startup are now visible).  This helper refreshes the
-    ``<lock>.tools.json`` cache so Claude Code can immediately pick up the full
-    tool list via the next ``notifications/tools/list_changed`` notification
-    without restarting the bridge.
+    Pre-stdio-pure, this helper rewrote ``<lock>.tools.json`` and touched
+    ``<lock>.tools-list-changed`` so the smart-stdio bridge could forward a
+    ``notifications/tools/list_changed`` to Claude Code. Without the bridge
+    layer there is nothing to refresh -- the HTTP server's own
+    capabilities response reflects the new credentials on the next
+    ``tools/list`` request the client makes after credential save.
 
-    D17.3: Also touches ``<lock>.tools-list-changed`` so the smart-stdio bridge
-    poller detects the change and forwards ``notifications/tools/list_changed``
-    to Claude Code within ~250ms.
-
-    Best-effort: any failure is logged at DEBUG level and silently swallowed.
+    The function is preserved (rather than fully deleted) because
+    ``run_http_server`` wires it into the credential-save callback chain;
+    the call sites stay green during the ecosystem migration and we can
+    drop the wrapper once all consumers no longer rely on the post-save
+    hook seam.
     """
-    try:
-        import os
-        import time as _time
-
-        from importlib.metadata import PackageNotFoundError, version as _pkg_version
-
-        from mcp_core.transport.smart_stdio import persist_capabilities_cache
-
-        mcp = _get_mcp_for_server(server_name)
-        tools_list = await mcp.list_tools()
-        # exclude_none=True strips null fields (title, icons, meta, execution) that
-        # Claude Code's MCP harness rejects as schema-invalid (verified 2026-04-30).
-        tools_payload = [t.model_dump(exclude_none=True) if hasattr(t, "model_dump") else dict(t) for t in tools_list]
-        try:
-            core_version = _pkg_version("n24q02m-mcp-core")
-        except PackageNotFoundError:
-            core_version = "0.0.0"
-        # listChanged: False matches TS bridge advertise pattern. D17.1 set True for
-        # post-config refresh notifications, but Claude Code defers tools/list query
-        # for plugins advertising True, leaving deferred tools registry empty.
-        persist_capabilities_cache(
-            lock_path,
-            server_name,
-            core_version,
-            {"tools": {}},
-            tools_payload,
-        )
-        # D17.3 — touch sentinel so bridge poller detects change
-        sentinel = lock_path.with_suffix(".tools-list-changed")
-        sentinel.touch(exist_ok=True)
-        now = _time.time()
-        os.utime(sentinel, (now, now))
-    except Exception:  # noqa: BLE001
-        logger.opt(exception=True).debug("Failed to refresh capabilities cache after credential save")
+    # Touch the args so static analyzers don't flag them as unused.
+    _ = (server_name, lock_path)
+    return None
 
 
-async def run_local_server(
+async def run_http_server(
     mcp: FastMCP,
     *,
     server_name: str,
@@ -499,18 +468,18 @@ async def run_local_server(
         else:
             setup_complete_hook(mark_fn)  # type: ignore[call-arg]
 
-    # Issue a long-lived access token for the stdio proxy to use.
-    # The token is written into the lock file so the proxy can read it
-    # without needing to go through the browser OAuth flow.
+    # Issue a long-lived access token written into the lock file so any
+    # in-process probe (e.g. health-check) can reach /mcp without going
+    # through the browser OAuth flow.
     proxy_token = _jwt_issuer.issue_access_token(
-        sub="stdio-proxy",
+        sub="http-server",
         expires_in_seconds=365 * 24 * 3600,  # 1 year
     )
 
     # Sweep stale locks for our server name BEFORE acquiring our own lock.
     # Without this, abnormal-exit residue (Windows OOM, taskkill, signal) can
-    # accumulate dozens of stale `<server>-<port>.lock` files that confuse
-    # `get_active_daemon` probing — see 2026-04-28 wet-mcp 11-stale-lock pile-up.
+    # accumulate dozens of stale `<server>-<port>.lock` files
+    # — see 2026-04-28 wet-mcp 11-stale-lock pile-up.
     from mcp_core.lifecycle.lock import sweep_stale_locks
 
     swept = sweep_stale_locks(server_name)
@@ -556,10 +525,8 @@ async def run_local_server(
                 setup_url,
             )
             # Auto-open browser so user sees relay form immediately on first
-            # connect. Without this the daemon stderr URL is hidden from the
-            # user (stdio-proxy redirects it to ~/daemon_stderr.log) and they
-            # have no way to discover the credential form. Best-effort: any
-            # failure is reported via the ASCII banner inside try_open_browser.
+            # connect. Best-effort: any failure is reported via the ASCII
+            # banner inside try_open_browser.
             from mcp_core.relay.browser import try_open_browser
 
             try_open_browser(setup_url)
@@ -582,37 +549,6 @@ async def run_local_server(
 
         refresh_task = _asyncio.create_task(_refresh_lock_timestamp_loop(lock.path, interval_seconds=3600.0))
 
-        # Persist the daemon's MCP capabilities + tools/list response next to
-        # its lock file. The smart-stdio proxy reads this on subsequent runs
-        # to answer ``initialize`` / ``tools/list`` from disk while the daemon
-        # is cold-starting — Claude Code sees the full tool surface within
-        # ~1s of session start instead of 30-60s. Best-effort: any failure
-        # here just disables the fast-handshake optimization on next run.
-        try:
-            from importlib.metadata import PackageNotFoundError, version as _pkg_version
-
-            from mcp_core.transport.smart_stdio import persist_capabilities_cache
-
-            tools_list = await mcp.list_tools()
-            # exclude_none=True strips null fields rejected by Claude Code's MCP harness.
-            tools_payload = [
-                t.model_dump(exclude_none=True) if hasattr(t, "model_dump") else dict(t) for t in tools_list
-            ]
-            try:
-                core_version = _pkg_version("n24q02m-mcp-core")
-            except PackageNotFoundError:
-                core_version = "0.0.0"
-            # listChanged: False matches TS bridge advertise pattern (see line 340 comment).
-            persist_capabilities_cache(
-                lock.path,
-                server_name,
-                core_version,
-                {"tools": {}},
-                tools_payload,
-            )
-        except Exception:  # noqa: BLE001
-            logger.opt(exception=True).debug("Failed to persist capabilities cache")
-
         try:
             await server.serve()
         finally:
@@ -625,13 +561,12 @@ async def run_local_server(
         logger.info("Server stopped (should_exit={})", server.should_exit)
 
 
-class LocalServerHandle:
-    """Handle returned by ``start_local_server_background``.
+class HttpServerHandle:
+    """Handle returned by ``start_http_server_background``.
 
     Exposes the bound ``host`` and ``port`` plus an ``async close()`` that
-    stops the uvicorn server cleanly. Use this from credential-state code
-    paths (stdio fallback) that need a non-blocking local credential form
-    on a random port. Parity with core-ts's ``runLocalServer`` return type.
+    stops the uvicorn server cleanly. Parity with core-ts's
+    ``runHttpServer`` return type.
     """
 
     def __init__(self, host: str, port: int, server: Any, task: Any) -> None:
@@ -659,18 +594,7 @@ class LocalServerHandle:
                     pass
 
 
-async def run_http_daemon(*args: Any, **kwargs: Any) -> None:
-    """HTTP daemon mode entry point. Renamed from ``run_local_server`` in 2026-04-30.
-
-    Identical behavior; the new name clarifies intent (HTTP daemon serving
-    Streamable HTTP + OAuth on 127.0.0.1) versus the original ambiguous
-    "local server" name. Use this for new code; ``run_local_server`` is kept
-    as the original symbol for backward compatibility.
-    """
-    return await run_local_server(*args, **kwargs)
-
-
-async def start_local_server_background(
+async def start_http_server_background(
     mcp: FastMCP,
     *,
     server_name: str,
@@ -685,13 +609,13 @@ async def start_local_server_background(
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
     startup_timeout: float = 5.0,
-) -> LocalServerHandle:
+) -> HttpServerHandle:
     """Start a local OAuth + MCP server in the background and return a handle.
 
-    Non-blocking variant of ``run_local_server``. Intended for stdio-mode
+    Non-blocking variant of ``run_http_server``. Intended for stdio-mode
     credential-state fallback: a stdio MCP server needs a short-lived local
     HTTP credential form on a random port without blocking its own event
-    loop. The returned ``LocalServerHandle`` exposes ``host``/``port`` and
+    loop. The returned ``HttpServerHandle`` exposes ``host``/``port`` and
     ``close()`` for clean shutdown once the form has been submitted.
 
     No ``LifecycleLock`` is acquired (the spawn is ephemeral and per-process);
@@ -709,7 +633,7 @@ async def start_local_server_background(
         host: Host to bind. Defaults to 127.0.0.1.
         on_credentials_saved: Callback invoked when the user submits creds.
         on_step_submitted: Callback for multi-step credential input (OTP / 2FA).
-        setup_complete_hook: See ``run_local_server``.
+        setup_complete_hook: See ``run_http_server``.
         jwt_keys_dir: JWT key storage directory. Optional.
         custom_credential_form_html: Optional form renderer override.
         delegated_oauth: Delegated OAuth config. Mutually exclusive with
@@ -719,7 +643,7 @@ async def start_local_server_background(
             before raising ``RuntimeError``. Defaults to 5s.
 
     Returns:
-        ``LocalServerHandle`` pointing at the bound address.
+        ``HttpServerHandle`` pointing at the bound address.
 
     Raises:
         RuntimeError: If uvicorn does not start within ``startup_timeout``.
@@ -784,4 +708,4 @@ async def start_local_server_background(
         raise RuntimeError(f"Local credential-form server did not start within {startup_timeout:.1f}s")
 
     logger.info("Local credential-form server ready at http://{}:{}", actual_host, actual_port)
-    return LocalServerHandle(host=actual_host, port=actual_port, server=server, task=task)
+    return HttpServerHandle(host=actual_host, port=actual_port, server=server, task=task)

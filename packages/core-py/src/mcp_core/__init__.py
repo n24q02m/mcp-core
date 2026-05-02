@@ -59,9 +59,9 @@ from mcp_core.storage.session_lock import (
     write_session_lock,
 )
 from mcp_core.transport.local_server import (
-    LocalServerHandle,
-    run_local_server,
-    start_local_server_background,
+    HttpServerHandle,
+    run_http_server,
+    start_http_server_background,
 )
 
 __all__ = [
@@ -106,7 +106,7 @@ __all__ = [
     "TokenCallback",
     "UpstreamOAuthConfig",
     "create_delegated_oauth_app",
-    "LocalServerHandle",
-    "run_local_server",
-    "start_local_server_background",
+    "HttpServerHandle",
+    "run_http_server",
+    "start_http_server_background",
 ]
