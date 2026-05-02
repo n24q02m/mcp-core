@@ -14,10 +14,12 @@ Two flows are supported:
 * :func:`acquire_jwt` — local-relay form fill (paste-token / API-keys form).
   The driver POSTs creds to ``/authorize``, gets ``{ok: true, redirect_url}``
   inline, parses the auth code, and exchanges it.
-* :func:`acquire_jwt_via_upstream_consent` — delegated-OAuth flow (notion's
-  ``MCP_MODE=remote-oauth``). The driver runs a local callback listener,
-  passes its URL as ``redirect_uri``, hands the upstream consent URL back to
-  the caller for the user-gate, and waits for the callback to land.
+* :func:`acquire_jwt_via_upstream_consent` — delegated-OAuth flow (notion
+  HTTP mode). The driver runs a local callback listener, passes its URL
+  as ``redirect_uri``, hands the upstream consent URL back to the caller
+  for the user-gate, and waits for the callback to land. (Pre-2026-05-02
+  this flow keyed off ``MCP_MODE=remote-oauth``; the env switch was
+  removed in spec ``2026-05-01-stdio-pure-http-multiuser.md`` §5.2.3.)
 """
 
 from __future__ import annotations

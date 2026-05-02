@@ -7,13 +7,12 @@ services:
       HOST: "0.0.0.0"
       PORT: "8080"
       TRANSPORT_MODE: "http"
-      {% if deployment == 'remote' -%}
-      MCP_MODE: "remote-relay"
+      # HTTP is always multi-user (per spec
+      # 2026-05-01-stdio-pure-http-multiuser.md §5.2.3) -- PUBLIC_URL +
+      # DCR secret are always set; the legacy mode-flavor env was
+      # deleted from the architecture in the same spec.
       PUBLIC_URL: "http://127.0.0.1:{{ host_port }}"
       MCP_DCR_SERVER_SECRET: "{{ mcp_dcr_server_secret }}"
-      {% else -%}
-      MCP_MODE: "local-relay"
-      {%- endif %}
       {% if gmail_email is defined and gmail_email -%}
       GMAIL_EMAIL: "{{ gmail_email }}"
       GMAIL_APP_PASSWORD: "{{ gmail_app_password }}"
