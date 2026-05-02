@@ -281,7 +281,11 @@ configs:
     tier: t2-non-interaction
     auth: env
     skret_namespace: /better-email-mcp/prod
-    skret_keys: [EMAIL_PROVIDER, EMAIL_USER, EMAIL_APP_PASSWORD]
+    # better-email-mcp credential-state.ts:loadCredsFromEnv accepts
+    # EMAIL_CREDENTIALS directly (combined "user:app-password" form per
+    # CLAUDE.md "Env vars" section). No EMAIL_PROVIDER/USER/APP_PASSWORD
+    # required when EMAIL_CREDENTIALS is set.
+    skret_keys: [EMAIL_CREDENTIALS]
     test: "uvx + env -> init -> tools/call (folders.list)"
 
   - id: telegram-stdio-bot
