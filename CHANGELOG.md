@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.6 (2026-05-02)
+
+### Bug Fixes
+
+- E2e driver — npx for TS plugins, negative test per-plugin, multi-session http <=1
+  ([#151](https://github.com/n24q02m/mcp-core/pull/151),
+  [`71599ec`](https://github.com/n24q02m/mcp-core/commit/71599ecb8273a5c95c2eb02d871bccd222d6a6c3))
+
+- E2e relay_filler follow_redirects + remove obsolete notion-paste-token
+  ([#152](https://github.com/n24q02m/mcp-core/pull/152),
+  [`ee33d2a`](https://github.com/n24q02m/mcp-core/commit/ee33d2a64892a3f466fe0e2df18d6987d7fc53be))
+
+- E2e strict-no-fallback negative test simulates Test B
+  ([#153](https://github.com/n24q02m/mcp-core/pull/153),
+  [`cea57a9`](https://github.com/n24q02m/mcp-core/commit/cea57a9d38e60f2d695fa946777792ca8167cd63))
+
+
 ## v1.13.0-beta.5 (2026-05-02)
 
 ### Features
