@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.5 (2026-05-02)
+
+### Features
+
+- E2e matrix stdio configs + driver multi-session invariant
+  ([#150](https://github.com/n24q02m/mcp-core/pull/150),
+  [`14f507d`](https://github.com/n24q02m/mcp-core/commit/14f507d3d7a4aca93a5b4969cd004154f606f253))
+
+
 ## v1.13.0-beta.4 (2026-05-02)
 
 ### Features
