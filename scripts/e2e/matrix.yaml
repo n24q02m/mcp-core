@@ -338,6 +338,18 @@ configs:
     auth: none
     test: "uvx without required env -> assert exit 1 + stderr message format match"
 
+  - id: stdio-pure-strict-no-fallback
+    repo: all
+    tier: t2-non-interaction
+    auth: none
+    # 2026-05-02 hardening: simulate Test B by wiping ALL persistent
+    # cred storage BEFORE each spawn (config.enc TS+Py legacy paths,
+    # PerPluginStore current, multi-user store, per-sub HTTP store,
+    # OAuth refresh tokens). Catches the regression where prior runs
+    # leave ~/.<plugin>-mcp/config.json on disk and the plugin's
+    # cred-resolution chain silently boots from the saved fallback.
+    test: "Clear ALL cred storage + spawn plugin with empty env + assert no fallback used. Required-cred plugins exit 1; optional-cred plugins boot without loading from store."
+
   # ============================================================
   # Multi-session spawn invariants (added 2026-05-02 per spec §5.5.3).
   # Stdio mode: N CC sessions => N independent processes (no shared
