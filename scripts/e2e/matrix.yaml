@@ -71,7 +71,6 @@ configs:
     repo: better-notion-mcp
     tier: t2-non-interaction
     auth: relay
-    deployment: [local]
     skret_namespace: /better-notion-mcp/prod
     # Driver POSTs the form field name from RELAY_SCHEMA (NOTION_TOKEN);
     # skret carries both NOTION_TOKEN + legacy NOTION_INTEGRATION_TOKEN
@@ -82,7 +81,6 @@ configs:
     repo: better-email-mcp
     tier: t2-non-interaction
     auth: relay
-    deployment: [local, remote]
     skret_namespace: /better-email-mcp/prod
     # Email's relay form is JS-rendered (no static <input>) and POSTs a
     # single ``EMAIL_CREDENTIALS`` field with format
@@ -95,7 +93,6 @@ configs:
     repo: better-telegram-mcp
     tier: t2-non-interaction
     auth: relay
-    deployment: [local, remote]
     skret_namespace: /better-telegram-mcp/prod
     skret_keys: [TELEGRAM_BOT_TOKEN, MCP_DCR_SERVER_SECRET]
 
@@ -103,7 +100,6 @@ configs:
     repo: better-code-review-graph
     tier: t2-non-interaction
     auth: relay
-    deployment: [local, remote]
     skret_namespace: /better-code-review-graph/prod
     skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
@@ -112,7 +108,6 @@ configs:
     repo: imagine-mcp
     tier: t2-non-interaction
     auth: relay
-    deployment: [local, remote]
     skret_namespace: /imagine-mcp/prod
     skret_keys: [GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY]
@@ -121,7 +116,6 @@ configs:
     repo: better-godot-mcp
     tier: t2-non-interaction
     auth: none
-    deployment: [local]
     requires_local_resource: "godot binary on PATH or GODOT_PATH env"
 
   # ============================================================
@@ -134,16 +128,13 @@ configs:
     auth: relay
     flow: device-code
     # ``spawn-setup.ts:182`` routes outlook.com / hotmail.com / live.com
-    # accounts through ``initiateOutlookDeviceCode`` regardless of mode —
-    # the server reads the email from the relay form, identifies the
-    # Outlook domain via ``isOutlookDomain``, and initiates Microsoft
-    # Device Code OAuth2. The difference between local-relay and remote-
-    # relay is only WHERE the refresh token is stored: local writes
-    # ``config.enc`` (single user), remote writes
+    # accounts through ``initiateOutlookDeviceCode`` — the server reads
+    # the email from the relay form, identifies the Outlook domain via
+    # ``isOutlookDomain``, and initiates Microsoft Device Code OAuth2.
+    # HTTP mode is always multi-user: refresh token stored at
     # ``~/.better-email-mcp/tokens/<sub>.json`` (per JWT sub).
     # OUTLOOK_CLIENT_ID falls back to the bundled public Azure client at
     # ``oauth2.ts:88`` (d56f8c71-...) so no skret entry is required.
-    deployment: [local, remote]
     skret_namespace: /better-email-mcp/prod
     skret_keys: [OUTLOOK_EMAIL, MCP_DCR_SERVER_SECRET]
     user_gate: "Click Microsoft device-code link"
@@ -160,24 +151,21 @@ configs:
     # it announces the local /authorize URL and waits for the form to
     # navigate the browser into the local callback listener after the
     # multi-step exchange completes.
-    deployment: [local, remote]
     skret_namespace: /better-telegram-mcp/prod
     skret_keys: [TELEGRAM_PHONE, MCP_DCR_SERVER_SECRET]
     user_gate: "Type OTP + 2FA password in browser"
 
   # wet-full / mnemo-full: relay form posts API keys (optional) + triggers
-  # GDrive Device Code OAuth. Both single-user and multi-user remote mode
-  # (PUBLIC_URL set) start the device-code flow on credential save and
-  # respond with ``next_step.type == "oauth_device_code"``. Per-sub token
-  # storage at ``~/.<server>-mcp/subs/<sub>/tokens/google_drive.json``
-  # (wet-mcp commit 52ec8da, mnemo-mcp commit b0b66e4 — closes the
-  # cross-user GDrive token leak gap from spec 2026-04-25 #134/#187).
+  # GDrive Device Code OAuth. HTTP mode is always multi-user (PUBLIC_URL
+  # set, per-JWT-sub credential storage at
+  # ``~/.<server>-mcp/subs/<sub>/tokens/google_drive.json`` -- wet-mcp
+  # commit 52ec8da, mnemo-mcp commit b0b66e4 closes the cross-user
+  # GDrive token leak gap from spec 2026-04-25 #134/#187).
   - id: wet-full
     repo: wet-mcp
     tier: t2-interaction
     auth: relay
     flow: device-code
-    deployment: [local, remote]
     skret_namespace: /wet-mcp/prod
     skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
@@ -188,7 +176,6 @@ configs:
     tier: t2-interaction
     auth: relay
     flow: device-code
-    deployment: [local, remote]
     skret_namespace: /mnemo-mcp/prod
     skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
     skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
@@ -269,3 +256,102 @@ configs:
     cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "better-telegram-mcp==4.9.0b4", "better-telegram-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 5
+
+  # ============================================================
+  # T2 stdio direct (added 2026-05-02 per spec
+  # ``2026-05-01-stdio-pure-http-multiuser.md`` §5.5.3).
+  # These configs go beyond the parallel-axis ``stdio-direct`` smoke
+  # tests above: they pull credentials from skret per-plugin namespace,
+  # spawn ``uvx <plugin>`` with env, run the standard MCP handshake,
+  # AND invoke a representative ``tools/call`` to verify the stdio
+  # entry point can serve real workloads (not just list tool names).
+  # 8 plugins + 1 negative + 2 multi-session invariant = 11 entries.
+  # ============================================================
+
+  - id: notion-stdio
+    repo: better-notion-mcp
+    tier: t2-non-interaction
+    auth: env
+    skret_namespace: /better-notion-mcp/prod
+    skret_keys: [NOTION_TOKEN]
+    test: "uvx + env -> init -> tools/call (workspace info)"
+
+  - id: email-stdio-gmail
+    repo: better-email-mcp
+    tier: t2-non-interaction
+    auth: env
+    skret_namespace: /better-email-mcp/prod
+    skret_keys: [EMAIL_PROVIDER, EMAIL_USER, EMAIL_APP_PASSWORD]
+    test: "uvx + env -> init -> tools/call (folders.list)"
+
+  - id: telegram-stdio-bot
+    repo: better-telegram-mcp
+    tier: t2-non-interaction
+    auth: env
+    skret_namespace: /better-telegram-mcp/prod
+    skret_keys: [TELEGRAM_BOT_TOKEN]
+    test: "uvx + env -> init -> tools/call (chat.list)"
+
+  - id: wet-stdio
+    repo: wet-mcp
+    tier: t2-non-interaction
+    auth: env
+    skret_namespace: /wet-mcp/prod
+    skret_keys: [BRAVE_API_KEY]
+    skret_optional: [BRAVE_API_KEY]
+    test: "uvx + env -> init -> search action"
+
+  - id: mnemo-stdio
+    repo: mnemo-mcp
+    tier: t2-non-interaction
+    auth: none
+    test: "uvx -> init -> memory store/recall"
+
+  - id: crg-stdio
+    repo: better-code-review-graph
+    tier: t2-non-interaction
+    auth: env
+    skret_namespace: /better-code-review-graph/prod
+    skret_keys: [GEMINI_API_KEY]
+    skret_optional: [GEMINI_API_KEY]
+    test: "uvx -> init -> graph build"
+
+  - id: imagine-stdio
+    repo: imagine-mcp
+    tier: t2-non-interaction
+    auth: env
+    skret_namespace: /imagine-mcp/prod
+    skret_keys: [GEMINI_API_KEY]
+    test: "uvx + env -> init -> understand action"
+
+  - id: godot-stdio
+    repo: better-godot-mcp
+    tier: t2-non-interaction
+    auth: none
+    test: "uvx -> init -> version"
+
+  - id: stdio-no-env-negative
+    repo: all
+    tier: t2-non-interaction
+    auth: none
+    test: "uvx without required env -> assert exit 1 + stderr message format match"
+
+  # ============================================================
+  # Multi-session spawn invariants (added 2026-05-02 per spec §5.5.3).
+  # Stdio mode: N CC sessions => N independent processes (no shared
+  # state). HTTP mode: N CC sessions => 1 shared daemon (multi-user
+  # JWT-sub state). These invariants are the runtime contract for
+  # the stdio-pure / http-multi-user architecture.
+  # ============================================================
+
+  - id: multi-session-stdio
+    repo: all
+    tier: t2-non-interaction
+    auth: env
+    test: "Spawn 3 concurrent stdio processes per plugin -> assert >=3 distinct PIDs (no sharing)"
+
+  - id: multi-session-http
+    repo: all
+    tier: t2-non-interaction
+    auth: env
+    test: "Spawn 3 concurrent HTTP-mode CC sessions -> assert exactly 1 daemon PID"

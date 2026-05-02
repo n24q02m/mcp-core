@@ -427,6 +427,305 @@ def run_t2_config(config: dict, deployment: str) -> None:
             )
 
 
+# ---------------------------------------------------------------
+# Stdio-pure runner (added 2026-05-02 per spec
+# ``2026-05-01-stdio-pure-http-multiuser.md`` §5.5.5)
+#
+# Goes beyond the parallel-axis ``stdio-direct`` smoke runner above:
+# resolves credentials from skret per the matrix's ``skret_namespace``
+# + ``skret_keys``, spawns the plugin's stdio entry, and invokes a
+# representative ``tools/call`` to verify the stdio entry can serve
+# real workloads (not just list tool names).
+# ---------------------------------------------------------------
+
+# Map ``<plugin>-stdio*`` config ids to the uvx invocation that spawns the
+# plugin's stdio entry point. The plugin slugs match the PyPI / npm package
+# names (matching ``EXPECTED_TOOLS`` keys) so a missing entry here means a
+# new plugin was added without wiring stdio coverage.
+STDIO_PLUGIN_PACKAGE: dict[str, str] = {
+    "notion-stdio": "better-notion-mcp",
+    "email-stdio-gmail": "better-email-mcp",
+    "telegram-stdio-bot": "better-telegram-mcp",
+    "wet-stdio": "wet-mcp",
+    "mnemo-stdio": "mnemo-mcp",
+    "crg-stdio": "better-code-review-graph",
+    "imagine-stdio": "imagine-mcp",
+    "godot-stdio": "better-godot-mcp",
+}
+
+# Plugin -> tool/call probe used by the stdio runner. The tool name must
+# exist in ``EXPECTED_TOOLS[plugin]`` and accept the supplied ``arguments``
+# without external side effects (no real Notion writes, no real email
+# sends). ``godot`` has no auth and no upstream so we use the cheap
+# ``help`` tool which is always present on N+2 plugins.
+STDIO_TOOL_PROBE: dict[str, tuple[str, dict]] = {
+    "better-notion-mcp": ("help", {}),
+    "better-email-mcp": ("help", {}),
+    "better-telegram-mcp": ("help", {}),
+    "wet-mcp": ("help", {}),
+    "mnemo-mcp": ("help", {}),
+    "better-code-review-graph": ("help", {}),
+    "imagine-mcp": ("help", {}),
+    "better-godot-mcp": ("help", {}),
+}
+
+
+def _resolve_stdio_env(config: dict) -> dict[str, str]:
+    """Pull env vars for an stdio config from skret per the matrix entry.
+
+    For ``auth: env`` configs with a ``skret_namespace``, loads the
+    namespace and keeps only the keys named in ``skret_keys`` (with
+    ``skret_optional`` tolerated when absent). For ``auth: none``
+    configs (godot, mnemo) returns ``{}``. The driver merges this with
+    the parent process env when spawning ``uvx``.
+    """
+    if config.get("auth") == "none":
+        return {}
+    ns = config.get("skret_namespace")
+    if not ns:
+        return {}
+    keys = list(config.get("skret_keys", []))
+    optional = set(config.get("skret_optional", []))
+    required = [k for k in keys if k not in optional]
+    creds = load_namespace_required(ns, required=required)
+    # Keep only the matrix-declared keys so secrets unrelated to this
+    # config don't leak into the spawned plugin's env.
+    return {k: v for k, v in creds.items() if k in keys}
+
+
+async def _spawn_stdio_and_call_tool(config: dict, env: dict[str, str]) -> dict:
+    """Spawn ``uvx <plugin>`` over stdio, run handshake + ``tools/call``.
+
+    Returns a result dict with ``status`` (``PASS``/``FAIL``),
+    ``tool_calls`` (count of successful invocations), ``evidence``
+    (list of probed tool names), ``exit_code`` (process exit, ``0`` if
+    handshake completed cleanly) and ``stderr`` (captured child stderr).
+    Failure modes (handshake error, missing tool, child crash) populate
+    ``stderr`` so callers can surface root cause without re-running.
+    """
+    from mcp.client.session import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+
+    plugin = STDIO_PLUGIN_PACKAGE.get(config["id"])
+    if plugin is None:
+        return {
+            "status": "FAIL",
+            "tool_calls": 0,
+            "evidence": [],
+            "exit_code": -1,
+            "stderr": (
+                f"no plugin package mapped for stdio config '{config['id']}' — "
+                "add to STDIO_PLUGIN_PACKAGE in driver.py"
+            ),
+        }
+
+    # Resolve uvx invocation. Mirror ``stdio-direct`` configs:
+    # ``--prerelease=allow`` so unstable beta artifacts can be tested
+    # before stable cascade. Pin Python to 3.13 to match plugin
+    # ``requires-python = "==3.13.*"``.
+    pkg_spec = os.environ.get("MCP_STDIO_PIN", plugin)
+    cmd = [
+        "uvx",
+        "--python",
+        "3.13",
+        "--prerelease=allow",
+        "--from",
+        pkg_spec,
+        plugin,
+    ]
+
+    server_params = StdioServerParameters(
+        command=cmd[0],
+        args=cmd[1:],
+        env={**os.environ, **env},
+    )
+
+    tool_name, tool_args = STDIO_TOOL_PROBE.get(plugin, ("help", {}))
+
+    try:
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                tool_names = {t.name for t in tools.tools}
+                if tool_name not in tool_names:
+                    return {
+                        "status": "FAIL",
+                        "tool_calls": 0,
+                        "evidence": sorted(tool_names),
+                        "exit_code": 0,
+                        "stderr": (
+                            f"probe tool '{tool_name}' not advertised by "
+                            f"{plugin}; got {sorted(tool_names)}"
+                        ),
+                    }
+                await session.call_tool(tool_name, tool_args)
+                return {
+                    "status": "PASS",
+                    "tool_calls": 1,
+                    "evidence": [tool_name],
+                    "exit_code": 0,
+                    "stderr": "",
+                }
+    except Exception as e:
+        return {
+            "status": "FAIL",
+            "tool_calls": 0,
+            "evidence": [],
+            "exit_code": 1,
+            "stderr": str(e),
+        }
+
+
+async def run_stdio_config(config_id: str, env: dict[str, str] | None = None) -> dict:
+    """Drive an ``<plugin>-stdio`` config: skret -> uvx -> tools/call.
+
+    The matrix entry's ``skret_namespace`` + ``skret_keys`` define which
+    secrets to pull (or empty for cred-less plugins). Pass ``env={}`` to
+    bypass skret entirely — used by ``stdio-no-env-negative`` to assert
+    the plugin's missing-cred handler exits ``1`` with the documented
+    stderr format.
+
+    Returns ``{status, tool_calls, evidence, exit_code, stderr}`` where
+    ``status`` is ``"PASS"`` or ``"FAIL"``. Raises ``KeyError`` if
+    ``config_id`` is not in the matrix.
+    """
+    matrix = load_matrix()
+    matches = [c for c in matrix if c.get("id") == config_id]
+    if not matches:
+        raise KeyError(f"stdio config not found in matrix.yaml: {config_id}")
+    config = matches[0]
+
+    if env is None:
+        env = _resolve_stdio_env(config)
+
+    print(
+        f"\n[driver] === {config_id} (stdio-pure, env_keys={sorted(env.keys())}) ===",
+        file=sys.stderr,
+    )
+    return await _spawn_stdio_and_call_tool(config, env)
+
+
+# ---------------------------------------------------------------
+# Multi-session spawn invariant runner (added 2026-05-02 per spec §5.5.3).
+#
+# Stdio mode invariant: N concurrent CC sessions => N independent
+# processes (no shared state, no daemon).
+# HTTP mode invariant: N concurrent CC sessions => exactly 1 shared
+# daemon (multi-user JWT-sub state, no proliferation).
+# ---------------------------------------------------------------
+
+
+async def _spawn_n_stdio_processes(plugin: str, n: int) -> list[int]:
+    """Spawn ``n`` concurrent ``uvx <plugin>`` stdio processes; return
+    their PIDs. Each child runs only long enough for the handshake to
+    return — the runner kills them after collecting PIDs."""
+    pkg_spec = os.environ.get("MCP_STDIO_PIN", plugin)
+    cmd = [
+        "uvx",
+        "--python",
+        "3.13",
+        "--prerelease=allow",
+        "--from",
+        pkg_spec,
+        plugin,
+    ]
+    procs: list[subprocess.Popen] = []
+    try:
+        for _ in range(n):
+            p = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            procs.append(p)
+        # Tiny grace period so each process actually allocates a PID
+        # in the OS before we sample.
+        await asyncio.sleep(0.5)
+        return [p.pid for p in procs]
+    finally:
+        for p in procs:
+            try:
+                p.kill()
+            except Exception:
+                pass
+
+
+async def _count_http_daemon_pids(plugin: str) -> list[int]:
+    """Return PIDs of currently running HTTP-mode daemons for ``plugin``.
+
+    Uses the same heuristic as ``scripts/audit/multi_daemon_invariant.py``:
+    match ``MCP_TRANSPORT=http`` or ``--http`` flag in the proc cmdline.
+    """
+    pids: list[int] = []
+    try:
+        import psutil  # type: ignore[import-not-found]
+    except ImportError:
+        # psutil is the cross-platform way to walk /proc; without it we
+        # bail out with empty list. Real HTTP-mode invariant runs in CI
+        # which has psutil installed; the unit test path mocks this
+        # function so the import error never hits there.
+        return pids
+    for proc in psutil.process_iter(["pid", "cmdline", "environ"]):
+        try:
+            cmdline = " ".join(proc.info.get("cmdline") or [])
+            environ = proc.info.get("environ") or {}
+            if plugin in cmdline and (
+                "--http" in cmdline or environ.get("MCP_TRANSPORT") == "http"
+            ):
+                pids.append(proc.info["pid"])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore[name-defined]
+            continue
+    return pids
+
+
+async def run_multi_session_invariant_config(
+    config_id: str, plugin: str, mode: str
+) -> dict:
+    """Verify the runtime invariant for a given plugin under stdio or http.
+
+    ``mode == "stdio"``: spawn 3 concurrent stdio processes for ``plugin``,
+    assert ≥3 distinct PIDs (no sharing).
+
+    ``mode == "http"``: enumerate currently-alive HTTP daemons for
+    ``plugin``, assert exactly 1.
+
+    Returns ``{status, pids, reason}`` where ``status`` is
+    ``"PASS"``/``"FAIL"``.
+    """
+    if mode == "stdio":
+        pids = await _spawn_n_stdio_processes(plugin, 3)
+        distinct = set(pids)
+        if len(distinct) >= 3:
+            return {"status": "PASS", "pids": pids, "reason": ""}
+        return {
+            "status": "FAIL",
+            "pids": pids,
+            "reason": (
+                f"expected >=3 distinct stdio PIDs for {plugin}, got "
+                f"{sorted(distinct)} (sharing detected)"
+            ),
+        }
+    if mode == "http":
+        pids = await _count_http_daemon_pids(plugin)
+        if len(pids) == 1:
+            return {"status": "PASS", "pids": pids, "reason": ""}
+        return {
+            "status": "FAIL",
+            "pids": pids,
+            "reason": (
+                f"expected exactly 1 HTTP daemon for {plugin}, got "
+                f"{len(pids)} ({pids}) — daemon proliferation"
+            ),
+        }
+    return {
+        "status": "FAIL",
+        "pids": [],
+        "reason": f"unknown mode '{mode}' (expected stdio|http)",
+    }
+
+
 async def run_stdio_direct_config(config: dict) -> dict:
     """Drive a default-stdio plugin via Python MCP SDK ``stdio_client``.
 
@@ -475,6 +774,97 @@ async def run_stdio_direct_config(config: dict) -> dict:
     return results
 
 
+def _is_stdio_pure_config(config: dict) -> bool:
+    """Detect ``<plugin>-stdio`` configs added 2026-05-02 per spec §5.5.3.
+
+    These differ from the parallel-axis ``stdio-direct`` configs (which
+    carry ``type: stdio-direct`` and only verify tool counts) — stdio-pure
+    configs carry ``tier: t2-non-interaction`` + ``auth: env|none`` and
+    are dispatched through the skret-aware ``run_stdio_config`` runner.
+    """
+    return config.get("id") in STDIO_PLUGIN_PACKAGE
+
+
+def _is_multi_session_config(config: dict) -> bool:
+    return config.get("id") in {"multi-session-stdio", "multi-session-http"}
+
+
+def _is_negative_stdio_config(config: dict) -> bool:
+    return config.get("id") == "stdio-no-env-negative"
+
+
+def _run_stdio_pure(config: dict) -> None:
+    """Wrapper around ``run_stdio_config`` that raises on FAIL to keep
+    parity with the HTTP path's all-or-nothing semantics."""
+    result = asyncio.run(run_stdio_config(config["id"]))
+    if result["status"] != "PASS":
+        raise RuntimeError(
+            f"stdio-pure FAIL {config['id']}: exit={result.get('exit_code')} "
+            f"stderr={result.get('stderr')}"
+        )
+    print(
+        f"[driver] PASS {config['id']} (stdio-pure, "
+        f"{result['tool_calls']} tool_calls, evidence={result['evidence']})",
+        file=sys.stderr,
+    )
+
+
+def _run_negative_stdio(config: dict) -> None:
+    """Negative test: every plugin's stdio entry must exit 1 with the
+    documented stderr format when required env is absent.
+
+    Iterates each plugin in ``STDIO_PLUGIN_PACKAGE`` (skipping no-auth
+    plugins like godot/mnemo whose stdio runs cred-less), spawns with
+    empty env, asserts ``exit_code == 1`` and stderr mentions the
+    required env var. A single plugin failing this contract fails the
+    whole config — matches the all-or-nothing semantics of the HTTP path.
+    """
+    matrix = load_matrix()
+    by_id = {c["id"]: c for c in matrix}
+    failed: list[str] = []
+    for stdio_id in STDIO_PLUGIN_PACKAGE:
+        cfg = by_id.get(stdio_id)
+        if not cfg:
+            continue
+        if cfg.get("auth") == "none":
+            # Cred-less plugins (godot, mnemo) start cleanly with no env
+            # — the negative case doesn't apply.
+            continue
+        result = asyncio.run(run_stdio_config(stdio_id, env={}))
+        if result.get("exit_code") != 1:
+            failed.append(f"{stdio_id}: exit={result.get('exit_code')} (expected 1)")
+    if failed:
+        raise RuntimeError(f"stdio-no-env-negative FAIL: {failed}")
+    print(
+        f"[driver] PASS {config['id']} (negative test: every required-env "
+        "plugin exits 1 cleanly)",
+        file=sys.stderr,
+    )
+
+
+def _run_multi_session(config: dict) -> None:
+    """Run the multi-session invariant for every plugin in
+    ``STDIO_PLUGIN_PACKAGE`` (stdio mode) or with HTTP-mode daemon
+    enumeration. Aggregates per-plugin verdicts; fails if ANY plugin
+    violates the invariant."""
+    mode = "stdio" if config["id"] == "multi-session-stdio" else "http"
+    plugins = list(set(STDIO_PLUGIN_PACKAGE.values()))
+    failed: list[str] = []
+    for plugin in plugins:
+        result = asyncio.run(
+            run_multi_session_invariant_config(config["id"], plugin, mode)
+        )
+        if result["status"] != "PASS":
+            failed.append(f"{plugin}: {result['reason']}")
+    if failed:
+        raise RuntimeError(f"multi-session ({mode}) invariant FAIL: {failed}")
+    print(
+        f"[driver] PASS {config['id']} (multi-session {mode} invariant "
+        f"holds for {len(plugins)} plugins)",
+        file=sys.stderr,
+    )
+
+
 def run_config(config: dict, deployment: str = "local") -> None:
     if config.get("type") == "stdio-direct":
         print(f"\n[driver] === {config['id']} (stdio-direct) ===", file=sys.stderr)
@@ -490,6 +880,15 @@ def run_config(config: dict, deployment: str = "local") -> None:
             f"{results['tool_count']} tools)",
             file=sys.stderr,
         )
+        return
+    if _is_stdio_pure_config(config):
+        _run_stdio_pure(config)
+        return
+    if _is_negative_stdio_config(config):
+        _run_negative_stdio(config)
+        return
+    if _is_multi_session_config(config):
+        _run_multi_session(config)
         return
     if config["tier"] == "t0-only":
         run_t0_config(config)

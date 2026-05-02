@@ -1,4 +1,4 @@
-"""Schema validation for matrix.yaml. Locks the 16+5 config taxonomy.
+"""Schema validation for matrix.yaml. Locks the config taxonomy.
 
 History:
 - 2026-04-27: 16 → 15 by reclassifying notion-oauth out of T2 (Notion app
@@ -17,6 +17,13 @@ History:
   point loads tools without an HTTP daemon. They have no ``tier`` /
   ``auth`` / ``skret_namespace`` field (tier-less + no upstream
   identity surface required).
+- 2026-05-02: 21 → 32 per spec ``2026-05-01-stdio-pure-http-multiuser.md``
+  §5.5: dropped the ``deployment: [local, remote]`` matrix axis from T2
+  configs (HTTP is always multi-user, single deployment shape) and added
+  9 ``<plugin>-stdio`` configs (skret-pulled env + uvx + tools/call) plus
+  2 ``multi-session-{stdio,http}`` runtime-invariant configs. Introduces
+  the ``auth: env`` value (pure env-var stdio) on top of the original
+  ``{none, oauth, relay}`` superset.
 """
 
 from pathlib import Path
@@ -43,11 +50,15 @@ def _tiered(configs: list[dict]) -> list[dict]:
     return [c for c in configs if c.get("type") != "stdio-direct"]
 
 
-def test_matrix_has_21_configs() -> None:
+def test_matrix_has_32_configs() -> None:
     data = _load()
-    # 16 tier-axis (5 t0-only + 6 t2-non-interaction + 4 t2-interaction
-    # + 1 t3-staging) + 5 stdio-direct = 21.
-    assert len(data["configs"]) == 21
+    # 16 tier-axis pre-2026-05-02
+    #   (5 t0-only + 6 t2-non-interaction + 4 t2-interaction + 1 t3-staging)
+    # + 5 stdio-direct (parallel axis, 2026-04-30)
+    # + 9 stdio configs (8 plugin + 1 negative, 2026-05-02 §5.5.3)
+    # + 2 multi-session invariants (2026-05-02 §5.5.3)
+    # = 32.
+    assert len(data["configs"]) == 32
 
 
 def test_matrix_tier_distribution() -> None:
@@ -57,28 +68,31 @@ def test_matrix_tier_distribution() -> None:
     t2_non = [c for c in tiered if c["tier"] == "t2-non-interaction"]
     t2_int = [c for c in tiered if c["tier"] == "t2-interaction"]
     t3_staging = [c for c in tiered if c["tier"] == "t3-staging"]
-    # 2026-04-28 final: 5 t0-only + 6 t2-non-interaction + 4 t2-interaction
-    # + 1 t3-staging (notion-oauth via beta CD → staging deploy → E2E gate).
+    # 2026-05-02 final: 5 t0-only + (6 relay/none non-int + 9 stdio +
+    # 2 multi-session = 17 t2-non-interaction) + 4 t2-interaction
+    # + 1 t3-staging.
     assert len(t0_only) == 5
-    assert len(t2_non) == 6
+    assert len(t2_non) == 17
     assert len(t2_int) == 4
     assert len(t3_staging) == 1
 
 
 def test_matrix_auth_modes_in_documented_superset() -> None:
-    """Configs span the documented ``{none, oauth, relay}`` superset.
+    """Configs span the documented ``{none, oauth, relay, env}`` superset.
 
     ``oauth`` re-enters the matrix on 2026-04-28 with the t3-staging
-    notion-oauth config; the test now asserts the full superset rather
-    than the post-reclassification subset. stdio-direct configs are on
-    a parallel axis and have no ``auth`` field (no upstream identity).
+    notion-oauth config. ``env`` joins on 2026-05-02 for stdio-pure
+    configs that pull credentials from skret (or run cred-less) and
+    spawn ``uvx <plugin>`` directly. stdio-direct configs are on a
+    parallel axis and have no ``auth`` field (no upstream identity).
     """
     data = _load()
     auths = {c["auth"] for c in _tiered(data["configs"])}
-    assert auths <= {"none", "oauth", "relay"}, (
+    assert auths <= {"none", "oauth", "relay", "env"}, (
         f"unexpected auth modes outside documented superset: {auths}"
     )
     assert "oauth" in auths, "notion-oauth t3-staging missing from matrix"
+    assert "env" in auths, "stdio-pure env configs missing from matrix"
 
 
 def test_notion_oauth_is_t3_staging() -> None:
@@ -105,6 +119,14 @@ def test_matrix_ids_unique() -> None:
 
 def test_t2_configs_have_skret_namespace_when_auth_present() -> None:
     data = _load()
+    # Multi-plugin invariant configs (``repo: all``) iterate every plugin
+    # at runtime and resolve each one's skret namespace from the per-plugin
+    # entry. The aggregate config itself has no single namespace to declare.
+    multi_plugin_ids = {
+        "stdio-no-env-negative",
+        "multi-session-stdio",
+        "multi-session-http",
+    }
     for c in _tiered(data["configs"]):
         if c["tier"] == "t0-only":
             continue
@@ -115,8 +137,52 @@ def test_t2_configs_have_skret_namespace_when_auth_present() -> None:
         # so the matrix entry has no skret_namespace.
         if c["tier"] == "t3-staging":
             continue
+        if c["id"] in multi_plugin_ids:
+            continue
         assert "skret_namespace" in c, f"{c['id']} missing skret_namespace"
         assert c["skret_namespace"].startswith("/"), f"{c['id']} ns must start with /"
+
+
+def test_no_deployment_axis_on_t2_configs() -> None:
+    """Per spec ``2026-05-01-stdio-pure-http-multiuser.md`` §5.5.2.
+
+    HTTP mode is always multi-user (single deployment shape), so the
+    legacy ``deployment: [local, remote]`` matrix axis is dropped from
+    every T2 config. ``t3-staging`` keeps ``deployment: [staging]`` as
+    its only allowed value (notion-oauth special flow).
+    """
+    data = _load()
+    for c in _tiered(data["configs"]):
+        if c["tier"] == "t3-staging":
+            continue
+        if c["tier"] == "t0-only":
+            continue
+        assert "deployment" not in c, (
+            f"{c['id']} (tier={c['tier']}) must not declare a "
+            "deployment axis after 2026-05-02 spec"
+        )
+
+
+def test_stdio_pure_configs_present() -> None:
+    """8 plugin stdio configs + 1 negative + 2 multi-session = 11 entries
+    added 2026-05-02 per spec §5.5.3."""
+    data = _load()
+    expected = {
+        "notion-stdio",
+        "email-stdio-gmail",
+        "telegram-stdio-bot",
+        "wet-stdio",
+        "mnemo-stdio",
+        "crg-stdio",
+        "imagine-stdio",
+        "godot-stdio",
+        "stdio-no-env-negative",
+        "multi-session-stdio",
+        "multi-session-http",
+    }
+    actual = {c["id"] for c in data["configs"]}
+    missing = expected - actual
+    assert not missing, f"stdio-pure configs missing from matrix: {missing}"
 
 
 def test_t2_interaction_configs_have_user_gate() -> None:
