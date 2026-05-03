@@ -37,6 +37,12 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
 from mcp_core.auth.credential_form import is_oauth_field, is_secret_field, render_credential_form
+from mcp_core.auth.relay_login import (
+    configure_relay_login,
+    login_get_handler,
+    login_post_handler,
+    require_relay_session,
+)
 from mcp_core.auth.well_known import (
     authorization_server_metadata,
     protected_resource_metadata,
@@ -154,6 +160,16 @@ def create_local_oauth_app(
     # Structure: {state: {data: {KEY: VALUE}, created_at: monotonic}}
     pending_prefills: dict[str, dict[str, Any]] = {}
     _PREFILL_TTL_S = 300.0
+
+    # Edge auth password gate (per spec 2026-05-01-stdio-pure-http-multiuser
+    # §4.2.1). When ``MCP_RELAY_PASSWORD`` is set, /authorize GET + POST and
+    # /authorize/prefill are fronted by a thin cookie-session check. Empty
+    # password disables the gate. Configured here so test setups that build
+    # multiple apps in one process get fresh state per ``create_local_oauth_app``
+    # call (relay_login keeps a single shared password — intentional, since in
+    # deploy each container hosts one app).
+    _relay_password = os.environ.get("MCP_RELAY_PASSWORD", "")
+    configure_relay_login(_relay_password)
 
     # One pending multi-step session at a time. POST /otp has no sub in its
     # body, so we also capture the sub that opened this flow (via POST
@@ -378,19 +394,39 @@ def create_local_oauth_app(
 
         return JSONResponse(response_body)
 
-    async def authorize(request: Request) -> HTMLResponse | JSONResponse:
-        """Dispatch GET/POST on /authorize."""
+    async def authorize(request: Request):
+        """Dispatch GET/POST on /authorize.
+
+        When ``MCP_RELAY_PASSWORD`` is set, requests without a valid
+        ``mcp_relay_session`` cookie are redirected to ``/login`` (handled
+        inside ``require_relay_session``).
+        """
+        if _relay_password:
+            gated = await require_relay_session(
+                dict(request.cookies), str(request.url.path) + (f"?{request.url.query}" if request.url.query else "")
+            )
+            if gated is not None:
+                return gated
         if request.method == "GET":
             return await authorize_get(request)
         return await authorize_post(request)
 
-    async def authorize_prefill(request: Request) -> JSONResponse:
+    async def authorize_prefill(request: Request):
         """POST /authorize/prefill -- driver-only side channel for form prefill.
 
         Stores form prefill values keyed by the OAuth ``state`` token chosen by
         the client. ``GET /authorize?state=<X>`` then hydrates the form on
         render — credentials never appear in the URL the user opens.
+
+        Gated by the same relay-password cookie as ``/authorize`` itself when
+        ``MCP_RELAY_PASSWORD`` is set.
         """
+        if _relay_password:
+            gated = await require_relay_session(
+                dict(request.cookies), str(request.url.path) + (f"?{request.url.query}" if request.url.query else "")
+            )
+            if gated is not None:
+                return gated
         state = request.query_params.get("state")
         if not state:
             return JSONResponse(
@@ -730,8 +766,21 @@ def create_local_oauth_app(
     # Build Starlette app
     # ------------------------------------------------------------------
 
+    async def login_get(request: Request):
+        """GET /login -- render the relay-password form."""
+        next_param = request.query_params.get("next", "/authorize")
+        return await login_get_handler(next_param)
+
+    async def login_post(request: Request):
+        """POST /login -- verify the relay password and issue a session cookie."""
+        form = await request.form()
+        ip = request.client.host if request.client else "unknown"
+        return await login_post_handler(dict(form), ip=ip)
+
     routes = [
         Route("/", root, methods=["GET"]),
+        Route("/login", login_get, methods=["GET"]),
+        Route("/login", login_post, methods=["POST"]),
         Route("/authorize", authorize, methods=["GET", "POST"]),
         Route("/authorize/prefill", authorize_prefill, methods=["POST"]),
         Route("/otp", otp_handler, methods=["POST"]),

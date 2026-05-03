@@ -127,6 +127,22 @@ export async function runHttpServer(
   const host = options.host ?? '127.0.0.1'
   const wantedPort = options.port ?? 0
 
+  // Edge auth deployment warning (per spec 2026-05-01-stdio-pure-http-multiuser
+  // §4.2.1). When ``PUBLIC_URL`` points to a non-localhost host but
+  // ``MCP_RELAY_PASSWORD`` is empty, the relay form is reachable from the
+  // public Internet without authentication — that's the wedge this gate
+  // closes. Operators running single-user dev on localhost intentionally
+  // skip the password; everyone else gets a startup warning so the misconfig
+  // doesn't pass silently.
+  const publicUrl = process.env.PUBLIC_URL ?? ''
+  const relayPassword = process.env.MCP_RELAY_PASSWORD ?? ''
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(publicUrl)
+  if (publicUrl && !isLocalhost && !relayPassword) {
+    console.warn(
+      '[mcp-core] WARNING: HTTP mode public deployment without MCP_RELAY_PASSWORD — relay form is open to Internet'
+    )
+  }
+
   let oauthApp: LocalOAuthAppResult | DelegatedOAuthAppResult | null = null
   let jwtIssuer: JWTIssuer | null = null
 
