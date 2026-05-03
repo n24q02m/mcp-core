@@ -665,6 +665,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     });
                     inputEl.addEventListener("input", function() {
                         inputEl.removeAttribute("aria-invalid");
+                        inputEl.removeAttribute("aria-errormessage");
                         errorEl.style.display = "none";
                     });
                 }
@@ -686,11 +687,14 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                 var value = inputEl.value;
 
                 inputEl.removeAttribute("aria-invalid");
+                inputEl.removeAttribute("aria-errormessage");
 
                 if (value.trim() === "") {
                     errorEl.textContent = "Please enter a value.";
                     errorEl.style.display = "block";
                     inputEl.setAttribute("aria-invalid", "true");
+                    inputEl.setAttribute("aria-errormessage", "step-error");
+                    inputEl.focus();
                     return;
                 }
                 errorEl.style.display = "none";
@@ -700,6 +704,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                 buttonEl.setAttribute("aria-busy", "true");
                 inputEl.disabled = true;
                 inputEl.removeAttribute("aria-invalid");
+                inputEl.removeAttribute("aria-errormessage");
 
                 var body = {};
                 body[fieldName] = value;
@@ -747,6 +752,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                 errorEl.style.display = "block";
                                 inputEl.disabled = false;
                                 inputEl.setAttribute("aria-invalid", "true");
+                                inputEl.setAttribute("aria-errormessage", "step-error");
                                 buttonEl.disabled = false;
                                 buttonEl.textContent = "Verify";
                                 buttonEl.removeAttribute("aria-busy");
@@ -759,9 +765,11 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                         errorEl.style.display = "block";
                         inputEl.disabled = false;
                         inputEl.setAttribute("aria-invalid", "true");
+                        inputEl.setAttribute("aria-errormessage", "step-error");
                         buttonEl.disabled = false;
                         buttonEl.textContent = "Verify";
                         buttonEl.removeAttribute("aria-busy");
+                        inputEl.focus();
                     });
             }
 
