@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.8 (2026-05-03)
+
+### Features
+
+- Wire /login gate into delegated_oauth_app (notion delegated path)
+  ([#159](https://github.com/n24q02m/mcp-core/pull/159),
+  [`63c512d`](https://github.com/n24q02m/mcp-core/commit/63c512d1e28167e602e931fe62020edf6ccfec04))
+
+
 ## v1.13.0-beta.7 (2026-05-03)
 
 ### Bug Fixes
