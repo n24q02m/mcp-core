@@ -46,9 +46,24 @@ export async function getMachineId(): Promise<string> {
 
   // Fallback: hostname + first MAC address
   const nics = networkInterfaces()
-  const mac = Object.values(nics)
-    .flat()
-    .find((n) => n && !n.internal && n.mac !== '00:00:00:00:00:00')?.mac
+
+  // Optimization: Manual loops are significantly faster than .flat().find() in Bun
+  // as they avoid intermediate memory allocations and functional iteration overhead.
+  let mac: string | undefined
+  for (const key in nics) {
+    const ifaces = nics[key]
+    if (ifaces) {
+      for (let i = 0; i < ifaces.length; i++) {
+        const n = ifaces[i]
+        if (n && !n.internal && n.mac !== '00:00:00:00:00:00') {
+          mac = n.mac
+          break
+        }
+      }
+    }
+    if (mac) break
+  }
+
   cachedMachineId = `${hostname()}-${mac ?? 'unknown'}`
   return cachedMachineId
 }
