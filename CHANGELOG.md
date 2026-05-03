@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.7 (2026-05-03)
+
+### Bug Fixes
+
+- Collapse relay-login form HTML to single line for Semgrep nosemgrep
+  ([#158](https://github.com/n24q02m/mcp-core/pull/158),
+  [`a47cdcd`](https://github.com/n24q02m/mcp-core/commit/a47cdcd65c6520344f09d7ba72b4e5a6302ae0a4))
+
+- Place nosemgrep comment on same line as flagged HTML literal
+  ([#158](https://github.com/n24q02m/mcp-core/pull/158),
+  [`a47cdcd`](https://github.com/n24q02m/mcp-core/commit/a47cdcd65c6520344f09d7ba72b4e5a6302ae0a4))
+
+- Relay-login type annotation + Semgrep XSS suppression
+  ([#158](https://github.com/n24q02m/mcp-core/pull/158),
+  [`a47cdcd`](https://github.com/n24q02m/mcp-core/commit/a47cdcd65c6520344f09d7ba72b4e5a6302ae0a4))
+
+### Features
+
+- Add MCP_RELAY_PASSWORD edge auth gate per spec §4.2.1
+  ([#158](https://github.com/n24q02m/mcp-core/pull/158),
+  [`a47cdcd`](https://github.com/n24q02m/mcp-core/commit/a47cdcd65c6520344f09d7ba72b4e5a6302ae0a4))
+
+- Relay password gate (edge auth) ([#158](https://github.com/n24q02m/mcp-core/pull/158),
+  [`a47cdcd`](https://github.com/n24q02m/mcp-core/commit/a47cdcd65c6520344f09d7ba72b4e5a6302ae0a4))
+
+
 ## v1.13.0-beta.6 (2026-05-02)
 
 ### Bug Fixes
