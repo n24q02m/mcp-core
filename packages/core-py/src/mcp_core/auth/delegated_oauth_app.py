@@ -50,6 +50,12 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
+from mcp_core.auth.relay_login import (
+    configure_relay_login,
+    login_get_handler,
+    login_post_handler,
+    require_relay_session,
+)
 from mcp_core.auth.well_known import (
     authorization_server_metadata,
     protected_resource_metadata,
@@ -230,6 +236,15 @@ def create_delegated_oauth_app(
     # Device-code flow: latest pending session (single-user). When the upstream
     # approves, we inject auth code so subsequent /token can complete.
     _device_pending: dict[str, Any] = {}
+
+    # Edge auth password gate (per spec 2026-05-01-stdio-pure-http-multiuser
+    # §4.2.1 + §5.1.2.1). When ``MCP_RELAY_PASSWORD`` is set, /authorize is
+    # fronted by a thin cookie-session check. Empty password disables the
+    # gate. Mirrors create_local_oauth_app wiring (PR #158); /token,
+    # /register, /setup-status, /callback, /.well-known/* stay ungated by
+    # design — they are machine endpoints / mid-OAuth callbacks.
+    _relay_password = os.environ.get("MCP_RELAY_PASSWORD", "")
+    configure_relay_login(_relay_password)
 
     def _prune_expired(store: dict[str, dict[str, Any]], ttl: float) -> None:
         now = time.monotonic()
@@ -561,6 +576,19 @@ def create_delegated_oauth_app(
     # ------------------------------------------------------------------
 
     async def authorize(request: Request) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Dispatch GET /authorize for redirect / device_code flows.
+
+        When ``MCP_RELAY_PASSWORD`` is set, requests without a valid
+        ``mcp_relay_session`` cookie are redirected to ``/login`` (handled
+        inside ``require_relay_session``).
+        """
+        if _relay_password:
+            gated = await require_relay_session(
+                dict(request.cookies),
+                str(request.url.path) + (f"?{request.url.query}" if request.url.query else ""),
+            )
+            if gated is not None:
+                return gated
         if flow == "redirect":
             return await _authorize_redirect(request)
         return await _authorize_device_code(request)
@@ -691,9 +719,22 @@ def create_delegated_oauth_app(
         )
         return HTMLResponse(html_content)
 
+    async def login_get(request: Request):
+        """GET /login -- render the relay-password form."""
+        next_param = request.query_params.get("next", "/authorize")
+        return await login_get_handler(next_param)
+
+    async def login_post(request: Request):
+        """POST /login -- verify the relay password and issue a session cookie."""
+        form = await request.form()
+        ip = request.client.host if request.client else "unknown"
+        return await login_post_handler(dict(form), ip=ip)
+
     routes = [
         Route("/", root, methods=["GET"]),
         Route("/callback-done", callback_done, methods=["GET"]),
+        Route("/login", login_get, methods=["GET"]),
+        Route("/login", login_post, methods=["POST"]),
         Route("/authorize", authorize, methods=["GET"]),
         Route("/token", token, methods=["POST"]),
         Route("/register", register_handler, methods=["POST"]),
