@@ -33,6 +33,7 @@ import {
   type RelayConfigSchema,
   renderCredentialForm
 } from './credential-form.js'
+import { configureRelayLogin, createRelayLoginMiddleware, loginGetHandler, loginPostHandler } from './relay-login.js'
 import {
   createRouter,
   htmlResponse,
@@ -269,6 +270,17 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
   // Single-user local mode: one pending multi-step session at a time.
   let pendingStep: PendingStep | null = null
   const setupStatus: Record<string, string> = { gdrive: 'idle' }
+
+  // Edge auth password gate. When ``MCP_RELAY_PASSWORD`` is set, /authorize
+  // GET + POST + /authorize/prefill are fronted by a cookie-session
+  // middleware. Empty password disables the gate (single-user dev). See
+  // spec ``2026-05-01-stdio-pure-http-multiuser §4.2.1``. Configured here
+  // (not module-scope) so multi-app test setups don't leak state across
+  // apps; the relay-login module itself keeps a single shared password
+  // string, intentional because in deploy each container hosts one app.
+  const relayPassword = process.env.MCP_RELAY_PASSWORD ?? ''
+  configureRelayLogin(relayPassword)
+  const relayMw = createRelayLoginMiddleware({ password: relayPassword })
 
   function markPendingStep(sub: string): void {
     pendingStep = { active: true, createdAt: Date.now(), attempts: 0, sub }
@@ -785,11 +797,170 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     htmlResponse(res, 200, html)
   }
 
+  // ------------------------------------------------------------------
+  // Relay password gate adapters.
+  //
+  // The relay-login module exposes Express-style handlers (``req.body``,
+  // ``res.status().send()`` etc) so the same logic can be unit-tested
+  // without a live HTTP server. Here we adapt them onto the project's
+  // ``IncomingMessage`` / ``ServerResponse`` router. Each adapter:
+  //   1. Parses ``Cookie`` into ``req.cookies``,
+  //   2. Mounts ``res.status / res.send / res.cookie / res.redirect /
+  //      res.header / res.set`` on top of ``res.writeHead`` / ``res.end``,
+  //   3. Lets the relay-login handler do the work.
+  //
+  // Only ``/authorize`` GET + POST + ``/authorize/prefill`` go through
+  // ``relayMw``; ``/token``, ``/register``, ``/otp``, ``/setup-status``,
+  // ``/.well-known/*``, ``/`` and ``/callback-done`` are intentionally NOT
+  // gated — they're machine endpoints (DCR / token exchange / metadata) or
+  // auto-bootstrap helpers that must remain accessible without the cookie.
+  // ------------------------------------------------------------------
+
+  function parseCookies(req: IncomingMessage): Record<string, string> {
+    const header = req.headers.cookie
+    if (!header) return {}
+    const out: Record<string, string> = {}
+    for (const part of header.split(';')) {
+      const idx = part.indexOf('=')
+      if (idx < 0) continue
+      const k = part.slice(0, idx).trim()
+      const v = part.slice(idx + 1).trim()
+      if (k.length > 0) out[k] = decodeURIComponent(v)
+    }
+    return out
+  }
+
+  function clientIp(req: IncomingMessage): string {
+    const fwd = req.headers['x-forwarded-for']
+    if (typeof fwd === 'string' && fwd.length > 0) {
+      return fwd.split(',')[0].trim()
+    }
+    return req.socket.remoteAddress ?? 'unknown'
+  }
+
+  function buildResAdapter(res: ServerResponse): {
+    adapter: Record<string, (...args: unknown[]) => unknown>
+    isComplete: () => boolean
+  } {
+    let statusCode = 200
+    const headers: Record<string, string> = {}
+    let completed = false
+    const setHeader = (name: string, value: string): void => {
+      headers[name] = value
+    }
+    const adapter: Record<string, (...args: unknown[]) => unknown> = {
+      status: (code: unknown) => {
+        statusCode = Number(code)
+        return adapter
+      },
+      header: (name: unknown, value: unknown) => {
+        setHeader(String(name), String(value))
+        return adapter
+      },
+      set: (name: unknown, value: unknown) => {
+        setHeader(String(name), String(value))
+        return adapter
+      },
+      cookie: (name: unknown, value: unknown, options: unknown) => {
+        const opts = (options ?? {}) as Record<string, unknown>
+        const parts: string[] = [`${String(name)}=${String(value)}`]
+        if (opts.maxAge !== undefined) {
+          parts.push(`Max-Age=${Math.floor(Number(opts.maxAge) / 1000)}`)
+        }
+        if (opts.httpOnly === true) parts.push('HttpOnly')
+        if (opts.secure === true) parts.push('Secure')
+        if (typeof opts.sameSite === 'string') {
+          // Capitalise SameSite values (lax → Lax, strict → Strict).
+          const v = opts.sameSite as string
+          parts.push(`SameSite=${v.charAt(0).toUpperCase() + v.slice(1)}`)
+        }
+        parts.push('Path=/')
+        const existing = headers['Set-Cookie']
+        const next = parts.join('; ')
+        headers['Set-Cookie'] = existing !== undefined ? `${existing}, ${next}` : next
+        return adapter
+      },
+      send: (body: unknown) => {
+        if (completed) return adapter
+        completed = true
+        if (!('Content-Type' in headers)) {
+          headers['Content-Type'] = 'text/html; charset=utf-8'
+        }
+        res.writeHead(statusCode, headers)
+        res.end(body === undefined ? '' : String(body))
+        return adapter
+      },
+      redirect: (url: unknown) => {
+        if (completed) return adapter
+        completed = true
+        headers.Location = String(url)
+        res.writeHead(302, headers)
+        res.end()
+        return adapter
+      }
+    }
+    return { adapter, isComplete: () => completed }
+  }
+
+  /**
+   * Wrap a router handler with the relay-login middleware. If the cookie
+   * gate redirects, the inner handler is never called; otherwise the inner
+   * handler runs against the original ``req`` / ``res``.
+   */
+  function withRelayGate(inner: RequestHandler): RequestHandler {
+    return async (req, res) => {
+      if (!relayPassword) {
+        await inner(req, res)
+        return
+      }
+      const cookies = parseCookies(req)
+      const expressReq = {
+        cookies,
+        originalUrl: req.url ?? '/'
+      }
+      const { adapter, isComplete } = buildResAdapter(res)
+      let proceed = false
+      await relayMw(expressReq as never, adapter as never, () => {
+        proceed = true
+      })
+      if (proceed && !isComplete()) {
+        await inner(req, res)
+      }
+    }
+  }
+
+  /**
+   * Adapter: bind ``loginGetHandler`` / ``loginPostHandler`` (Express-style)
+   * onto IncomingMessage / ServerResponse routes.
+   */
+  async function loginGetRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+    const expressReq = { query: { next: url.searchParams.get('next') ?? '/authorize' } }
+    const { adapter } = buildResAdapter(res)
+    await loginGetHandler(expressReq as never, adapter as never)
+  }
+
+  async function loginPostRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let body: Record<string, string> = {}
+    try {
+      body = await parseFormBody(req)
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'invalid_request' }))
+      return
+    }
+    const expressReq = { body, ip: clientIp(req) }
+    const { adapter } = buildResAdapter(res)
+    await loginPostHandler(expressReq as never, adapter as never)
+  }
+
   const handler = createRouter([
     { method: 'GET', path: '/', handler: rootHandler },
-    { method: 'GET', path: '/authorize', handler: authorize },
-    { method: 'POST', path: '/authorize', handler: authorize },
-    { method: 'POST', path: '/authorize/prefill', handler: authorizePrefill },
+    { method: 'GET', path: '/login', handler: loginGetRoute },
+    { method: 'POST', path: '/login', handler: loginPostRoute },
+    { method: 'GET', path: '/authorize', handler: withRelayGate(authorize) },
+    { method: 'POST', path: '/authorize', handler: withRelayGate(authorize) },
+    { method: 'POST', path: '/authorize/prefill', handler: withRelayGate(authorizePrefill) },
     { method: 'POST', path: '/token', handler: token },
     { method: 'POST', path: '/register', handler: registerHandler },
     { method: 'POST', path: '/otp', handler: otpHandler },

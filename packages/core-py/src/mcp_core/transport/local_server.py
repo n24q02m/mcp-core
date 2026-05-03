@@ -381,10 +381,25 @@ async def run_http_server(
         auth_scope: Optional middleware invoked after JWT verification. Passed
             through to ``build_local_app``. See ``BearerMCPApp`` for details.
     """
+    import os
+    import re
     import uvicorn
 
     from mcp_core.lifecycle.lock import LifecycleLock
     from mcp_core.storage.config_file import read_config
+
+    # Edge auth deployment warning (per spec
+    # 2026-05-01-stdio-pure-http-multiuser §4.2.1). When ``PUBLIC_URL`` points
+    # to a non-localhost host but ``MCP_RELAY_PASSWORD`` is empty, the relay
+    # form is reachable from the public Internet without authentication —
+    # that's the wedge this gate closes. Localhost dev intentionally skips
+    # the password; everyone else gets a startup warning so the misconfig
+    # doesn't pass silently.
+    _public_url = os.environ.get("PUBLIC_URL", "")
+    _relay_password = os.environ.get("MCP_RELAY_PASSWORD", "")
+    _is_localhost = bool(re.match(r"^https?://(localhost|127\.0\.0\.1)", _public_url))
+    if _public_url and not _is_localhost and not _relay_password:
+        logger.warning("HTTP mode public deployment without MCP_RELAY_PASSWORD — relay form is open to Internet")
 
     # Resolve port + host
     actual_port = port if port != 0 else find_free_port()
