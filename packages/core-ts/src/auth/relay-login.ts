@@ -15,6 +15,7 @@
  * lives at ``packages/core-py/src/mcp_core/auth/relay_login.py``.
  */
 import crypto from 'node:crypto'
+import { renderFormShell } from './credential-form.js'
 
 interface SessionEntry {
   expiresAt: number
@@ -153,8 +154,47 @@ export async function loginGetHandler(
   // raw-html-format rule expects sanitisers to handle. Semgrep can't see
   // the custom helper so we suppress the warning here.
   const safeNext = escapeHtml(String(next))
-  const html = `<!DOCTYPE html><html><body><h1>Relay login</h1><form method="POST" action="/login"><input type="hidden" name="next" value="${safeNext}"><input type="password" name="password" placeholder="Relay password" required autofocus><button type="submit">Continue</button></form></body></html>` // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-  res.send(html)
+  // Visual parity with the relay credential form: same dark-theme card,
+  // typography, ``.field-group`` / ``.field-label`` / ``.field-input``
+  // classes, and primary submit button styling. Pure POST (no JavaScript)
+  // so the gate works under strict CSP that blocks inline scripts.
+  const bodyHtml = `    <div class="container">
+        <div class="card">
+            <div class="server-header">
+                <h1 class="server-name">Relay login</h1>
+                <div class="server-id">mcp-relay</div>
+                <p class="server-description">Enter the relay password shared by your deployer.</p>
+            </div>
+
+            <p class="form-title">Authenticate</p>
+
+            <form method="POST" action="/login" novalidate>
+                <input type="hidden" name="next" value="${safeNext}">
+                <div class="field-group">
+                    <label for="field-password" class="field-label">
+                        Relay password
+                        <span class="required-badge">Required</span>
+                    </label>
+                    <input
+                        id="field-password"
+                        type="password"
+                        name="password"
+                        class="field-input"
+                        placeholder="Relay password"
+                        autocomplete="current-password"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false"
+                        required
+                        autofocus
+                    />
+                </div>
+
+                <button type="submit" class="submit-btn">Continue</button>
+            </form>
+        </div>
+    </div>` // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
+  res.send(renderFormShell('Relay login', bodyHtml))
 }
 
 export async function loginPostHandler(

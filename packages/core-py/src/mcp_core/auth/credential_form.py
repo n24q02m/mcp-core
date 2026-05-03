@@ -41,6 +41,368 @@ def _escape(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
 
+# Shared CSS for every relay/auth HTML page rendered by core-py.
+#
+# Kept verbatim with ``packages/core-ts/src/auth/credential-form.ts``'s
+# ``FORM_SHELL_CSS`` constant so the credential form, the ``/login`` password
+# gate, and any future relay page have identical visual styling regardless of
+# which language renders them. Extending this string requires updating the TS
+# parity copy in the same commit.
+_FORM_SHELL_CSS = """        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #0f0f0f;
+            color: #e8e8e8;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 15px;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+        }
+
+        .card {
+            background-color: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .server-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .server-name {
+            font-size: 1.375rem;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 0.375rem;
+        }
+
+        .server-id {
+            font-size: 0.8125rem;
+            color: #9ca3af;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            margin-bottom: 0.5rem;
+        }
+
+        .server-description {
+            font-size: 0.9rem;
+            color: #9ca3af;
+            margin-top: 0.5rem;
+        }
+
+        .form-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1.25rem;
+        }
+
+        .field-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .field-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #ccc;
+            margin-bottom: 0.375rem;
+        }
+
+        .required-badge {
+            font-size: 0.6875rem;
+            font-weight: 500;
+            color: #f87171;
+            background-color: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.25);
+            border-radius: 4px;
+            padding: 0.1rem 0.4rem;
+        }
+
+        .optional-badge {
+            font-size: 0.6875rem;
+            font-weight: 400;
+            color: #9ca3af;
+            background-color: rgba(255, 255, 255, 0.04);
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 0.1rem 0.4rem;
+        }
+
+        .field-input {
+            width: 100%;
+            background-color: #111;
+            border: 1px solid #2e2e2e;
+            border-radius: 8px;
+            color: #e8e8e8;
+            font-size: 0.9375rem;
+            padding: 0.625rem 0.875rem;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            outline: none;
+        }
+
+        .field-input:focus {
+            border-color: #4a6fa5;
+            box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
+        }
+
+        .field-input::placeholder {
+            color: #9ca3af;
+        }
+
+        .field-input[aria-invalid="true"] {
+            border-color: #f87171;
+        }
+
+        .field-input[aria-invalid="true"]:focus {
+            box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2);
+        }
+
+        .field-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #0f0f0f;
+        }
+
+        .help-text {
+            font-size: 0.8125rem;
+            color: #9ca3af;
+            margin-top: 0.375rem;
+        }
+
+        .help-text a {
+            color: #6c9bd2;
+            text-decoration: none;
+        }
+
+        .help-text a:hover {
+            text-decoration: underline;
+        }
+
+        .help-text a:focus-visible {
+            outline: 2px solid #4a6fa5;
+            outline-offset: 2px;
+            border-radius: 2px;
+        }
+
+        .submit-btn {
+            width: 100%;
+            background-color: #4a6fa5;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            padding: 0.75rem 1.5rem;
+            transition: background-color 0.15s ease, opacity 0.15s ease;
+            margin-top: 0.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .submit-btn:hover {
+            background-color: #5a7fb5;
+        }
+
+        .submit-btn:focus-visible {
+            outline: 2px solid #6c9bd2;
+            outline-offset: 2px;
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .submit-btn[aria-busy="true"] {
+            cursor: wait;
+        }
+
+        .submit-btn[aria-busy="true"]::before {
+            content: "";
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .status-box {
+            display: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+        }
+
+        .status-box.success {
+            background-color: rgba(52, 199, 89, 0.1);
+            border: 1px solid rgba(52, 199, 89, 0.3);
+            color: #34c759;
+        }
+
+        .status-box.error {
+            background-color: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            color: #f87171;
+        }
+
+        .status-box.info {
+            background-color: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #e8e8e8;
+        }
+
+        .status-box a {
+            color: #60a5fa;
+            font-weight: 500;
+            text-decoration: none;
+        }
+
+        .status-box a:hover {
+            text-decoration: underline;
+        }
+
+        .status-box a:focus-visible {
+            outline: 2px solid #60a5fa;
+            outline-offset: 2px;
+            border-radius: 2px;
+        }
+
+        .capabilities-section {
+            margin-top: 0;
+        }
+
+        .capabilities-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.875rem;
+        }
+
+        .capabilities-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.625rem;
+        }
+
+        .capability-item {
+            background-color: #111;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+        }
+
+        .capability-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .capability-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #ccc;
+        }
+
+        .capability-priority {
+            font-size: 0.6875rem;
+            font-weight: 500;
+            border-radius: 4px;
+            padding: 0.1rem 0.4rem;
+            text-transform: capitalize;
+        }
+
+        .priority-high {
+            color: #f87171;
+            background-color: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.25);
+        }
+
+        .priority-medium {
+            color: #fbbf24;
+            background-color: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.25);
+        }
+
+        .priority-low {
+            color: #6ee7b7;
+            background-color: rgba(110, 231, 183, 0.1);
+            border: 1px solid rgba(110, 231, 183, 0.25);
+        }
+
+        .capability-desc {
+            font-size: 0.8125rem;
+            color: #9ca3af;
+        }
+"""
+
+
+def render_form_shell(title: str, body_html: str) -> str:
+    """Wrap ``body_html`` in the shared dark-theme HTML shell.
+
+    The shell provides ``<!DOCTYPE html>``, ``<head>`` (charset, viewport,
+    escaped ``<title>``, embedded ``_FORM_SHELL_CSS``) and a ``<body>`` whose
+    only child is ``body_html``. ``body_html`` is inserted verbatim, so
+    callers MUST pre-escape any untrusted values they interpolate.
+
+    ``title`` is HTML-escaped before being placed in ``<title>``.
+
+    Used by ``render_credential_form`` (relay credential form) and by
+    ``relay_login.login_get_handler`` (the ``/login`` password gate) so both
+    pages share identical typography, palette, card layout, and input
+    styling. Parity with TS ``renderFormShell`` in
+    ``packages/core-ts/src/auth/credential-form.ts``.
+    """
+    safe_title = _escape(title)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{safe_title}</title>
+    <style>
+{_FORM_SHELL_CSS}    </style>
+</head>
+<body>
+{body_html}
+</body>
+</html>"""
+
+
 def _render_field(field: dict[str, Any], value: str = "") -> str:
     """Render a single ConfigField as an HTML input block.
 
@@ -135,7 +497,7 @@ def render_credential_form(
     display_name = _escape(schema.get("displayName", schema.get("server", "Configuration")))
     server = _escape(schema.get("server", ""))
     description = _escape(schema.get("description", ""))
-    title = _escape(page_title) if page_title is not None else display_name
+    title = page_title if page_title is not None else schema.get("displayName", schema.get("server", "Configuration"))
     submit_url_escaped = _escape(submit_url)
 
     fields: list[dict[str, Any]] = schema.get("fields", [])
@@ -156,337 +518,7 @@ def render_credential_form(
 
     description_html = f'<p class="server-description">{description}</p>' if description else ""
 
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title}</title>
-    <style>
-        *, *::before, *::after {{
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }}
-
-        body {{
-            background-color: #0f0f0f;
-            color: #e8e8e8;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-size: 15px;
-            line-height: 1.6;
-            min-height: 100vh;
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            padding: 2rem 1rem;
-        }}
-
-        .container {{
-            width: 100%;
-            max-width: 480px;
-        }}
-
-        .card {{
-            background-color: #1a1a1a;
-            border: 1px solid #2a2a2a;
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 1.25rem;
-        }}
-
-        .server-header {{
-            margin-bottom: 1.5rem;
-        }}
-
-        .server-name {{
-            font-size: 1.375rem;
-            font-weight: 600;
-            color: #ffffff;
-            margin-bottom: 0.375rem;
-        }}
-
-        .server-id {{
-            font-size: 0.8125rem;
-            color: #9ca3af;
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-            margin-bottom: 0.5rem;
-        }}
-
-        .server-description {{
-            font-size: 0.9rem;
-            color: #9ca3af;
-            margin-top: 0.5rem;
-        }}
-
-        .form-title {{
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #aaa;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 1.25rem;
-        }}
-
-        .field-group {{
-            margin-bottom: 1.25rem;
-        }}
-
-        .field-label {{
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #ccc;
-            margin-bottom: 0.375rem;
-        }}
-
-        .required-badge {{
-            font-size: 0.6875rem;
-            font-weight: 500;
-            color: #f87171;
-            background-color: rgba(248, 113, 113, 0.1);
-            border: 1px solid rgba(248, 113, 113, 0.25);
-            border-radius: 4px;
-            padding: 0.1rem 0.4rem;
-        }}
-
-        .optional-badge {{
-            font-size: 0.6875rem;
-            font-weight: 400;
-            color: #9ca3af;
-            background-color: rgba(255, 255, 255, 0.04);
-            border: 1px solid #333;
-            border-radius: 4px;
-            padding: 0.1rem 0.4rem;
-        }}
-
-        .field-input {{
-            width: 100%;
-            background-color: #111;
-            border: 1px solid #2e2e2e;
-            border-radius: 8px;
-            color: #e8e8e8;
-            font-size: 0.9375rem;
-            padding: 0.625rem 0.875rem;
-            transition: border-color 0.15s ease, box-shadow 0.15s ease;
-            outline: none;
-        }}
-
-        .field-input:focus {{
-            border-color: #4a6fa5;
-            box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
-        }}
-
-        .field-input::placeholder {{
-            color: #9ca3af;
-        }}
-
-        .field-input[aria-invalid="true"] {{
-            border-color: #f87171;
-        }}
-
-        .field-input[aria-invalid="true"]:focus {{
-            box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.2);
-        }}
-
-        .field-input:disabled {{
-            opacity: 0.5;
-            cursor: not-allowed;
-            background-color: #0f0f0f;
-        }}
-
-        .help-text {{
-            font-size: 0.8125rem;
-            color: #9ca3af;
-            margin-top: 0.375rem;
-        }}
-
-        .help-text a {{
-            color: #6c9bd2;
-            text-decoration: none;
-        }}
-
-        .help-text a:hover {{
-            text-decoration: underline;
-        }}
-
-        .help-text a:focus-visible {{
-            outline: 2px solid #4a6fa5;
-            outline-offset: 2px;
-            border-radius: 2px;
-        }}
-
-        .submit-btn {{
-            width: 100%;
-            background-color: #4a6fa5;
-            border: none;
-            border-radius: 8px;
-            color: #fff;
-            cursor: pointer;
-            font-size: 0.9375rem;
-            font-weight: 500;
-            padding: 0.75rem 1.5rem;
-            transition: background-color 0.15s ease, opacity 0.15s ease;
-            margin-top: 0.5rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-
-        .submit-btn:hover {{
-            background-color: #5a7fb5;
-        }}
-
-        .submit-btn:focus-visible {{
-            outline: 2px solid #6c9bd2;
-            outline-offset: 2px;
-        }}
-
-        .submit-btn:disabled {{
-            opacity: 0.5;
-            cursor: not-allowed;
-        }}
-
-        .submit-btn[aria-busy="true"] {{
-            cursor: wait;
-        }}
-
-        .submit-btn[aria-busy="true"]::before {{
-            content: "";
-            width: 1rem;
-            height: 1rem;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top-color: #fff;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }}
-
-        @keyframes spin {{
-            to {{
-                transform: rotate(360deg);
-            }}
-        }}
-
-        .status-box {{
-            display: none;
-            border-radius: 8px;
-            font-size: 0.875rem;
-            margin-top: 1rem;
-            padding: 0.75rem 1rem;
-        }}
-
-        .status-box.success {{
-            background-color: rgba(52, 199, 89, 0.1);
-            border: 1px solid rgba(52, 199, 89, 0.3);
-            color: #34c759;
-        }}
-
-        .status-box.error {{
-            background-color: rgba(248, 113, 113, 0.1);
-            border: 1px solid rgba(248, 113, 113, 0.3);
-            color: #f87171;
-        }}
-
-        .status-box.info {{
-            background-color: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            color: #e8e8e8;
-        }}
-
-        .status-box a {{
-            color: #60a5fa;
-            font-weight: 500;
-            text-decoration: none;
-        }}
-
-        .status-box a:hover {{
-            text-decoration: underline;
-        }}
-
-        .status-box a:focus-visible {{
-            outline: 2px solid #60a5fa;
-            outline-offset: 2px;
-            border-radius: 2px;
-        }}
-
-        .capabilities-section {{
-            margin-top: 0;
-        }}
-
-        .capabilities-title {{
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #aaa;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.875rem;
-        }}
-
-        .capabilities-list {{
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 0.625rem;
-        }}
-
-        .capability-item {{
-            background-color: #111;
-            border: 1px solid #2a2a2a;
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
-        }}
-
-        .capability-header {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.5rem;
-            margin-bottom: 0.25rem;
-        }}
-
-        .capability-label {{
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #ccc;
-        }}
-
-        .capability-priority {{
-            font-size: 0.6875rem;
-            font-weight: 500;
-            border-radius: 4px;
-            padding: 0.1rem 0.4rem;
-            text-transform: capitalize;
-        }}
-
-        .priority-high {{
-            color: #f87171;
-            background-color: rgba(248, 113, 113, 0.1);
-            border: 1px solid rgba(248, 113, 113, 0.25);
-        }}
-
-        .priority-medium {{
-            color: #fbbf24;
-            background-color: rgba(251, 191, 36, 0.1);
-            border: 1px solid rgba(251, 191, 36, 0.25);
-        }}
-
-        .priority-low {{
-            color: #6ee7b7;
-            background-color: rgba(110, 231, 183, 0.1);
-            border: 1px solid rgba(110, 231, 183, 0.25);
-        }}
-
-        .capability-desc {{
-            font-size: 0.8125rem;
-            color: #9ca3af;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
+    body_html = f"""    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">{display_name}</h1>
@@ -861,9 +893,9 @@ def render_credential_form(
                     }});
             }});
         }})();
-    </script>
-</body>
-</html>"""
+    </script>"""
+
+    return render_form_shell(title, body_html)
 
 
 def is_schema_complete(config: dict[str, Any] | None, schema: dict[str, Any]) -> bool:

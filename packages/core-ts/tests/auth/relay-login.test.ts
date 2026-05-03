@@ -17,6 +17,7 @@ import {
   __resetRelayLoginState,
   configureRelayLogin,
   createRelayLoginMiddleware,
+  loginGetHandler,
   loginPostHandler,
   type RelayCookieOptions,
   type RelayLoginRequest,
@@ -134,6 +135,52 @@ describe('relay-login', () => {
     const stub = makeResponseStub()
     await loginPostHandler(req, stub.res)
     expect(stub.status()).toBe(401)
+  })
+
+  it('login GET reuses shared form shell (visual parity with credential form)', async () => {
+    let captured = ''
+    const res: Pick<RelayLoginResponse, 'send' | 'set'> = {
+      send: (body?: unknown) => {
+        captured = String(body ?? '')
+        return undefined as never
+      },
+      set: () => undefined as never
+    }
+    await loginGetHandler({ query: { next: '/authorize?session=abc' } }, res)
+    // Shared shell markers (head + global CSS variables).
+    expect(captured).toContain('<title>Relay login</title>')
+    expect(captured).toContain('#0f0f0f')
+    // Card classes carried over from credential-form.
+    expect(captured).toContain('class="container"')
+    expect(captured).toContain('class="card"')
+    expect(captured).toContain('class="server-name"')
+    // Field-group structure replaces the bare <input>.
+    expect(captured).toContain('class="field-group"')
+    expect(captured).toContain('class="field-label"')
+    expect(captured).toContain('class="field-input"')
+    expect(captured).toContain('class="required-badge"')
+    expect(captured).toContain('class="submit-btn"')
+    // Behavioural contract preserved.
+    expect(captured).toContain('action="/login"')
+    expect(captured).toContain('method="POST"')
+    expect(captured).toContain('name="next" value="/authorize?session=abc"')
+    expect(captured).toContain('type="password"')
+    expect(captured).toContain('name="password"')
+  })
+
+  it('login GET escapes the next query param', async () => {
+    let captured = ''
+    const res: Pick<RelayLoginResponse, 'send' | 'set'> = {
+      send: (body?: unknown) => {
+        captured = String(body ?? '')
+        return undefined as never
+      },
+      set: () => undefined as never
+    }
+    await loginGetHandler({ query: { next: '/authorize?x=<script>alert("xss")</script>' } }, res)
+    expect(captured).not.toContain('<script>')
+    expect(captured).toContain('&lt;script&gt;')
+    expect(captured).toContain('&quot;')
   })
 
   it('brute force 6th attempt within 15min returns 429', async () => {

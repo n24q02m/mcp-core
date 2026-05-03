@@ -79,116 +79,16 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;')
 }
 
-function renderField(field: ConfigField, value = ''): string {
-  const key = escapeHtml(field.key ?? '')
-  const label = escapeHtml(field.label ?? '')
-  const fieldType = escapeHtml(field.type ?? 'text')
-  const placeholder = escapeHtml(field.placeholder ?? '')
-  const helpText = escapeHtml(field.helpText ?? '')
-  const helpUrl = escapeHtml(field.helpUrl ?? '')
-  const required = Boolean(field.required)
-
-  const requiredAttr = required ? ' required' : ''
-  const requiredBadge = required
-    ? '<span class="required-badge">Required</span>'
-    : '<span class="optional-badge">Optional</span>'
-
-  const valueAttr = value ? ` value="${escapeHtml(value)}"` : ''
-
-  let helpHtml = ''
-  let ariaDescribedby = ''
-  if (helpText) {
-    ariaDescribedby = ` aria-describedby="help-${key}"`
-    if (helpUrl) {
-      helpHtml = `<p class="help-text" id="help-${key}"><a href="${helpUrl}" target="_blank" rel="noopener noreferrer">${helpText}</a></p>`
-    } else {
-      helpHtml = `<p class="help-text" id="help-${key}">${helpText}</p>`
-    }
-  }
-
-  return `
-        <div class="field-group">
-            <label for="field-${key}" class="field-label">
-                ${label}
-                ${requiredBadge}
-            </label>
-            <input
-                id="field-${key}"
-                name="${key}"
-                type="${fieldType}"
-                placeholder="${placeholder}"
-                class="field-input"
-                autocomplete="off"
-                autocorrect="off"
-                autocapitalize="off"
-                spellcheck="false"${valueAttr}${requiredAttr}${ariaDescribedby}
-            />
-            ${helpHtml}
-        </div>`
-}
-
-function renderCapability(cap: CapabilityInfo): string {
-  const label = escapeHtml(cap.label ?? '')
-  const priority = escapeHtml(cap.priority ?? '')
-  const description = escapeHtml(cap.description ?? '')
-
-  const priorityClass = priority ? `priority-${priority}` : 'priority-medium'
-
-  const descHtml = description ? `<p class="capability-desc">${description}</p>` : ''
-
-  return `
-            <li class="capability-item">
-                <div class="capability-header">
-                    <span class="capability-label">${label}</span>
-                    <span class="capability-priority ${priorityClass}">${priority}</span>
-                </div>
-                ${descHtml}
-            </li>`
-}
-
 /**
- * Render a dark-themed HTML credential form from a RelayConfigSchema.
+ * Shared CSS for every relay/auth HTML page rendered by core-ts.
  *
- * @param schema RelayConfigSchema with server metadata and field definitions.
- * @param options.submitUrl URL the form POSTs to as JSON via fetch().
- * @param options.pageTitle Optional browser tab title. Defaults to displayName.
- * @param options.prefill Optional ``{KEY: VALUE}`` map for input ``value=`` attrs.
- * @returns Complete HTML document string, XSS-safe with all dynamic content escaped.
+ * Kept verbatim with `packages/core-py/src/mcp_core/auth/credential_form.py`'s
+ * `_FORM_SHELL_CSS` constant so the credential form, the `/login` password
+ * gate, and any future relay page have identical visual styling regardless of
+ * which language renders them. Extending this string requires updating the
+ * Python parity copy in the same commit.
  */
-export function renderCredentialForm(schema: RelayConfigSchema, options: RenderOptions): string {
-  const displayName = escapeHtml(schema.displayName ?? schema.server ?? 'Configuration')
-  const server = escapeHtml(schema.server ?? '')
-  const description = escapeHtml(schema.description ?? '')
-  const title = options.pageTitle !== undefined ? escapeHtml(options.pageTitle) : displayName
-  const submitUrlEscaped = escapeHtml(options.submitUrl)
-
-  const fields = schema.fields ?? []
-  const capabilityInfo = schema.capabilityInfo ?? []
-  const prefill = options.prefill ?? {}
-
-  const fieldsHtml = fields.map((f) => renderField(f, prefill[f.key] ?? '')).join('')
-
-  let capabilitiesHtml = ''
-  if (capabilityInfo.length > 0) {
-    const itemsHtml = capabilityInfo.map(renderCapability).join('')
-    capabilitiesHtml = `
-        <section class="capabilities-section">
-            <h2 class="capabilities-title">Capabilities Requested</h2>
-            <ul class="capabilities-list">${itemsHtml}
-            </ul>
-        </section>`
-  }
-
-  const descriptionHtml = description ? `<p class="server-description">${description}</p>` : ''
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title}</title>
-    <style>
-        *, *::before, *::after {
+const FORM_SHELL_CSS = `        *, *::before, *::after {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
@@ -508,10 +408,147 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
             font-size: 0.8125rem;
             color: #9ca3af;
         }
-    </style>
+`
+
+/**
+ * Wrap `bodyHtml` in the shared dark-theme HTML shell.
+ *
+ * The shell provides `<!DOCTYPE html>`, `<head>` (charset, viewport, escaped
+ * `<title>`, embedded `FORM_SHELL_CSS`) and a `<body>` whose only child is
+ * `bodyHtml`. `bodyHtml` is inserted verbatim, so callers MUST pre-escape any
+ * untrusted values they interpolate.
+ *
+ * `title` is HTML-escaped before being placed in `<title>`.
+ *
+ * Used by `renderCredentialForm` (relay credential form) and by
+ * `loginGetHandler` in `relay-login.ts` (the `/login` password gate) so both
+ * pages share identical typography, palette, card layout, and input styling.
+ * Parity with Python `render_form_shell` in
+ * `packages/core-py/src/mcp_core/auth/credential_form.py`.
+ */
+export function renderFormShell(title: string, bodyHtml: string): string {
+  const safeTitle = escapeHtml(title)
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${safeTitle}</title>
+    <style>
+${FORM_SHELL_CSS}    </style>
 </head>
 <body>
-    <div class="container">
+${bodyHtml}
+</body>
+</html>`
+}
+
+function renderField(field: ConfigField, value = ''): string {
+  const key = escapeHtml(field.key ?? '')
+  const label = escapeHtml(field.label ?? '')
+  const fieldType = escapeHtml(field.type ?? 'text')
+  const placeholder = escapeHtml(field.placeholder ?? '')
+  const helpText = escapeHtml(field.helpText ?? '')
+  const helpUrl = escapeHtml(field.helpUrl ?? '')
+  const required = Boolean(field.required)
+
+  const requiredAttr = required ? ' required' : ''
+  const requiredBadge = required
+    ? '<span class="required-badge">Required</span>'
+    : '<span class="optional-badge">Optional</span>'
+
+  const valueAttr = value ? ` value="${escapeHtml(value)}"` : ''
+
+  let helpHtml = ''
+  let ariaDescribedby = ''
+  if (helpText) {
+    ariaDescribedby = ` aria-describedby="help-${key}"`
+    if (helpUrl) {
+      helpHtml = `<p class="help-text" id="help-${key}"><a href="${helpUrl}" target="_blank" rel="noopener noreferrer">${helpText}</a></p>`
+    } else {
+      helpHtml = `<p class="help-text" id="help-${key}">${helpText}</p>`
+    }
+  }
+
+  return `
+        <div class="field-group">
+            <label for="field-${key}" class="field-label">
+                ${label}
+                ${requiredBadge}
+            </label>
+            <input
+                id="field-${key}"
+                name="${key}"
+                type="${fieldType}"
+                placeholder="${placeholder}"
+                class="field-input"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"${valueAttr}${requiredAttr}${ariaDescribedby}
+            />
+            ${helpHtml}
+        </div>`
+}
+
+function renderCapability(cap: CapabilityInfo): string {
+  const label = escapeHtml(cap.label ?? '')
+  const priority = escapeHtml(cap.priority ?? '')
+  const description = escapeHtml(cap.description ?? '')
+
+  const priorityClass = priority ? `priority-${priority}` : 'priority-medium'
+
+  const descHtml = description ? `<p class="capability-desc">${description}</p>` : ''
+
+  return `
+            <li class="capability-item">
+                <div class="capability-header">
+                    <span class="capability-label">${label}</span>
+                    <span class="capability-priority ${priorityClass}">${priority}</span>
+                </div>
+                ${descHtml}
+            </li>`
+}
+
+/**
+ * Render a dark-themed HTML credential form from a RelayConfigSchema.
+ *
+ * @param schema RelayConfigSchema with server metadata and field definitions.
+ * @param options.submitUrl URL the form POSTs to as JSON via fetch().
+ * @param options.pageTitle Optional browser tab title. Defaults to displayName.
+ * @param options.prefill Optional ``{KEY: VALUE}`` map for input ``value=`` attrs.
+ * @returns Complete HTML document string, XSS-safe with all dynamic content escaped.
+ */
+export function renderCredentialForm(schema: RelayConfigSchema, options: RenderOptions): string {
+  const displayName = escapeHtml(schema.displayName ?? schema.server ?? 'Configuration')
+  const server = escapeHtml(schema.server ?? '')
+  const description = escapeHtml(schema.description ?? '')
+  const title = options.pageTitle !== undefined ? escapeHtml(options.pageTitle) : displayName
+  const submitUrlEscaped = escapeHtml(options.submitUrl)
+
+  const fields = schema.fields ?? []
+  const capabilityInfo = schema.capabilityInfo ?? []
+  const prefill = options.prefill ?? {}
+
+  const fieldsHtml = fields.map((f) => renderField(f, prefill[f.key] ?? '')).join('')
+
+  let capabilitiesHtml = ''
+  if (capabilityInfo.length > 0) {
+    const itemsHtml = capabilityInfo.map(renderCapability).join('')
+    capabilitiesHtml = `
+        <section class="capabilities-section">
+            <h2 class="capabilities-title">Capabilities Requested</h2>
+            <ul class="capabilities-list">${itemsHtml}
+            </ul>
+        </section>`
+  }
+
+  const descriptionHtml = description ? `<p class="server-description">${description}</p>` : ''
+
+  // The body is wrapped in `renderFormShell` below. The shell injects the
+  // `<head>` (with the shared `FORM_SHELL_CSS`) and the `<body>` opening +
+  // closing tags, so this template starts at the first child of `<body>`.
+  const bodyHtml = `    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">${displayName}</h1>
@@ -886,9 +923,9 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     });
             });
         })();
-    </script>
-</body>
-</html>`
+    </script>`
+
+  return renderFormShell(title, bodyHtml)
 }
 
 /**
