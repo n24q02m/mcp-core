@@ -13,6 +13,8 @@ live Starlette test client; integration is covered separately by
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 from mcp_core.auth.relay_login import (
@@ -25,7 +27,7 @@ from mcp_core.auth.relay_login import (
 
 
 @pytest.fixture(autouse=True)
-def _reset() -> None:
+def _reset() -> Iterator[None]:
     """Clear module-scoped sessions + brute-force counters between cases."""
     _sessions.clear()
     _fails.clear()

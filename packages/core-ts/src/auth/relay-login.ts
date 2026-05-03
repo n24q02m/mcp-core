@@ -147,6 +147,12 @@ export async function loginGetHandler(
 ): Promise<void> {
   const next = req.query?.next ?? '/authorize'
   res.set?.('Content-Type', 'text/html')
+  // ``next`` flows from the query string but every interpolation is run
+  // through ``escapeHtml`` (defined above) which replaces &, <, >, ", and
+  // ' with their HTML entity equivalents — the same character set the
+  // raw-html-format rule expects sanitisers to handle. Semgrep can't see
+  // the custom helper so we suppress the warning here.
+  // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
   res.send(`<!DOCTYPE html><html><body><h1>Relay login</h1>
 <form method="POST" action="/login">
 <input type="hidden" name="next" value="${escapeHtml(String(next))}">
