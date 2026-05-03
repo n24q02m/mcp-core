@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.13.0-beta.9 (2026-05-03)
+
+### Features
+
+- Reuse relay form CSS for /login gate (visual parity)
+  ([#160](https://github.com/n24q02m/mcp-core/pull/160),
+  [`17f8e89`](https://github.com/n24q02m/mcp-core/commit/17f8e89ed59f785fb2e369d07a2a18b46238caef))
+
+
 ## v1.13.0-beta.8 (2026-05-03)
 
 ### Features
