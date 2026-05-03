@@ -21,6 +21,7 @@ from mcp_core.auth.relay_login import (
     _fails,
     _sessions,
     configure_relay_login,
+    login_get_handler,
     login_post_handler,
     require_relay_session,
 )
@@ -43,6 +44,46 @@ async def test_empty_env_disables_gate() -> None:
     # signalling the caller that the gate is disabled and the request
     # should pass through.
     assert await require_relay_session(cookies, "/authorize", password="") is None
+
+
+async def test_login_get_uses_shared_form_shell() -> None:
+    """The /login form must reuse the relay credential-form shell.
+
+    Visual parity with ``render_credential_form`` is enforced by checking the
+    shared CSS classes (``.field-input``, ``.field-label``, ``.field-group``,
+    ``.required-badge``, ``.submit-btn``) appear in the rendered HTML, plus
+    the dark-theme palette colour ``#0f0f0f`` and the page ``<title>``.
+    """
+    response = await login_get_handler("/authorize?session=abc")
+    body = response.body.decode()
+    # Shared shell markers (head + global CSS variables).
+    assert "<title>Relay login</title>" in body
+    assert "#0f0f0f" in body  # body background from shared CSS
+    # Card classes carried over from credential_form.
+    assert 'class="container"' in body
+    assert 'class="card"' in body
+    assert 'class="server-name"' in body
+    # Field group structure replaces the bare <input>.
+    assert 'class="field-group"' in body
+    assert 'class="field-label"' in body
+    assert 'class="field-input"' in body
+    assert 'class="required-badge"' in body
+    assert 'class="submit-btn"' in body
+    # Behavioural contract preserved (POST endpoint, hidden next, password input).
+    assert 'action="/login"' in body
+    assert 'method="POST"' in body
+    assert 'name="next" value="/authorize?session=abc"' in body
+    assert 'type="password"' in body
+    assert 'name="password"' in body
+
+
+async def test_login_get_escapes_next_param() -> None:
+    """``next`` query value flows into the hidden input HTML-escaped."""
+    response = await login_get_handler('/authorize?x=<script>alert("xss")</script>')
+    body = response.body.decode()
+    assert "<script>" not in body
+    assert "&lt;script&gt;" in body
+    assert "&quot;" in body
 
 
 async def test_wrong_password_401() -> None:

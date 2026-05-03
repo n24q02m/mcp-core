@@ -23,6 +23,8 @@ from urllib.parse import quote
 
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
+from mcp_core.auth.credential_form import render_form_shell
+
 # In-memory session + brute-force stores. Module-scope is intentional: each
 # container hosts a single relay app, so a single shared map matches the
 # operational model. Test code resets these directly via fixtures.
@@ -82,15 +84,52 @@ async def require_relay_session(
 
 
 async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
-    """Render the password form."""
+    """Render the password form using the shared relay form shell.
+
+    The visible card mirrors the relay credential form: dark theme, Inter
+    fall-back font stack, ``.field-group`` / ``.field-label`` / ``.field-input``
+    classes for the password input, and a primary submit button matching the
+    "Connect" styling. The form keeps a plain HTML POST (no JavaScript) so the
+    gate works even with a strict CSP that blocks inline scripts.
+    """
     safe_next = next.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-    body = f"""<!DOCTYPE html><html><body><h1>Relay login</h1>
-<form method="POST" action="/login">
-<input type="hidden" name="next" value="{safe_next}">
-<input type="password" name="password" placeholder="Relay password" required autofocus>
-<button type="submit">Continue</button>
-</form></body></html>"""
-    return HTMLResponse(body)
+    body_html = f"""    <div class="container">
+        <div class="card">
+            <div class="server-header">
+                <h1 class="server-name">Relay login</h1>
+                <div class="server-id">mcp-relay</div>
+                <p class="server-description">Enter the relay password shared by your deployer.</p>
+            </div>
+
+            <p class="form-title">Authenticate</p>
+
+            <form method="POST" action="/login" novalidate>
+                <input type="hidden" name="next" value="{safe_next}">
+                <div class="field-group">
+                    <label for="field-password" class="field-label">
+                        Relay password
+                        <span class="required-badge">Required</span>
+                    </label>
+                    <input
+                        id="field-password"
+                        type="password"
+                        name="password"
+                        class="field-input"
+                        placeholder="Relay password"
+                        autocomplete="current-password"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false"
+                        required
+                        autofocus
+                    />
+                </div>
+
+                <button type="submit" class="submit-btn">Continue</button>
+            </form>
+        </div>
+    </div>"""
+    return HTMLResponse(render_form_shell("Relay login", body_html))
 
 
 async def login_post_handler(form: dict, ip: str) -> Response:
