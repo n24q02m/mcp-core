@@ -152,13 +152,11 @@ export async function loginGetHandler(
   // ' with their HTML entity equivalents — the same character set the
   // raw-html-format rule expects sanitisers to handle. Semgrep can't see
   // the custom helper so we suppress the warning here.
+  const safeNext = escapeHtml(String(next))
   // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-  res.send(`<!DOCTYPE html><html><body><h1>Relay login</h1>
-<form method="POST" action="/login">
-<input type="hidden" name="next" value="${escapeHtml(String(next))}">
-<input type="password" name="password" placeholder="Relay password" required autofocus>
-<button type="submit">Continue</button>
-</form></body></html>`)
+  res.send(
+    `<!DOCTYPE html><html><body><h1>Relay login</h1><form method="POST" action="/login"><input type="hidden" name="next" value="${safeNext}"><input type="password" name="password" placeholder="Relay password" required autofocus><button type="submit">Continue</button></form></body></html>`
+  )
 }
 
 export async function loginPostHandler(
