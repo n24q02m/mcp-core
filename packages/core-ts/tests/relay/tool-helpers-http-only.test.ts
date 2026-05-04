@@ -1,3 +1,7 @@
+import { vi } from 'vitest'
+
+vi.mock('../../src/relay/browser.js', () => ({ tryOpenBrowser: vi.fn().mockResolvedValue(true) }))
+
 import { describe, expect, it } from 'vitest'
 import { buildOpenRelayHandler } from '../../src/relay/tool-helpers.js'
 
