@@ -59,7 +59,7 @@ class TestGeneratePassphrase:
             remaining = passphrase
             matched = 0
             for word in sorted(word_set, key=len, reverse=True):
-                if str(word) in remaining:
+                while str(word) in remaining:
                     remaining = remaining.replace(str(word), "", 1)
                     matched += 1
             assert matched >= 4
