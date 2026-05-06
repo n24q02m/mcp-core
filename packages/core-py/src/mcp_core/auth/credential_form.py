@@ -635,6 +635,7 @@ def render_credential_form(
                     }});
                     inputEl.addEventListener("input", function() {{
                         inputEl.removeAttribute("aria-invalid");
+                        inputEl.removeAttribute("aria-errormessage");
                         errorEl.style.display = "none";
                     }});
                 }}
@@ -661,6 +662,8 @@ def render_credential_form(
                     errorEl.textContent = "Please enter a value.";
                     errorEl.style.display = "block";
                     inputEl.setAttribute("aria-invalid", "true");
+                    inputEl.setAttribute("aria-errormessage", "step-error");
+                    inputEl.focus();
                     return;
                 }}
                 errorEl.style.display = "none";
@@ -717,6 +720,7 @@ def render_credential_form(
                                 errorEl.style.display = "block";
                                 inputEl.disabled = false;
                                 inputEl.setAttribute("aria-invalid", "true");
+                                inputEl.setAttribute("aria-errormessage", "step-error");
                                 buttonEl.disabled = false;
                                 buttonEl.textContent = "Verify";
                                 buttonEl.removeAttribute("aria-busy");
@@ -729,9 +733,11 @@ def render_credential_form(
                         errorEl.style.display = "block";
                         inputEl.disabled = false;
                         inputEl.setAttribute("aria-invalid", "true");
+                        inputEl.setAttribute("aria-errormessage", "step-error");
                         buttonEl.disabled = false;
                         buttonEl.textContent = "Verify";
                         buttonEl.removeAttribute("aria-busy");
+                        inputEl.focus();
                     }});
             }}
 
