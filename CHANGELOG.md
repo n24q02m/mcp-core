@@ -2,6 +2,43 @@
 
 <!-- version list -->
 
+## v1.14.0-beta.1 (2026-05-06)
+
+### Bug Fixes
+
+- **deps**: Update dependency cryptography to v48
+  ([#165](https://github.com/n24q02m/mcp-core/pull/165),
+  [`b536172`](https://github.com/n24q02m/mcp-core/commit/b536172700ee49b51a0e78a9139e7d97532d2307))
+
+- **deps**: Update non-major dependencies ([#155](https://github.com/n24q02m/mcp-core/pull/155),
+  [`5147a19`](https://github.com/n24q02m/mcp-core/commit/5147a192836e10f1af7191bf308b7d0b70c2e7a3))
+
+### Chores
+
+- **deps**: Update semgrep/semgrep docker digest to 326e5f4
+  ([#164](https://github.com/n24q02m/mcp-core/pull/164),
+  [`80643db`](https://github.com/n24q02m/mcp-core/commit/80643db81ff0571e0b2727c8bc589bc3244856e0))
+
+- **deps**: Update step-security/harden-runner digest to a5ad31d
+  ([#154](https://github.com/n24q02m/mcp-core/pull/154),
+  [`95afe41`](https://github.com/n24q02m/mcp-core/commit/95afe4103f78a1981012ed5b80c739513091dc28))
+
+### Features
+
+- Explicitly manage aria-errormessage for multi-step form validation
+  ([#166](https://github.com/n24q02m/mcp-core/pull/166),
+  [`1df79ea`](https://github.com/n24q02m/mcp-core/commit/1df79ea9966440bbb827b207a6ff60ef6bc9e82d))
+
+### Performance Improvements
+
+- Fix test_only_uses_words_from_wordlist flakiness
+  ([#162](https://github.com/n24q02m/mcp-core/pull/162),
+  [`5ce5edc`](https://github.com/n24q02m/mcp-core/commit/5ce5edce6deeff2a8e3b6beffd224f73e88a83e6))
+
+- Replace .flat().find() with manual for loop ([#162](https://github.com/n24q02m/mcp-core/pull/162),
+  [`5ce5edc`](https://github.com/n24q02m/mcp-core/commit/5ce5edce6deeff2a8e3b6beffd224f73e88a83e6))
+
+
 ## v1.13.0 (2026-05-04)
 
 
