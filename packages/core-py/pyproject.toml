@@ -25,7 +25,7 @@ dependencies = [
     "fastmcp>=3.2.4",
     "httpx>=0.28.1",
     "cryptography>=48.0.0",
-    "authlib>=1.7.0",
+    "authlib>=1.7.1",
     "starlette>=1.0.0",
     # Cohere 6.1.x pins pydantic-core <2.44.0 which caps pydantic <2.13;
     # keep pydantic range loose so downstream (wet/mnemo/crg) that pull cohere
@@ -35,7 +35,7 @@ dependencies = [
     "loguru>=0.7.3",
     "platformdirs>=4.9.6",
     "tomli-w>=1.2.0",
-    "filelock>=3.16.1",
+    "filelock>=3.29.0",
 ]
 
 [project.urls]
@@ -53,7 +53,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.15.12",
-    "ty>=0.0.33",
+    "ty>=0.0.34",
 ]
 
 [tool.hatch.build.targets.wheel]
