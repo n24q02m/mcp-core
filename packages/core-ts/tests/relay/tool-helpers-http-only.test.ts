@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../src/relay/browser.js', () => ({ tryOpenBrowser: vi.fn().mockResolvedValue(true) }))
+
 import { buildOpenRelayHandler } from '../../src/relay/tool-helpers.js'
 
 describe('buildOpenRelayHandler -- HTTP mode', () => {

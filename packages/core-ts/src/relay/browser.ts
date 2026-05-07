@@ -30,10 +30,10 @@ function encodePowerShellCommand(command: string): string {
 
 async function openInPowerShell(url: string): Promise<boolean> {
   try {
-    const escapedUrl = url.replace(/'/g, "''")
-    const command = `Start-Process '${escapedUrl}'`
+    const urlB64 = Buffer.from(url, 'utf-8').toString('base64')
+    const command = `$u=[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${urlB64}')); Start-Process $u`
     const encodedCommand = encodePowerShellCommand(command)
-    await execFileAsync('powershell.exe', ['-EncodedCommand', encodedCommand])
+    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encodedCommand])
     return true
   } catch {
     return false

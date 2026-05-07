@@ -144,7 +144,7 @@ describe('tryOpenBrowser', () => {
 
       expect(execFile).toHaveBeenCalledWith(
         'powershell.exe',
-        expect.arrayContaining(['-EncodedCommand']),
+        expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
         expect.any(Function)
       )
 
@@ -152,7 +152,9 @@ describe('tryOpenBrowser', () => {
       const args = lastCall[1] as string[]
       const encodedCommand = args[args.indexOf('-EncodedCommand') + 1]
       const decoded = Buffer.from(encodedCommand, 'base64').toString('utf16le')
-      expect(decoded).toContain(`Start-Process '${url}'`)
+      const urlB64 = Buffer.from(url, 'utf-8').toString('base64')
+      expect(decoded).toContain(`FromBase64String('${urlB64}')`)
+      expect(decoded).toContain('Start-Process $u')
     })
   })
 
@@ -175,7 +177,7 @@ describe('tryOpenBrowser', () => {
       expect(execFile).toHaveBeenCalledWith('wslview', [url], expect.any(Function))
       expect(execFile).toHaveBeenCalledWith(
         'powershell.exe',
-        expect.arrayContaining(['-EncodedCommand']),
+        expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
         expect.any(Function)
       )
     })
