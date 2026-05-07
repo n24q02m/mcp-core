@@ -488,43 +488,44 @@ def _render_capabilities(capability_info: list[dict[str, Any]]) -> str:
 
 
 def _generate_js(submit_url: str) -> str:
-    """Generate the large JavaScript block for the credential form.
+    """Generate the JavaScript block for the credential form.
 
-    This block is kept in sync with the client-side logic in
-    packages/core-ts/src/auth/credential-form.ts.
+    Kept in parity with packages/core-ts/src/auth/credential-form.ts.
     """
     submit_url_escaped = _escape(submit_url)
-    js_template = r"""    <script>
-        (function () {
+    # The template below uses doubled braces for literal braces in the JS
+    # so that the rf""" interpolation outputs single braces.
+    js_template = rf"""    <script>
+        (function () {{
             var form = document.getElementById("credential-form");
             var submitBtn = document.getElementById("submit-btn");
             var statusBox = document.getElementById("status-box");
-            var submitUrl = "{SUBMIT_URL_HERE}";
+            var submitUrl = "{{SUBMIT_URL_HERE}}";
 
-            function showStatus(type, message) {
+            function showStatus(type, message) {{
                 statusBox.className = "status-box " + type;
                 statusBox.textContent = message;
                 statusBox.style.display = "block";
-            }
+            }}
 
             // Derive /otp endpoint URL from submitUrl (replaces /authorize... with /otp).
-            function otpUrl() {
-                return submitUrl.replace(/\/authorize.*/, "/otp");
-            }
+            function otpUrl() {{
+                return submitUrl.replace(/\\/authorize.*/, "/otp");
+            }}
 
             // Render (or update in-place) a step-input UI for otp_required / password_required.
-            // ns: next_step object with { text, field, input_type, placeholder }.
+            // ns: next_step object with {{ text, field, input_type, placeholder }}.
             // All textual content from ns is inserted via textContent (never innerHTML).
-            function showStepInput(ns) {
+            function showStepInput(ns) {{
                 // Hide the original credential form after first transition.
-                if (form && form.style.display !== "none") {
+                if (form && form.style.display !== "none") {{
                     form.style.display = "none";
-                }
+                }}
 
                 // If a step container already exists, update it in-place (chained next_step).
                 var container = document.getElementById("step-container");
                 var promptEl, inputEl, buttonEl, errorEl;
-                if (container) {
+                if (container) {{
                     promptEl = document.getElementById("step-prompt");
                     inputEl = document.getElementById("step-input");
                     buttonEl = document.getElementById("step-submit");
@@ -536,7 +537,7 @@ def _generate_js(submit_url: str) -> str:
                     buttonEl.disabled = false;
                     buttonEl.removeAttribute("aria-busy");
                     buttonEl.textContent = "Verify";
-                } else {
+                }} else {{
                     // Build a fresh step-input container inside the card.
                     var card = form.parentNode;
                     container = document.createElement("div");
@@ -577,21 +578,21 @@ def _generate_js(submit_url: str) -> str:
                     card.appendChild(container);
 
                     // Submit handlers (attached once, read current field name from dataset).
-                    buttonEl.addEventListener("click", function () {
+                    buttonEl.addEventListener("click", function () {{
                         submitStep();
-                    });
-                    inputEl.addEventListener("keydown", function (evt) {
-                        if (evt.key === "Enter") {
+                    }});
+                    inputEl.addEventListener("keydown", function (evt) {{
+                        if (evt.key === "Enter") {{
                             evt.preventDefault();
                             submitStep();
-                        }
-                    });
-                    inputEl.addEventListener("input", function() {
+                        }}
+                    }});
+                    inputEl.addEventListener("input", function() {{
                         inputEl.removeAttribute("aria-invalid");
                         inputEl.removeAttribute("aria-errormessage");
                         errorEl.style.display = "none";
-                    });
-                }
+                    }});
+                }}
 
                 // Populate prompt + input attributes via safe DOM APIs.
                 promptEl.textContent = ns.text || "";
@@ -600,9 +601,9 @@ def _generate_js(submit_url: str) -> str:
                 // Stash field name so submitStep can read it at click time.
                 inputEl.dataset.field = ns.field || "value";
                 inputEl.focus();
-            }
+            }}
 
-            function submitStep() {
+            function submitStep() {{
                 var inputEl = document.getElementById("step-input");
                 var buttonEl = document.getElementById("step-submit");
                 var errorEl = document.getElementById("step-error");
@@ -611,14 +612,14 @@ def _generate_js(submit_url: str) -> str:
 
                 inputEl.removeAttribute("aria-invalid");
 
-                if (value.trim() === "") {
+                if (value.trim() === "") {{
                     errorEl.textContent = "Please enter a value.";
                     errorEl.style.display = "block";
                     inputEl.setAttribute("aria-invalid", "true");
                     inputEl.setAttribute("aria-errormessage", "step-error");
                     inputEl.focus();
                     return;
-                }
+                }}
                 errorEl.style.display = "none";
                 errorEl.textContent = "";
                 buttonEl.disabled = true;
@@ -627,47 +628,47 @@ def _generate_js(submit_url: str) -> str:
                 inputEl.disabled = true;
                 inputEl.removeAttribute("aria-invalid");
 
-                var body = {};
+                var body = {{}};
                 body[fieldName] = value;
 
-                fetch(otpUrl(), {
+                fetch(otpUrl(), {{
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {{ "Content-Type": "application/json" }},
                     body: JSON.stringify(body),
-                })
-                    .then(function (response) {
-                        return response.json().then(function (data) {
-                            if (data.ok) {
-                                if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {
+                }})
+                    .then(function (response) {{
+                        return response.json().then(function (data) {{
+                            if (data.ok) {{
+                                if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {{
                                     // Chain: update in place with new prompt/field/type.
                                     showStepInput(data.next_step);
-                                } else if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) {
+                                }} else if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) {{
                                     // Multi-step auth finished: follow the OAuth redirect so
                                     // the originating client callback server receives the
                                     // code. Without this the external client hangs forever.
                                     var container = document.getElementById("step-container");
-                                    while (container.firstChild) {
+                                    while (container.firstChild) {{
                                         container.removeChild(container.firstChild);
-                                    }
+                                    }}
                                     var done = document.createElement("div");
                                     done.className = "status-box success";
                                     done.style.display = "block";
                                     done.textContent = "Setup complete! Redirecting...";
                                     container.appendChild(done);
                                     window.location.replace(data.redirect_url);
-                                } else {
+                                }} else {{
                                     // Completed.
                                     var container = document.getElementById("step-container");
-                                    while (container.firstChild) {
+                                    while (container.firstChild) {{
                                         container.removeChild(container.firstChild);
-                                    }
+                                    }}
                                     var done = document.createElement("div");
                                     done.className = "status-box success";
                                     done.style.display = "block";
                                     done.textContent = "Setup complete! You can close this tab.";
                                     container.appendChild(done);
-                                }
-                            } else {
+                                }}
+                            }} else {{
                                 // Error: show message, re-enable input + button for retry, keep value.
                                 errorEl.textContent = data.error || data.error_description || "Verification failed.";
                                 errorEl.style.display = "block";
@@ -678,10 +679,10 @@ def _generate_js(submit_url: str) -> str:
                                 buttonEl.textContent = "Verify";
                                 buttonEl.removeAttribute("aria-busy");
                                 inputEl.focus();
-                            }
-                        });
-                    })
-                    .catch(function (err) {
+                            }}
+                        }});
+                    }})
+                    .catch(function (err) {{
                         errorEl.textContent = "Network error: " + err.message;
                         errorEl.style.display = "block";
                         inputEl.disabled = false;
@@ -691,69 +692,69 @@ def _generate_js(submit_url: str) -> str:
                         buttonEl.textContent = "Verify";
                         buttonEl.removeAttribute("aria-busy");
                         inputEl.focus();
-                    });
-            }
+                    }});
+            }}
 
-            form.addEventListener("input", function (event) {
-                if (event.target.classList.contains("field-input")) {
+            form.addEventListener("input", function (event) {{
+                if (event.target.classList.contains("field-input")) {{
                     event.target.removeAttribute("aria-invalid");
                     event.target.removeAttribute("aria-errormessage");
                     statusBox.style.display = "none";
-                }
-            });
+                }}
+            }});
 
-            form.addEventListener("submit", function (event) {
+            form.addEventListener("submit", function (event) {{
                 event.preventDefault();
 
                 var inputs = form.querySelectorAll(".field-input");
-                var payload = {};
+                var payload = {{}};
                 var valid = true;
                 var firstInvalid = null;
 
-                inputs.forEach(function (input) {
-                    if (input.hasAttribute("required") && input.value.trim() === "") {
+                inputs.forEach(function (input) {{
+                    if (input.hasAttribute("required") && input.value.trim() === "") {{
                         valid = false;
                         input.setAttribute("aria-invalid", "true");
                         input.setAttribute("aria-errormessage", "status-box");
-                        if (!firstInvalid) {
+                        if (!firstInvalid) {{
                             firstInvalid = input;
-                        }
-                    } else {
+                        }}
+                    }} else {{
                         input.removeAttribute("aria-invalid");
                         input.removeAttribute("aria-errormessage");
                         payload[input.name] = input.value;
-                    }
-                });
+                    }}
+                }});
 
-                if (!valid) {
+                if (!valid) {{
                     showStatus("error", "Please fill in all required fields.");
-                    if (firstInvalid) {
+                    if (firstInvalid) {{
                         firstInvalid.focus();
-                    }
+                    }}
                     return;
-                }
+                }}
 
                 submitBtn.disabled = true;
                 submitBtn.textContent = "Connecting...";
                 submitBtn.setAttribute("aria-busy", "true");
                 statusBox.style.display = "none";
 
-                fetch(submitUrl, {
+                fetch(submitUrl, {{
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {{ "Content-Type": "application/json" }},
                     body: JSON.stringify(payload),
-                })
-                    .then(function (response) {
-                        return response.json().then(function (data) {
-                            if (data.ok) {
-                                form.querySelectorAll(".field-input").forEach(function (i) {
+                }})
+                    .then(function (response) {{
+                        return response.json().then(function (data) {{
+                            if (data.ok) {{
+                                form.querySelectorAll(".field-input").forEach(function (i) {{
                                     i.disabled = true;
-                                });
+                                }});
                                 submitBtn.disabled = true;
                                 submitBtn.textContent = "Connected";
                                 submitBtn.removeAttribute("aria-busy");
                                 var pendingRedirectUrl = (typeof data.redirect_url === "string" && data.redirect_url.length > 0) ? data.redirect_url : null;
-                                if (data.next_step && data.next_step.type === "oauth_device_code") {
+                                if (data.next_step && data.next_step.type === "oauth_device_code") {{
                                     var ns = data.next_step;
                                     statusBox.textContent = "";
                                     var title = document.createElement("strong");
@@ -790,39 +791,39 @@ def _generate_js(submit_url: str) -> str:
                                     // Poll /setup-status until GDrive auth completes or fails.
                                     // Success:   gdrive === "complete"
                                     // Failure:   gdrive starts with "error:" -- show red message + stop polling.
-                                    var pollInterval = setInterval(function () {
-                                        fetch(submitUrl.replace(/\/authorize.*/, "/setup-status"))
-                                            .then(function (r) { return r.json(); })
-                                            .then(function (s) {
-                                                if (s.gdrive === "complete") {
+                                    var pollInterval = setInterval(function () {{
+                                        fetch(submitUrl.replace(/\\/authorize.*/, "/setup-status"))
+                                            .then(function (r) {{ return r.json(); }})
+                                            .then(function (s) {{
+                                                if (s.gdrive === "complete") {{
                                                     clearInterval(pollInterval);
-                                                    if (pendingRedirectUrl) {
+                                                    if (pendingRedirectUrl) {{
                                                         window.location.replace(pendingRedirectUrl);
                                                         return;
-                                                    }
+                                                    }}
                                                     var w = document.getElementById("gdrive-waiting");
-                                                    if (w) {
+                                                    if (w) {{
                                                         w.style.color = "#34c759";
                                                         w.textContent = "Google Drive authorized! Setup complete. You can close this tab.";
-                                                    }
-                                                } else if (typeof s.gdrive === "string" && s.gdrive.indexOf("error:") === 0) {
+                                                    }}
+                                                }} else if (typeof s.gdrive === "string" && s.gdrive.indexOf("error:") === 0) {{
                                                     clearInterval(pollInterval);
                                                     var w = document.getElementById("gdrive-waiting");
-                                                    if (w) {
+                                                    if (w) {{
                                                         w.style.color = "#ff453a";
                                                         w.textContent = "Google Drive authorization failed: " + s.gdrive.slice(6) + ". Please retry setup.";
-                                                    }
-                                                }
-                                            })
-                                            .catch(function () {});
-                                    }, 3000);
-                                } else if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {
+                                                    }}
+                                                }}
+                                            }})
+                                            .catch(function () {{}});
+                                    }}, 3000);
+                                }} else if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {{
                                     // Multi-step auth: hide form, show step input UI.
                                     statusBox.style.display = "none";
                                     showStepInput(data.next_step);
-                                } else if (data.next_step && data.next_step.type === "info") {
+                                }} else if (data.next_step && data.next_step.type === "info") {{
                                     showStatus("success", data.next_step.message || "Setup saved. Additional steps may be required.");
-                                } else if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) {
+                                }} else if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) {{
                                     // OAuth authorization-code flow: server returned the
                                     // client's redirect_uri with ?code=...&state=... appended.
                                     // The browser MUST navigate there so the client callback
@@ -832,26 +833,26 @@ def _generate_js(submit_url: str) -> str:
                                     // while the client waits on a callback that never fires.
                                     showStatus("success", "Credentials saved. Redirecting...");
                                     window.location.replace(data.redirect_url);
-                                } else {
+                                }} else {{
                                     var successMsg = data.message || "Connected successfully. You can close this window.";
                                     showStatus("success", successMsg);
-                                }
-                            } else {
+                                }}
+                            }} else {{
                                 showStatus("error", data.error || data.error_description || "Request failed.");
                                 submitBtn.disabled = false;
                                 submitBtn.textContent = "Connect";
                                 submitBtn.removeAttribute("aria-busy");
-                            }
-                        });
-                    })
-                    .catch(function (err) {
+                            }}
+                        }});
+                    }})
+                    .catch(function (err) {{
                         showStatus("error", "Network error: " + err.message);
                         submitBtn.disabled = false;
                         submitBtn.textContent = "Connect";
                         submitBtn.removeAttribute("aria-busy");
-                    });
-            });
-        })();
+                    }});
+            }});
+        }})();
     </script>"""
     return js_template.replace("{SUBMIT_URL_HERE}", submit_url_escaped)
 
