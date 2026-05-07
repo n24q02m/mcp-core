@@ -56,7 +56,8 @@ export function persistToolsCache(
     self.atomicWrite(path, payload)
   } catch (err) {
     // Suppress per D10 — log only.
-    console.debug(`Failed to persist capabilities cache for ${serverName}:`, err)
+    // semgrep-ignore-line: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
+    console.debug('Failed to persist capabilities cache for', serverName, ':', err)
   }
 }
 

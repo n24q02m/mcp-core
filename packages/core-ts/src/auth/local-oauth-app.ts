@@ -445,8 +445,11 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       try {
         await markConfigSetupComplete(options.serverName)
       } catch (err) {
+        // semgrep-ignore-line: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
         console.warn(
-          `Failed to mark _setup_complete=true for ${options.serverName}:`,
+          'Failed to mark _setup_complete=true for',
+          options.serverName,
+          ':',
           err instanceof Error ? err.message : String(err)
         )
       }
@@ -677,8 +680,11 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     try {
       await markConfigSetupComplete(options.serverName)
     } catch (err) {
+      // semgrep-ignore-line: javascript.lang.security.audit.unsafe-formatstring.unsafe-formatstring
       console.warn(
-        `Failed to mark _setup_complete=true for ${options.serverName}:`,
+        'Failed to mark _setup_complete=true for',
+        options.serverName,
+        ':',
         err instanceof Error ? err.message : String(err)
       )
     }

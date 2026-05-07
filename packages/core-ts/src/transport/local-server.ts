@@ -199,7 +199,7 @@ export async function runHttpServer(
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sessionId) => {
-          transports.set(sessionId, transport!)
+          if (transport) transports.set(sessionId, transport)
           servers.set(sessionId, server)
         },
         onsessionclosed: (sessionId) => {
