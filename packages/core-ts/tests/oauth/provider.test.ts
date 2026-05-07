@@ -78,7 +78,7 @@ describe('InMemoryAuthCache', () => {
     }
 
     // We need to bypass the cleanup in save() to test expiration in getAndDelete()
-    const map = (cache as any).cache as Map<string, PreAuthSession>
+    const map = (cache as unknown as { cache: any }).cache as Map<string, PreAuthSession>
     map.set('sess-1', session)
 
     expect(map.has('sess-1')).toBe(true)
@@ -114,7 +114,7 @@ describe('InMemoryAuthCache', () => {
     }
 
     // Manually set expired session to avoid immediate cleanup on save
-    const map = (cache as any).cache as Map<string, PreAuthSession>
+    const map = (cache as unknown as { cache: any }).cache as Map<string, PreAuthSession>
     map.set('expired', expired)
 
     cache.save(valid)
@@ -158,7 +158,7 @@ describe('OAuthProvider', () => {
       jwtIssuer: mockJwtIssuer,
       cache: customCache
     })
-    expect((providerWithCache as any).cache).toBe(customCache)
+    expect((providerWithCache as unknown as { cache: any }).cache).toBe(customCache)
   })
 
   describe('createAuthorizeRedirect', () => {
@@ -201,7 +201,7 @@ describe('OAuthProvider', () => {
       ])
       const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey)
 
-      const cache = (provider as any).cache as InMemoryAuthCache
+      const cache = (provider as unknown as { cache: any }).cache as InMemoryAuthCache
       cache.save({
         sessionId: 'code-123',
         clientId: 'client-1',
@@ -231,7 +231,7 @@ describe('OAuthProvider', () => {
       ])
       const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey)
 
-      const cache = (provider as any).cache as InMemoryAuthCache
+      const cache = (provider as unknown as { cache: any }).cache as InMemoryAuthCache
       cache.save({
         sessionId: 'code-plain',
         clientId: 'client-1',
@@ -254,7 +254,7 @@ describe('OAuthProvider', () => {
     })
 
     it('should throw on S256 PKCE verification failure', async () => {
-      const cache = (provider as any).cache as InMemoryAuthCache
+      const cache = (provider as unknown as { cache: any }).cache as InMemoryAuthCache
       cache.save({
         sessionId: 'code-fail',
         clientId: 'client-1',
@@ -273,7 +273,7 @@ describe('OAuthProvider', () => {
     })
 
     it('should throw on plain PKCE verification failure', async () => {
-      const cache = (provider as any).cache as InMemoryAuthCache
+      const cache = (provider as unknown as { cache: any }).cache as InMemoryAuthCache
       cache.save({
         sessionId: 'code-fail-plain',
         clientId: 'client-1',
@@ -298,7 +298,7 @@ describe('OAuthProvider', () => {
     })
 
     it('should throw on unsupported challenge method', async () => {
-      const cache = (provider as any).cache as InMemoryAuthCache
+      const cache = (provider as unknown as { cache: any }).cache as InMemoryAuthCache
       cache.save({
         sessionId: 'code-unsupported',
         clientId: 'client-1',
@@ -323,7 +323,7 @@ describe('OAuthProvider', () => {
       ])
       const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey)
 
-      const cache = (provider as any).cache as InMemoryAuthCache
+      const cache = (provider as unknown as { cache: any }).cache as InMemoryAuthCache
       cache.save({
         sessionId: 'code-no-user',
         clientId: 'client-1',

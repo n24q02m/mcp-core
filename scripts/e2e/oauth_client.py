@@ -73,6 +73,8 @@ def get_flow_timeout(flow: str | None) -> float:
 
 
 async def _health_probe(client: httpx.AsyncClient, base_url: str) -> None:
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("invalid base_url")
     """Confirm the local mcp container is alive + OAuth metadata reachable.
 
     Run BEFORE announcing a user-gate URL so the driver does not prompt the
@@ -129,6 +131,8 @@ def _pkce_pair() -> tuple[str, str]:
 
 
 async def _register_client(client: httpx.AsyncClient, base_url: str) -> str:
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("invalid base_url")
     """Try Dynamic Client Registration; fall back to ``local-browser`` if the
     server doesn't expose ``/register`` (older mcp-core or local-relay-only).
     """
@@ -161,6 +165,8 @@ async def acquire_jwt(
     poll_timeout: float | None = None,
     flow_label: str | None = None,
 ) -> str:
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("invalid base_url")
     """Drive the full PKCE + form-fill + token-exchange flow.
 
     Returns the JWT access token. Raises ``RuntimeError`` with the server's
@@ -189,6 +195,8 @@ async def acquire_jwt(
     state = secrets.token_urlsafe(16)
 
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+        # Confirm target alive BEFORE registration
+
         await _health_probe(client, base_url)
 
         client_id = await _register_client(client, base_url)
@@ -210,7 +218,7 @@ async def acquire_jwt(
         if not action_m:
             raise RuntimeError(f"No form action in {base_url}/authorize")
         action = action_m.group(1)
-        action_url = action if action.startswith("http") else f"{base_url}{action}"
+        action_url = action if action.startswith("http") else urljoin(base_url, action)
 
         # Two form patterns:
         #  - Static <input name="..."> (Python core-py + Notion paste-token):
@@ -396,6 +404,8 @@ async def acquire_jwt_via_browser_form(
     flow_label: str | None = "browser-form",
     allowed_prefill_keys: list[str] | None = None,
 ) -> str:
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("invalid base_url")
     """Drive a relay-form flow that requires user input INSIDE the form.
 
     telegram-user is the canonical case: phone submit returns
@@ -451,11 +461,8 @@ async def acquire_jwt_via_browser_form(
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             # Probe BEFORE printing the URL; user clicking a link to a dead
-
             # server is the worst failure mode (silent, looks like driver bug).
-
             await _health_probe(client, base_url)
-
             client_id = await _register_client(client, base_url)
             # Push prefill server-side BEFORE announcing the URL so the value
             # never leaves the client-server boundary via URL.
@@ -471,7 +478,7 @@ async def acquire_jwt_via_browser_form(
                         f"{prefill_resp.text}"
                     )
             authorize_url = (
-                urljoin(base_url, "/authorize") + "?"
+                f"{base_url}/authorize?"
                 f"client_id={client_id}&"
                 f"redirect_uri={redirect_uri}&"
                 f"state={state}&"
@@ -532,6 +539,8 @@ async def acquire_jwt_via_upstream_consent(
     timeout: float | None = None,
     flow_label: str | None = "oauth-redirect",
 ) -> str:
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("invalid base_url")
     """Drive a delegated-OAuth flow that requires upstream user consent.
 
     Notion remote-oauth, Microsoft device-code (when surfaced as a redirect
@@ -563,7 +572,6 @@ async def acquire_jwt_via_upstream_consent(
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             await _health_probe(client, base_url)
-
             client_id = await _register_client(client, base_url)
             params = {
                 "client_id": client_id,
