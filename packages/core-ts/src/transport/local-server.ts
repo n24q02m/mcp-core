@@ -199,7 +199,7 @@ export async function runHttpServer(
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sessionId) => {
-          transports.set(sessionId, transport!)
+          transports.set(sessionId, transport as StreamableHTTPServerTransport)
           servers.set(sessionId, server)
         },
         onsessionclosed: (sessionId) => {
@@ -330,7 +330,7 @@ export async function runHttpServer(
 
       if (!configComplete) {
         const setupUrl = `http://${host}:${actualPort}/`
-        if (process.env.NODE_ENV !== "test") await tryOpenBrowser(setupUrl)
+        if (process.env.NODE_ENV !== 'test') await tryOpenBrowser(setupUrl)
       }
     } catch {
       /* best-effort: never crash startup on browser-open failure */

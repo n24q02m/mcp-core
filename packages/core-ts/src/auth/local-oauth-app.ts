@@ -369,7 +369,7 @@ class LocalOAuthApp {
 
     const prefill: Record<string, string> = {}
     if (this.pendingPrefills.has(state)) {
-      const entry = this.pendingPrefills.get(state)!
+      const entry = this.pendingPrefills.get(state) as { data: Record<string, string>; createdAt: number }
       Object.assign(prefill, entry.data)
       this.pendingPrefills.delete(state)
     } else {
