@@ -15,10 +15,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
 import { type HttpServerHandle, runHttpServer } from '../../src/transport/local-server.js'
+
 vi.mock('../../src/relay/browser.js', () => ({
   tryOpenBrowser: vi.fn().mockResolvedValue(true)
 }))
-
 
 const SCHEMA: RelayConfigSchema = {
   server: 'test-server',
@@ -298,7 +298,7 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
       expect(sessionId).toBeTruthy()
       const sessionHeaders = {
         ...commonHeaders,
-        'mcp-session-id': sessionId!,
+        'mcp-session-id': sessionId as string,
         'mcp-protocol-version': '2025-03-26'
       }
 

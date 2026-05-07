@@ -33,7 +33,7 @@ import secrets
 import sys
 import time
 from collections.abc import Awaitable, Callable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
@@ -73,7 +73,6 @@ def get_flow_timeout(flow: str | None) -> float:
 
 
 async def _health_probe(client: httpx.AsyncClient, base_url: str) -> None:
-    assert base_url.startswith("http")
     """Confirm the local mcp container is alive + OAuth metadata reachable.
 
     Run BEFORE announcing a user-gate URL so the driver does not prompt the
@@ -82,8 +81,8 @@ async def _health_probe(client: httpx.AsyncClient, base_url: str) -> None:
     enough detail to diagnose without docker logs.
     """
     for url in (
-        f"{base_url}/setup-status",
-        f"{base_url}/.well-known/oauth-authorization-server",
+        urljoin(base_url, "/setup-status"),
+        urljoin(base_url, "/.well-known/oauth-authorization-server"),
     ):
         try:
             r = await client.get(url, timeout=5.0)
@@ -130,13 +129,12 @@ def _pkce_pair() -> tuple[str, str]:
 
 
 async def _register_client(client: httpx.AsyncClient, base_url: str) -> str:
-    assert base_url.startswith("http")
     """Try Dynamic Client Registration; fall back to ``local-browser`` if the
     server doesn't expose ``/register`` (older mcp-core or local-relay-only).
     """
     try:
         r = await client.post(
-            f"{base_url}/register",
+            urljoin(base_url, "/register"),
             json={
                 "redirect_uris": [_LOCALHOST_REDIRECT],
                 "client_name": "e2e-driver",
@@ -191,10 +189,6 @@ async def acquire_jwt(
     state = secrets.token_urlsafe(16)
 
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-        # Verify server alive + OAuth metadata reachable BEFORE
-
-        # attempting registration or any other network ops.
-
         await _health_probe(client, base_url)
 
         client_id = await _register_client(client, base_url)
@@ -207,7 +201,7 @@ async def acquire_jwt(
             "code_challenge_method": "S256",
             "response_type": "code",
         }
-        get_form = await client.get(f"{base_url}/authorize", params=params)
+        get_form = await client.get(urljoin(base_url, "/authorize"), params=params)
         get_form.raise_for_status()
 
         action_m = _FORM_ACTION_RE.search(get_form.text) or _JS_SUBMIT_URL_RE.search(
@@ -271,7 +265,7 @@ async def acquire_jwt(
             raise RuntimeError(f"No auth code in redirect_url: {redirect_url}")
 
         token_resp = await client.post(
-            f"{base_url}/token",
+            urljoin(base_url, "/token"),
             data={
                 "grant_type": "authorization_code",
                 "code": code,
@@ -457,6 +451,7 @@ async def acquire_jwt_via_browser_form(
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             # Probe BEFORE printing the URL; user clicking a link to a dead
+
             # server is the worst failure mode (silent, looks like driver bug).
 
             await _health_probe(client, base_url)
@@ -466,7 +461,7 @@ async def acquire_jwt_via_browser_form(
             # never leaves the client-server boundary via URL.
             if prefill_data:
                 prefill_resp = await client.post(
-                    f"{base_url}/authorize/prefill",
+                    urljoin(base_url, "/authorize/prefill"),
                     params={"state": state},
                     json=prefill_data,
                 )
@@ -476,7 +471,7 @@ async def acquire_jwt_via_browser_form(
                         f"{prefill_resp.text}"
                     )
             authorize_url = (
-                f"{base_url}/authorize?"
+                urljoin(base_url, "/authorize") + "?"
                 f"client_id={client_id}&"
                 f"redirect_uri={redirect_uri}&"
                 f"state={state}&"
@@ -509,7 +504,7 @@ async def acquire_jwt_via_browser_form(
                 )
 
             token_resp = await client.post(
-                f"{base_url}/token",
+                urljoin(base_url, "/token"),
                 data={
                     "grant_type": "authorization_code",
                     "code": code,
@@ -578,7 +573,7 @@ async def acquire_jwt_via_upstream_consent(
                 "code_challenge_method": "S256",
                 "response_type": "code",
             }
-            resp = await client.get(f"{base_url}/authorize", params=params)
+            resp = await client.get(urljoin(base_url, "/authorize"), params=params)
             if resp.status_code not in (302, 303, 307):
                 raise RuntimeError(
                     f"Expected /authorize 302 to upstream, got "
@@ -612,7 +607,7 @@ async def acquire_jwt_via_upstream_consent(
                 )
 
             token_resp = await client.post(
-                f"{base_url}/token",
+                urljoin(base_url, "/token"),
                 data={
                     "grant_type": "authorization_code",
                     "code": code,
