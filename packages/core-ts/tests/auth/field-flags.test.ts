@@ -29,4 +29,18 @@ describe('field flags', () => {
     expect(isOAuthField(f)).toBe(true)
     expect(isSecretField(f)).toBe(true)
   })
+
+  it('strict check for secret', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: testing runtime behavior
+    expect(isSecretField({ name: 'F', label: 'L', required: true, secret: 1 as any })).toBe(false)
+    expect(isSecretField({ name: 'F', label: 'L', required: true, secret: false })).toBe(false)
+    expect(isSecretField({ name: 'F', label: 'L', required: true, secret: undefined })).toBe(false)
+  })
+
+  it('strict check for oauthField', () => {
+    // biome-ignore lint/suspicious/noExplicitAny: testing runtime behavior
+    expect(isOAuthField({ name: 'F', label: 'L', required: true, oauthField: 'true' as any })).toBe(false)
+    expect(isOAuthField({ name: 'F', label: 'L', required: true, oauthField: false })).toBe(false)
+    expect(isOAuthField({ name: 'F', label: 'L', required: true, oauthField: undefined })).toBe(false)
+  })
 })
