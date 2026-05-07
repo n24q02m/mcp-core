@@ -10,6 +10,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { vi } from 'vitest'
+
+vi.mock('../../src/relay/browser.js', () => ({ tryOpenBrowser: vi.fn().mockResolvedValue(true) }))
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
