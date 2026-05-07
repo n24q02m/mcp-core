@@ -12,7 +12,9 @@ import { join } from 'node:path'
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { vi } from 'vitest'
+
 vi.mock('../../src/relay/browser.js', () => ({ tryOpenBrowser: vi.fn().mockResolvedValue(true) }))
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
@@ -296,7 +298,7 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
       expect(sessionId).toBeTruthy()
       const sessionHeaders = {
         ...commonHeaders,
-        'mcp-session-id': sessionId!,
+        'mcp-session-id': sessionId ?? '',
         'mcp-protocol-version': '2025-03-26'
       }
 
