@@ -446,7 +446,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
         await markConfigSetupComplete(options.serverName)
       } catch (err) {
         console.warn(
-          `Failed to mark _setup_complete=true for ${options.serverName}:`,
+          "Failed to mark _setup_complete=true for %s:", options.serverName,
           err instanceof Error ? err.message : String(err)
         )
       }
@@ -678,7 +678,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       await markConfigSetupComplete(options.serverName)
     } catch (err) {
       console.warn(
-        `Failed to mark _setup_complete=true for ${options.serverName}:`,
+        "Failed to mark _setup_complete=true for %s:", options.serverName,
         err instanceof Error ? err.message : String(err)
       )
     }

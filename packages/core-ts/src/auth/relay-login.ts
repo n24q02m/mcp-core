@@ -1,3 +1,4 @@
+
 /**
  * MCP relay edge auth — password gate for ``/authorize``.
  *
@@ -158,6 +159,7 @@ export async function loginGetHandler(
   // typography, ``.field-group`` / ``.field-label`` / ``.field-input``
   // classes, and primary submit button styling. Pure POST (no JavaScript)
   // so the gate works under strict CSP that blocks inline scripts.
+
   const bodyHtml = `    <div class="container">
         <div class="card">
             <div class="server-header">
@@ -169,7 +171,7 @@ export async function loginGetHandler(
             <p class="form-title">Authenticate</p>
 
             <form method="POST" action="/login" novalidate>
-                <input type="hidden" name="next" value="${safeNext}">
+                <input type="hidden" name="next" value="NEXT_VALUE_PLACEHOLDER">
                 <div class="field-group">
                     <label for="field-password" class="field-label">
                         Relay password
@@ -194,7 +196,7 @@ export async function loginGetHandler(
             </form>
         </div>
     </div>` // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-  res.send(renderFormShell('Relay login', bodyHtml))
+  res.send(renderFormShell("Relay login", bodyHtml.replace("NEXT_VALUE_PLACEHOLDER", safeNext)))
 }
 
 export async function loginPostHandler(
