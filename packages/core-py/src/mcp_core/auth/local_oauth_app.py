@@ -71,7 +71,7 @@ _OTP_MAX_ATTEMPTS = 5
 # ``on_credentials_saved`` receives the submitted credentials AND a
 # per-authorize-session ``SubjectContext`` (``{"sub": "<uuid>"}``). The sub is
 # generated fresh when GET /authorize renders the form, threaded through POST
-# /authorize, and stamped onto the JWT issued at /token — so consumers that
+# /authorize, and stamped onto the JWT issued at /token -- so consumers that
 # persist credentials keyed by ``sub`` (remote-relay multi-user mode) can
 # later look them up via AsyncLocalStorage in the Bearer auth scope. Without
 # this primitive every browser session collapsed to a static ``local-user``
@@ -162,20 +162,20 @@ def create_local_oauth_app(
     _PREFILL_TTL_S = 300.0
 
     # Edge auth password gate (per spec 2026-05-01-stdio-pure-http-multiuser
-    # §4.2.1). When ``MCP_RELAY_PASSWORD`` is set, /authorize GET + POST and
+    # Section 4.2.1). When ``MCP_RELAY_PASSWORD`` is set, /authorize GET + POST and
     # /authorize/prefill are fronted by a thin cookie-session check. Empty
     # password disables the gate. Configured here so test setups that build
     # multiple apps in one process get fresh state per ``create_local_oauth_app``
-    # call (relay_login keeps a single shared password — intentional, since in
+    # call (relay_login keeps a single shared password -- intentional, since in
     # deploy each container hosts one app).
     _relay_password = os.environ.get("MCP_RELAY_PASSWORD", "")
     configure_relay_login(_relay_password)
 
     # One pending multi-step session at a time. POST /otp has no sub in its
     # body, so we also capture the sub that opened this flow (via POST
-    # /authorize → on_credentials_saved → otp_required NextStep) and thread
+    # /authorize -> on_credentials_saved -> otp_required NextStep) and thread
     # it into on_step_submitted as SubjectContext. Concurrent remote-relay
-    # OTP flows are inherently serialized by this design — that's acceptable
+    # OTP flows are inherently serialized by this design -- that's acceptable
     # for multi-step auth UX and prevents cross-user step corruption.
     # Keys: "active" (bool), "created_at" (monotonic), "attempts" (int),
     # "sub" (str, the JWT sub that owns this step session).
@@ -351,7 +351,7 @@ def create_local_oauth_app(
         # Mark the persistent ``_setup_complete`` flag once the user has
         # successfully submitted the form. For single-step flows this is the
         # final state. For multi-step flows (OTP / 2FA), defer marking until
-        # the chain completes — see ``otp_handler``. The flag lets
+        # the chain completes -- see ``otp_handler``. The flag lets
         # ``runLocalServer``'s ``is_schema_complete`` gate distinguish "user
         # finished the form" from "config.enc has values from peer-share".
         is_multi_step = next_step is not None and next_step.get("type") in (
@@ -387,7 +387,7 @@ def create_local_oauth_app(
             # If next_step requires additional input (OTP or 2FA password),
             # activate the pending step session so the /otp endpoint accepts input.
             # Capture the authorize-session sub so /otp can thread the correct
-            # SubjectContext into on_step_submitted — the browser POSTs step
+            # SubjectContext into on_step_submitted -- the browser POSTs step
             # data without a sub, so this field is the only binding.
             if next_step.get("type") in ("otp_required", "password_required"):
                 _mark_pending_step(session["sub"])
@@ -416,7 +416,7 @@ def create_local_oauth_app(
 
         Stores form prefill values keyed by the OAuth ``state`` token chosen by
         the client. ``GET /authorize?state=<X>`` then hydrates the form on
-        render — credentials never appear in the URL the user opens.
+        render -- credentials never appear in the URL the user opens.
 
         Gated by the same relay-password cookie as ``/authorize`` itself when
         ``MCP_RELAY_PASSWORD`` is set.
@@ -618,7 +618,7 @@ def create_local_oauth_app(
 
         # Completion (callback returned None or unknown dict type).
         # Mark persistent _setup_complete flag now that the multi-step chain
-        # has finished — single-step counterpart lives in authorize_post.
+        # has finished -- single-step counterpart lives in authorize_post.
         try:
             _mark_config_setup_complete(server_name)
         except Exception:  # noqa: BLE001
@@ -803,19 +803,19 @@ def create_local_oauth_app(
 
 
 # ---------------------------------------------------------------------------
-# D7 — Pre-fill renderer + form-submission merger.
+# D7 -- Pre-fill renderer + form-submission merger.
 #
 # These helpers are exported as standalone primitives for consumers that build
 # their own ``customCredentialFormHtml`` renderer or POST handler. They are
 # intentionally NOT wired into the default ``authorize_get`` / ``authorize_post``
-# above — that path stays on ``render_credential_form`` for legacy parity. New
+# above -- that path stays on ``render_credential_form`` for legacy parity. New
 # consumers (transparent-bridge Wave 1) compose ``render_field`` per field to
 # get secret-aware rendering and then call ``merge_submission`` to merge the
 # POST body with their stored ``config.enc`` so a missing secret in the body
 # preserves the previously stored value instead of clearing it.
 # ---------------------------------------------------------------------------
 
-_SECRET_PLACEHOLDER = "••••••••(configured)"
+_SECRET_PLACEHOLDER = "********(configured)"
 
 
 def _field_name(field: dict) -> str:

@@ -1,4 +1,4 @@
-"""MCP relay edge auth — password gate for ``/authorize`` (Python parity).
+"""MCP relay edge auth -- password gate for ``/authorize`` (Python parity).
 
 When ``MCP_RELAY_PASSWORD`` is set, the ``/authorize`` route is fronted by a
 thin cookie-session check. Unauthenticated requests are redirected to
@@ -10,7 +10,7 @@ Empty / unset password disables the gate entirely (single-user dev mode).
 Brute-force protection: 5 wrong submissions per IP within a 15-minute
 sliding window block further attempts with HTTP 429 + ``Retry-After``.
 
-Per spec ``2026-05-01-stdio-pure-http-multiuser §4.2.1``. TypeScript parity
+Per spec ``2026-05-01-stdio-pure-http-multiuser Section 4.2.1``. TypeScript parity
 lives at ``packages/core-ts/src/auth/relay-login.ts``.
 """
 

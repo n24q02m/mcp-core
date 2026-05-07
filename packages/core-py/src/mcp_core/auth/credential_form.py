@@ -908,7 +908,7 @@ def is_schema_complete(config: dict[str, Any] | None, schema: dict[str, Any]) ->
     """Return True if every required field in ``schema`` has a non-empty value in ``config``.
 
     Schemas whose fields are all ``required: false`` are considered complete only
-    when ``config["_setup_complete"]`` is True — explicit user submission via the
+    when ``config["_setup_complete"]`` is True -- explicit user submission via the
     relay form. This lets servers like wet-mcp (where every cloud key is optional
     individually but at least one configuration step is required) distinguish
     "user has submitted the form, leaving everything blank by choice" from

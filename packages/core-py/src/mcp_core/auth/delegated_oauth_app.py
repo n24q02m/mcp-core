@@ -98,7 +98,7 @@ class UpstreamOAuthConfig:
     scopes: list[str] = field(default_factory=list)
     client_secret: str | None = None
     # How to pass client credentials to the upstream token endpoint.
-    # Defaults to ``client_secret_basic`` per RFC 6749 §2.3.1. Notion / GitHub
+    # Defaults to ``client_secret_basic`` per RFC 6749 Section 2.3.1. Notion / GitHub
     # / Microsoft require basic; Google / Slack accept both.
     token_endpoint_auth_method: TokenEndpointAuthMethod = "client_secret_basic"
     # Redirect flow only
@@ -238,11 +238,11 @@ def create_delegated_oauth_app(
     _device_pending: dict[str, Any] = {}
 
     # Edge auth password gate (per spec 2026-05-01-stdio-pure-http-multiuser
-    # §4.2.1 + §5.1.2.1). When ``MCP_RELAY_PASSWORD`` is set, /authorize is
+    # Section 4.2.1 + Section 5.1.2.1). When ``MCP_RELAY_PASSWORD`` is set, /authorize is
     # fronted by a thin cookie-session check. Empty password disables the
     # gate. Mirrors create_local_oauth_app wiring (PR #158); /token,
     # /register, /setup-status, /callback, /.well-known/* stay ungated by
-    # design — they are machine endpoints / mid-OAuth callbacks.
+    # design -- they are machine endpoints / mid-OAuth callbacks.
     _relay_password = os.environ.get("MCP_RELAY_PASSWORD", "")
     configure_relay_login(_relay_password)
 

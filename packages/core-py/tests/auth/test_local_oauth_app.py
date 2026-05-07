@@ -869,7 +869,7 @@ class TestRootBootstrapsPKCE:
         params = parse_qs(parsed.query)
         assert params["client_id"] == ["local-browser"]
         assert params["code_challenge_method"] == ["S256"]
-        assert len(params["state"][0]) >= 16  # token_urlsafe(16) ≥ 22 chars
+        assert len(params["state"][0]) >= 16  # token_urlsafe(16) >= 22 chars
         # code_challenge MUST be base64url S256 output (43 chars, no padding).
         challenge = params["code_challenge"][0]
         assert len(challenge) == 43
@@ -960,7 +960,7 @@ class TestSetupStatus:
         to ``"complete"`` but the key lived in a closure-scoped dict and
         survived the next form submit. The second submit rendered a fresh
         oauth_device_code UI, started the 3-second ``/setup-status`` poll,
-        and saw the stale ``"complete"`` on the first hit — the user saw
+        and saw the stale ``"complete"`` on the first hit -- the user saw
         the device code flash and then the app redirected before they
         ever approved the new code. Each POST /authorize must reset all
         existing keys back to ``"idle"``.

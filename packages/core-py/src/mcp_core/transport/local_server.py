@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 
 # Callback may be sync or async. Async lets callbacks perform I/O without
-# running-loop hacks. See mcp_core.auth.local_oauth_app for details.
+# complex event loop management. See mcp_core.auth.local_oauth_app for details.
 #
 # Credential callback now receives a second arg ``context`` (``SubjectContext``)
 # carrying the per-authorize-request ``sub``. Consumers that want multi-user
@@ -389,9 +389,9 @@ async def run_http_server(
     from mcp_core.storage.config_file import read_config
 
     # Edge auth deployment warning (per spec
-    # 2026-05-01-stdio-pure-http-multiuser §4.2.1). When ``PUBLIC_URL`` points
+    # 2026-05-01-stdio-pure-http-multiuser Section 4.2.1). When ``PUBLIC_URL`` points
     # to a non-localhost host but ``MCP_RELAY_PASSWORD`` is empty, the relay
-    # form is reachable from the public Internet without authentication —
+    # form is reachable from the public Internet without authentication --
     # that's the wedge this gate closes. Localhost dev intentionally skips
     # the password; everyone else gets a startup warning so the misconfig
     # doesn't pass silently.
@@ -399,7 +399,7 @@ async def run_http_server(
     _relay_password = os.environ.get("MCP_RELAY_PASSWORD", "")
     _is_localhost = bool(re.match(r"^https?://(localhost|127\.0\.0\.1)", _public_url))
     if _public_url and not _is_localhost and not _relay_password:
-        logger.warning("HTTP mode public deployment without MCP_RELAY_PASSWORD — relay form is open to Internet")
+        logger.warning("HTTP mode public deployment without MCP_RELAY_PASSWORD -- relay form is open to Internet")
 
     # Resolve port + host
     actual_port = port if port != 0 else find_free_port()
@@ -494,7 +494,7 @@ async def run_http_server(
     # Sweep stale locks for our server name BEFORE acquiring our own lock.
     # Without this, abnormal-exit residue (Windows OOM, taskkill, signal) can
     # accumulate dozens of stale `<server>-<port>.lock` files
-    # — see 2026-04-28 wet-mcp 11-stale-lock pile-up.
+    # -- see 2026-04-28 wet-mcp 11-stale-lock pile-up.
     from mcp_core.lifecycle.lock import sweep_stale_locks
 
     swept = sweep_stale_locks(server_name)
@@ -531,7 +531,7 @@ async def run_http_server(
             # Open the root URL ("/") so the OAuth-AS auto-bootstraps PKCE
             # and redirects to /authorize with valid parameters. Opening
             # /authorize directly returns ``invalid_request`` because the
-            # endpoint requires client_id/redirect_uri/state/code_challenge —
+            # endpoint requires client_id/redirect_uri/state/code_challenge --
             # see ``local_oauth_app.root()`` docstring ("one-URL UX without
             # exposing raw OAuth machinery").
             setup_url = f"http://{actual_host}:{actual_port}/"
@@ -638,7 +638,7 @@ async def start_http_server_background(
     close the handle once ``on_credentials_saved`` has persisted the config.
 
     Args:
-        mcp: FastMCP server instance. May be a minimal stub — the spawn is
+        mcp: FastMCP server instance. May be a minimal stub -- the spawn is
             credential-form-focused and ``/mcp`` should not be exercised
             against it.
         server_name: Identifier used for JWT iss/aud and credential storage.
