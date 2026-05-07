@@ -10,3 +10,7 @@
 ## 2025-05-04 - [Avoid fragile optimizations and micro-optimizing small loop iterations]
 **Learning:** In Python, attempting to optimize a short loop (like scanning a small JSON list `responses` in `poll_for_responses`) by keeping a `last_seen_count` state to skip previously scanned elements provides zero measurable performance gain, because the time saved (fractions of a millisecond) is dwarfed by the massive HTTP request latency and `asyncio.sleep()` in the same loop. Furthermore, assuming the server array is append-only is dangerous and could break if the server starts paginating or clearing old items.
 **Action:** Do not micro-optimize small iterations in Python when the loop contains expensive operations (like I/O or network requests), and never assume an external API's response array is strictly append-only without verification.
+
+## 2025-05-14 - [Double mapping over arrays in schema transformation]
+**Learning:** Functional iteration chains like `.filter().map().every()` on arrays create intermediate allocations and require multiple passes. In performance-sensitive code within the Bun/V8 environment, a manual `for` loop is significantly more efficient.
+**Action:** Replace multiple-pass functional chains with a single manual loop when performance is a priority and the collection may be large or the function is hot.
