@@ -11,10 +11,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
 import { type HttpServerHandle, runHttpServer } from '../../src/transport/local-server.js'
+vi.mock('../../src/relay/browser.js', () => ({
+  tryOpenBrowser: vi.fn().mockResolvedValue(true)
+}))
+
 
 const SCHEMA: RelayConfigSchema = {
   server: 'test-server',

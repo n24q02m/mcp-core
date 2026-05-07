@@ -73,6 +73,7 @@ def get_flow_timeout(flow: str | None) -> float:
 
 
 async def _health_probe(client: httpx.AsyncClient, base_url: str) -> None:
+    assert base_url.startswith("http")
     """Confirm the local mcp container is alive + OAuth metadata reachable.
 
     Run BEFORE announcing a user-gate URL so the driver does not prompt the
@@ -129,6 +130,7 @@ def _pkce_pair() -> tuple[str, str]:
 
 
 async def _register_client(client: httpx.AsyncClient, base_url: str) -> str:
+    assert base_url.startswith("http")
     """Try Dynamic Client Registration; fall back to ``local-browser`` if the
     server doesn't expose ``/register`` (older mcp-core or local-relay-only).
     """
@@ -190,8 +192,11 @@ async def acquire_jwt(
 
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
         # Verify server alive + OAuth metadata reachable BEFORE
+
         # attempting registration or any other network ops.
+
         await _health_probe(client, base_url)
+
         client_id = await _register_client(client, base_url)
 
         params = {
@@ -453,7 +458,9 @@ async def acquire_jwt_via_browser_form(
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             # Probe BEFORE printing the URL; user clicking a link to a dead
             # server is the worst failure mode (silent, looks like driver bug).
+
             await _health_probe(client, base_url)
+
             client_id = await _register_client(client, base_url)
             # Push prefill server-side BEFORE announcing the URL so the value
             # never leaves the client-server boundary via URL.
@@ -561,6 +568,7 @@ async def acquire_jwt_via_upstream_consent(
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             await _health_probe(client, base_url)
+
             client_id = await _register_client(client, base_url)
             params = {
                 "client_id": client_id,
