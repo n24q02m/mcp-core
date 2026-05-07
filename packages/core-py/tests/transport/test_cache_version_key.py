@@ -6,6 +6,7 @@ either side invalidates the cache. Persist must not raise on filesystem errors
 bridge).
 """
 
+import logging
 from mcp_core.transport.cache import (
     cache_filename,
     persist_tools_cache,
@@ -46,7 +47,7 @@ def test_persist_atomic_replace_on_existing(tmp_path, monkeypatch):
     assert loaded == [{"name": "search2"}]
 
 
-def test_persist_silent_on_oserror(tmp_path, monkeypatch):
+def test_persist_silent_on_oserror(tmp_path, monkeypatch, caplog):
     """D10 root cause for #384 — Windows write may fail; silently skip cache, no exception."""
     monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
 
@@ -54,7 +55,11 @@ def test_persist_silent_on_oserror(tmp_path, monkeypatch):
         raise PermissionError("Windows access denied")
 
     monkeypatch.setattr("mcp_core.transport.cache._atomic_write", fake_atomic_write)
-    # Must not raise
-    persist_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0", tools=[])
+
+    with caplog.at_level(logging.DEBUG):
+        # Must not raise
+        persist_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0", tools=[])
+
+    assert "Failed to persist capabilities cache for wet-mcp: Windows access denied" in caplog.text
     # And cache stays absent (load returns None)
     assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
