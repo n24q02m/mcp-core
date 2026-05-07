@@ -2,6 +2,7 @@
 
 import base64
 import logging
+import os
 import re
 import subprocess
 import time
@@ -27,17 +28,21 @@ def _is_wsl() -> bool:
         return False
 
 
-def _open_in_powershell(url: str) -> bool:
+def _open_in_powershell(url: str, extra_env: dict[str, str] | None = None) -> bool:
     """Open URL using powershell.exe -EncodedCommand."""
     try:
-        escaped_url = url.replace("'", "''")
-        command = f"Start-Process '{escaped_url}'"
+        command = "Start-Process $env:MCP_BROWSER_URL"
         encoded_command = base64.b64encode(command.encode("utf-16le")).decode("ascii")
+        env = os.environ.copy()
+        if extra_env:
+            env.update(extra_env)
+        env["MCP_BROWSER_URL"] = url
         subprocess.run(
-            ["powershell.exe", "-EncodedCommand", encoded_command],
+            ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_command],
             check=True,
             capture_output=True,
             timeout=10,
+            env=env,
         )
         return True
     except (FileNotFoundError, subprocess.SubprocessError):
@@ -59,7 +64,9 @@ def _open_in_wsl(url: str) -> bool:
         pass
 
     # Fallback to powershell.exe -EncodedCommand
-    return _open_in_powershell(url)
+    wslenv = os.environ.get("WSLENV", "")
+    new_wslenv = (f"{wslenv}:" if wslenv else "") + "MCP_BROWSER_URL/u"
+    return _open_in_powershell(url, extra_env={"WSLENV": new_wslenv})
 
 
 def try_open_browser(url: str) -> bool:
@@ -78,7 +85,7 @@ def try_open_browser(url: str) -> bool:
         True if the browser was likely opened, False otherwise.
     """
     # Validate URL
-    if not re.match(r"^https?://[a-zA-Z0-9-._~:/?#\[\]@!$&%*+,=]+$", url, re.IGNORECASE):
+    if not re.match(r"^https?://[a-zA-Z0-9-._~:/?#\[\]@!$&'()*+,;=%]+$", url, re.IGNORECASE):
         logger.debug("Invalid URL for browser open: %s", url)
         return False
 

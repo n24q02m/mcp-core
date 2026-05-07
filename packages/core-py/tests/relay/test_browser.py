@@ -45,7 +45,6 @@ class TestTryOpenBrowser:
             "https://example.com$(whoami)",
             "https://example.com`whoami`",
             "https://example.com|nc localhost 4444",
-            "https://example.com' -and $true -and '1'='1",
             "javascript:alert(1)",
             "file:///etc/passwd",
         ]
@@ -56,6 +55,12 @@ class TestTryOpenBrowser:
         with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
             mock_wb.open.return_value = True
             url = "https://example.com/auth?code=123&state=abc"
+            assert try_open_browser(url) is True
+
+    def test_accepts_urls_with_single_quotes(self):
+        with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+            mock_wb.open.return_value = True
+            url = "https://example.com/auth?q='hello'"
             assert try_open_browser(url) is True
 
     def test_returns_true_on_success(self):
@@ -110,6 +115,7 @@ class TestOpenInWsl:
             from mcp_core.relay.browser import _open_in_wsl
 
             result = _open_in_wsl("https://example.com")
+            # Should return True because mock_sp.run doesn't raise
             assert result is True
             mock_sp.run.assert_called_once()
             args = mock_sp.run.call_args
@@ -133,6 +139,11 @@ class TestOpenInWsl:
             result = _open_in_wsl("https://example.com")
             assert result is True
             assert mock_sp.run.call_count == 2
+            # Second call should be powershell
+            args = mock_sp.run.call_args
+            assert args[0][0][0] == "powershell.exe"
+            assert "MCP_BROWSER_URL/u" in args[1]["env"]["WSLENV"]
+            assert args[1]["env"]["MCP_BROWSER_URL"] == "https://example.com"
 
     def test_returns_false_when_all_methods_fail(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
@@ -142,3 +153,25 @@ class TestOpenInWsl:
 
             result = _open_in_wsl("https://example.com")
             assert result is False
+
+
+class TestOpenInPowerShell:
+    def test_uses_env_var_and_noprofile(self):
+        with patch("mcp_core.relay.browser.subprocess") as mock_sp:
+            mock_sp.SubprocessError = Exception
+            from mcp_core.relay.browser import _open_in_powershell
+
+            url = "https://example.com"
+            result = _open_in_powershell(url)
+
+            assert result is True
+            mock_sp.run.assert_called_once()
+            args, kwargs = mock_sp.run.call_args
+
+            cmd_list = args[0]
+            assert cmd_list[0] == "powershell.exe"
+            assert "-NoProfile" in cmd_list
+            assert "-EncodedCommand" in cmd_list
+
+            env = kwargs["env"]
+            assert env["MCP_BROWSER_URL"] == url

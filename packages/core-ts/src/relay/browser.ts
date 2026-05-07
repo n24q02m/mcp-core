@@ -28,12 +28,17 @@ function encodePowerShellCommand(command: string): string {
   return Buffer.from(command, 'utf16le').toString('base64')
 }
 
-async function openInPowerShell(url: string): Promise<boolean> {
+async function openInPowerShell(url: string, extraEnv?: Record<string, string>): Promise<boolean> {
   try {
-    const escapedUrl = url.replace(/'/g, "''")
-    const command = `Start-Process '${escapedUrl}'`
+    const command = 'Start-Process $env:MCP_BROWSER_URL'
     const encodedCommand = encodePowerShellCommand(command)
-    await execFileAsync('powershell.exe', ['-EncodedCommand', encodedCommand])
+    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encodedCommand], {
+      env: {
+        ...process.env,
+        ...extraEnv,
+        MCP_BROWSER_URL: url
+      }
+    })
     return true
   } catch {
     return false
@@ -50,7 +55,7 @@ async function openInWsl(url: string): Promise<boolean> {
   }
 
   // Fallback to powershell.exe -EncodedCommand
-  return openInPowerShell(url)
+  return openInPowerShell(url, { WSLENV: (process.env.WSLENV ? `${process.env.WSLENV}:` : '') + 'MCP_BROWSER_URL/u' })
 }
 
 /**
@@ -58,15 +63,15 @@ async function openInWsl(url: string): Promise<boolean> {
  *
  * Detection order:
  * 1. win32: powershell.exe -EncodedCommand
- * 2. darwin: \`open\` command
- * 3. linux: check WSL then \`xdg-open\`
+ * 2. darwin: `open` command
+ * 3. linux: check WSL then `xdg-open`
  *
  * Never throws. Returns false on failure.
  */
 export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Validate URL
-    if (!/^https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!$&%*+,=]+$/i.test(url)) {
+    if (!/^https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!$&'()*+,;=%]+$/i.test(url)) {
       return false
     }
 
