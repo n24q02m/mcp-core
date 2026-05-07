@@ -14,3 +14,7 @@
 ## 2025-05-14 - [Node.js Event Loop Blocking]
 **Learning:** Using synchronous file I/O operations (`readFileSync`, `writeFileSync`, etc.) in hot paths or recurring background tasks (`setInterval`) blocks the Node.js event loop, degrading server performance and responsiveness.
 **Action:** Always use asynchronous fs APIs (`fs/promises`) for file I/O operations in `packages/core-ts` to ensure the event loop remains free to handle concurrent requests.
+
+## 2025-05-14 - [CI Timeout due to Process Spawning]
+**Learning:** Functions that spawn external processes (like `tryOpenBrowser`) can cause indefinite hangs or timeouts in headless CI environments if not properly handled or mocked.
+**Action:** Always mock process-spawning modules in unit tests to ensure stability and prevent CI failures.

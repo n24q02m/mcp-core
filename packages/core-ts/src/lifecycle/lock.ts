@@ -24,8 +24,7 @@
  * identical for cross-language parity.
  */
 
-import { existsSync } from 'node:fs'
-import { readdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { access, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -80,7 +79,12 @@ function parseLockText(raw: string): LockMetadata | null {
  * byte-range lock is held past the metadata region (parity with core-py).
  */
 export async function refreshLockTimestamp(path: string): Promise<void> {
-  if (!existsSync(path)) return
+  try {
+    await access(path)
+  } catch {
+    return
+  }
+
   let raw: string
   try {
     raw = await readFile(path, { encoding: 'utf-8' })
@@ -111,7 +115,11 @@ export async function refreshLockTimestamp(path: string): Promise<void> {
  */
 export async function sweepStaleLocks(serverName: string, ttlHours?: number, root?: string): Promise<number> {
   const dir = root !== undefined ? root : self.lockDir()
-  if (!existsSync(dir)) return 0
+  try {
+    await access(dir)
+  } catch {
+    return 0
+  }
 
   let removed = 0
   let entries: string[]
