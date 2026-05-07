@@ -63,9 +63,7 @@ async function startApp(options: {
     pollIntervalMs?: number
     callbackPath?: string
   }
-  onTokenReceived: (
-    tokens: Record<string, unknown>
-  ) => string | undefined | undefined | Promise<string | undefined | undefined>
+  onTokenReceived: (tokens: Record<string, unknown>) => string | undefined | Promise<string | undefined>
   keysDir: string
 }): Promise<TestServer> {
   const jwtIssuer = new JWTIssuer('test-delegated', options.keysDir)
