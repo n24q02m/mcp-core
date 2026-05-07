@@ -33,33 +33,33 @@ describe('tools cache', () => {
     expect(cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')).toBe('wet-mcp-55317-2.28.4-1.11.0.tools.json')
   })
 
-  it('persist + load match', () => {
+  it('persist + load match', async () => {
     const tools = [{ name: 'search' }]
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', tools)
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', tools)
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toEqual(tools)
   })
 
-  it('mismatched srv_version returns null', () => {
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
+  it('mismatched srv_version returns null', async () => {
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
     expect(loadToolsCache('wet-mcp', 55317, '2.29.0', '1.11.0')).toBeNull()
   })
 
-  it('mismatched core_version returns null', () => {
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
+  it('mismatched core_version returns null', async () => {
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.12.0')).toBeNull()
   })
 
-  it('atomic replace existing', () => {
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'a' }])
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'b' }])
+  it('atomic replace existing', async () => {
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'a' }])
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'b' }])
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toEqual([{ name: 'b' }])
   })
 
-  it('persist suppresses error', () => {
+  it('persist suppresses error', async () => {
     vi.spyOn(cacheModule, 'atomicWrite').mockImplementation(() => {
-      throw new Error('access denied')
+      return Promise.reject(new Error('access denied'))
     })
-    expect(() => persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [])).not.toThrow()
+    await expect(persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [])).resolves.not.toThrow()
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
   })
 })

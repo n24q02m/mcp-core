@@ -10,3 +10,7 @@
 ## 2025-05-04 - [Avoid fragile optimizations and micro-optimizing small loop iterations]
 **Learning:** In Python, attempting to optimize a short loop (like scanning a small JSON list `responses` in `poll_for_responses`) by keeping a `last_seen_count` state to skip previously scanned elements provides zero measurable performance gain, because the time saved (fractions of a millisecond) is dwarfed by the massive HTTP request latency and `asyncio.sleep()` in the same loop. Furthermore, assuming the server array is append-only is dangerous and could break if the server starts paginating or clearing old items.
 **Action:** Do not micro-optimize small iterations in Python when the loop contains expensive operations (like I/O or network requests), and never assume an external API's response array is strictly append-only without verification.
+
+## 2025-05-22 - [Performance] Asynchronous File Operations in Cache Persist
+**Learning:** Using synchronous file operations (like `writeFileSync`) in the main thread of an MCP server or bridge blocks execution, which is detrimental for performance as caching is an optimization and shouldn't penalize the critical path.
+**Action:** Always prefer `node:fs/promises` and `async/await` for non-critical path file operations such as cache persistence.
