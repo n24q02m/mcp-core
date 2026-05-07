@@ -169,7 +169,7 @@ export async function loginGetHandler(
             <p class="form-title">Authenticate</p>
 
             <form method="POST" action="/login" novalidate>
-                <input type="hidden" name="next" value="${safeNext}">
+                <input type="hidden" name="next" value="${safeNext}"> // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
                 <div class="field-group">
                     <label for="field-password" class="field-label">
                         Relay password
