@@ -57,9 +57,9 @@ _AUTH_CODE_TTL_S = 600
 _SESSION_TTL_S = 600
 
 # Multi-step auth (OTP / 2FA password) constraints.
-# _OTP_TIMEOUT_S: khoảng thời gian tối đa giữa lúc submit credentials và
-# lúc user nhập OTP/password. _OTP_MAX_ATTEMPTS: số lần submit sai tối đa
-# trước khi reset pending step session.
+# _OTP_TIMEOUT_S: maximum time interval between credential submission and
+# user entering OTP/password. _OTP_MAX_ATTEMPTS: maximum number of failed
+# attempts before resetting the pending step session.
 _OTP_TIMEOUT_S = 300
 _OTP_MAX_ATTEMPTS = 5
 
@@ -189,7 +189,7 @@ def create_local_oauth_app(
         _pending_step["sub"] = sub
 
     def _clear_pending_step() -> None:
-        """Xóa pending step session (sau khi complete hoặc expired)."""
+        """Clear the pending step session (after completion or expiry)."""
         _pending_step.clear()
 
     def _prune_expired(store: dict[str, dict[str, Any]], ttl: float) -> None:
@@ -332,7 +332,7 @@ def create_local_oauth_app(
         if on_credentials_saved is not None:
             try:
                 result = on_credentials_saved(credentials, context)
-                if inspect.iscoroutine(result):
+                if inspect.isawaitable(result):
                     result = await result
                 if isinstance(result, dict):
                     next_step = cast("dict[str, Any]", result)
@@ -384,8 +384,8 @@ def create_local_oauth_app(
         response_body: dict = {"ok": True, "redirect_url": redirect_url}
         if next_step:
             response_body["next_step"] = next_step
-            # Nếu next_step yêu cầu input thêm (OTP hoặc 2FA password),
-            # activate pending step session để /otp endpoint chấp nhận input.
+            # If next_step requires additional input (OTP or 2FA password),
+            # activate the pending step session so the /otp endpoint accepts input.
             # Capture the authorize-session sub so /otp can thread the correct
             # SubjectContext into on_step_submitted — the browser POSTs step
             # data without a sub, so this field is the only binding.
@@ -588,7 +588,7 @@ def create_local_oauth_app(
         if on_step_submitted is not None:
             try:
                 result = on_step_submitted(step_data, step_context)
-                if inspect.iscoroutine(result):
+                if inspect.isawaitable(result):
                     result = await result
                 if isinstance(result, dict):
                     next_step = cast("dict[str, Any]", result)

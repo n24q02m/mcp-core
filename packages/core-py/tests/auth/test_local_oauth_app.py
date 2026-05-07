@@ -692,7 +692,7 @@ def test_otp_endpoint_max_attempts_clears_session(client_with_otp_error):
 
 
 # ---------------------------------------------------------------------------
-# Async callback tests (regression: running-loop bug in telegram)
+# Async callback tests
 # ---------------------------------------------------------------------------
 
 
@@ -732,7 +732,7 @@ def client_with_async_otp():
 
 
 def test_otp_endpoint_with_async_callbacks(client_with_async_otp):
-    """Async callbacks should be awaited properly -- no running-loop error."""
+    """Async callbacks should be awaited properly."""
     client, _ = client_with_async_otp
     nonce = _extract_nonce(client)
     resp = client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
