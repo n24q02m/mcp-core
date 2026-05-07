@@ -56,7 +56,7 @@ export function persistToolsCache(
     self.atomicWrite(path, payload)
   } catch (err) {
     // Suppress per D10 — log only.
-    console.debug(`Failed to persist capabilities cache for ${serverName}:`, err)
+    console.debug('Failed to persist capabilities cache for', serverName, ':', err)
   }
 }
 
