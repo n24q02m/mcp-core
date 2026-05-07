@@ -473,74 +473,28 @@ def _render_capability(cap: dict[str, Any]) -> str:
             </li>"""
 
 
-def render_credential_form(
-    schema: dict[str, Any],
-    *,
-    submit_url: str,
-    page_title: str | None = None,
-    prefill: dict[str, str] | None = None,
-) -> str:
-    """Render a dark-themed HTML credential form from a RelayConfigSchema dict.
+def _render_capabilities(capability_info: list[dict[str, Any]]) -> str:
+    """Render the capabilities section from capabilityInfo items."""
+    if not capability_info:
+        return ""
 
-    Args:
-        schema: RelayConfigSchema dict with server metadata and field definitions.
-        submit_url: URL the form POSTs to as JSON via fetch().
-        page_title: Optional browser tab title. Defaults to displayName.
-        prefill: Optional ``{KEY: VALUE}`` mapping for input ``value=`` attrs.
-            Driver populates this from skret via ``?prefill_<KEY>=<VALUE>``
-            query params on the GET so users only type what skret can't
-            supply (OTP, 2FA password). Non-matching keys are ignored.
-
-    Returns:
-        Complete HTML document string, XSS-safe with all dynamic content escaped.
-    """
-    display_name = _escape(schema.get("displayName", schema.get("server", "Configuration")))
-    server = _escape(schema.get("server", ""))
-    description = _escape(schema.get("description", ""))
-    title = page_title if page_title is not None else schema.get("displayName", schema.get("server", "Configuration"))
-    submit_url_escaped = _escape(submit_url)
-
-    fields: list[dict[str, Any]] = schema.get("fields", [])
-    capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
-
-    prefill = prefill or {}
-    fields_html = "".join(_render_field(f, prefill.get(f.get("key", ""), "")) for f in fields)
-
-    capabilities_html = ""
-    if capability_info:
-        items_html = "".join(_render_capability(c) for c in capability_info)
-        capabilities_html = f"""
+    items_html = "".join(_render_capability(c) for c in capability_info)
+    return f"""
         <section class="capabilities-section">
             <h2 class="capabilities-title">Capabilities Requested</h2>
             <ul class="capabilities-list">{items_html}
             </ul>
         </section>"""
 
-    description_html = f'<p class="server-description">{description}</p>' if description else ""
 
-    body_html = f"""    <div class="container">
-        <div class="card">
-            <div class="server-header">
-                <h1 class="server-name">{display_name}</h1>
-                <div class="server-id">{server}</div>
-                {description_html}
-            </div>
+def _generate_js(submit_url: str) -> str:
+    """Generate the large JavaScript block for the credential form.
 
-            <p class="form-title">Enter your credentials</p>
-
-            <form id="credential-form" novalidate>
-                {fields_html}
-
-                <button type="submit" class="submit-btn" id="submit-btn">
-                    Connect
-                </button>
-
-                <div class="status-box" id="status-box" role="alert"></div>
-            </form>
-        </div>
-        {capabilities_html}
-    </div>
-
+    This block is kept in sync with the client-side logic in
+    packages/core-ts/src/auth/credential-form.ts.
+    """
+    submit_url_escaped = _escape(submit_url)
+    return rf"""
     <script>
         (function () {{
             var form = document.getElementById("credential-form");
@@ -556,7 +510,7 @@ def render_credential_form(
 
             // Derive /otp endpoint URL from submitUrl (replaces /authorize... with /otp).
             function otpUrl() {{
-                return submitUrl.replace(/\\/authorize.*/, "/otp");
+                return submitUrl.replace(/\/authorize.*/, "/otp");
             }}
 
             // Render (or update in-place) a step-input UI for otp_required / password_required.
@@ -752,31 +706,24 @@ def render_credential_form(
             form.addEventListener("submit", function (event) {{
                 event.preventDefault();
 
-                var inputs = form.querySelectorAll(".field-input");
                 var payload = {{}};
-                var valid = true;
-                var firstInvalid = null;
+                var inputs = form.querySelectorAll(".field-input");
+                var isValid = true;
 
                 inputs.forEach(function (input) {{
-                    if (input.hasAttribute("required") && input.value.trim() === "") {{
-                        valid = false;
+                    var name = input.getAttribute("name");
+                    var value = input.value;
+
+                    if (input.hasAttribute("required") && value.trim() === "") {{
+                        isValid = false;
                         input.setAttribute("aria-invalid", "true");
-                        input.setAttribute("aria-errormessage", "status-box");
-                        if (!firstInvalid) {{
-                            firstInvalid = input;
-                        }}
-                    }} else {{
-                        input.removeAttribute("aria-invalid");
-                        input.removeAttribute("aria-errormessage");
-                        payload[input.name] = input.value;
                     }}
+
+                    payload[name] = value;
                 }});
 
-                if (!valid) {{
+                if (!isValid) {{
                     showStatus("error", "Please fill in all required fields.");
-                    if (firstInvalid) {{
-                        firstInvalid.focus();
-                    }}
                     return;
                 }}
 
@@ -838,7 +785,7 @@ def render_credential_form(
                                     // Success:   gdrive === "complete"
                                     // Failure:   gdrive starts with "error:" -- show red message + stop polling.
                                     var pollInterval = setInterval(function () {{
-                                        fetch(submitUrl.replace(/\\/authorize.*/, "/setup-status"))
+                                        fetch(submitUrl.replace(/\/authorize.*/, "/setup-status"))
                                             .then(function (r) {{ return r.json(); }})
                                             .then(function (s) {{
                                                 if (s.gdrive === "complete") {{
@@ -900,6 +847,67 @@ def render_credential_form(
             }});
         }})();
     </script>"""
+
+
+def render_credential_form(
+    schema: dict[str, Any],
+    *,
+    submit_url: str,
+    page_title: str | None = None,
+    prefill: dict[str, str] | None = None,
+) -> str:
+    """Render a dark-themed HTML credential form from a RelayConfigSchema dict.
+
+    Args:
+        schema: RelayConfigSchema dict with server metadata and field definitions.
+        submit_url: URL the form POSTs to as JSON via fetch().
+        page_title: Optional browser tab title. Defaults to displayName.
+        prefill: Optional ``{KEY: VALUE}`` mapping for input ``value=`` attrs.
+            Driver populates this from skret via ``?prefill_<KEY>=<VALUE>``
+            query params on the GET so users only type what skret can't
+            supply (OTP, 2FA password). Non-matching keys are ignored.
+
+    Returns:
+        Complete HTML document string, XSS-safe with all dynamic content escaped.
+    """
+    display_name = _escape(schema.get("displayName", schema.get("server", "Configuration")))
+    server = _escape(schema.get("server", ""))
+    description = _escape(schema.get("description", ""))
+    title = page_title if page_title is not None else schema.get("displayName", schema.get("server", "Configuration"))
+
+    fields: list[dict[str, Any]] = schema.get("fields", [])
+    capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
+
+    prefill = prefill or {}
+    fields_html = "".join(_render_field(f, prefill.get(f.get("key", ""), "")) for f in fields)
+
+    capabilities_html = _render_capabilities(capability_info)
+    description_html = f'<p class="server-description">{description}</p>' if description else ""
+
+    body_html = f"""    <div class="container">
+        <div class="card">
+            <div class="server-header">
+                <h1 class="server-name">{display_name}</h1>
+                <div class="server-id">{server}</div>
+                {description_html}
+            </div>
+
+            <p class="form-title">Enter your credentials</p>
+
+            <form id="credential-form" novalidate>
+                {fields_html}
+
+                <button type="submit" class="submit-btn" id="submit-btn">
+                    Connect
+                </button>
+
+                <div class="status-box" id="status-box" role="alert"></div>
+            </form>
+        </div>
+        {capabilities_html}
+    </div>
+
+    {_generate_js(submit_url)}"""
 
     return render_form_shell(title, body_html)
 
