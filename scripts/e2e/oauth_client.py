@@ -189,6 +189,9 @@ async def acquire_jwt(
     state = secrets.token_urlsafe(16)
 
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+        # Verify server alive + OAuth metadata reachable BEFORE
+        # attempting registration or any other network ops.
+        await _health_probe(client, base_url)
         client_id = await _register_client(client, base_url)
 
         params = {
@@ -245,10 +248,6 @@ async def acquire_jwt(
         # exchanging the code.
         next_step = body.get("next_step")
         if next_step:
-            # Verify server alive + OAuth metadata reachable BEFORE prompting
-            # the user. A dead container with cached auth code = user clicks
-            # link, sees error, doesn't realize the test framework is at fault.
-            await _health_probe(client, base_url)
             if on_next_step is not None:
                 result = on_next_step(next_step)
                 if asyncio.iscoroutine(result):
@@ -452,10 +451,10 @@ async def acquire_jwt_via_browser_form(
         redirect_uri = f"http://127.0.0.1:{port}/callback"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
-            client_id = await _register_client(client, base_url)
             # Probe BEFORE printing the URL; user clicking a link to a dead
             # server is the worst failure mode (silent, looks like driver bug).
             await _health_probe(client, base_url)
+            client_id = await _register_client(client, base_url)
             # Push prefill server-side BEFORE announcing the URL so the value
             # never leaves the client-server boundary via URL.
             if prefill_data:
@@ -561,8 +560,8 @@ async def acquire_jwt_via_upstream_consent(
         redirect_uri = f"http://127.0.0.1:{port}/callback"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
-            client_id = await _register_client(client, base_url)
             await _health_probe(client, base_url)
+            client_id = await _register_client(client, base_url)
             params = {
                 "client_id": client_id,
                 "redirect_uri": redirect_uri,
