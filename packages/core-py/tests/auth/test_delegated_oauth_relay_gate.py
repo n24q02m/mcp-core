@@ -4,7 +4,7 @@ Mirrors the gate semantics PR #158 added to ``create_local_oauth_app``: when
 ``MCP_RELAY_PASSWORD`` is set, ``/authorize`` is fronted by a cookie-session
 middleware that redirects unauthenticated requests to ``/login``. ``/token``,
 ``/register``, ``/setup-status``, ``/callback``, ``/.well-known/*`` stay
-ungated by design — they are machine endpoints or mid-OAuth callbacks.
+ungated by design -- they are machine endpoints or mid-OAuth callbacks.
 
 Tests use Starlette's ``TestClient`` and ``follow_redirects=False`` so we can
 observe the 302 the gate emits without losing the Location header.
@@ -161,7 +161,7 @@ def test_machine_endpoints_not_gated(monkeypatch: pytest.MonkeyPatch) -> None:
     """/token, /register, /setup-status, /.well-known/* must stay ungated.
 
     These are machine endpoints (DCR / token exchange / metadata polling) and
-    /callback is hit by the upstream provider mid-OAuth — gating any of them
+    /callback is hit by the upstream provider mid-OAuth -- gating any of them
     would break the protocol.
     """
     app = _make_app(monkeypatch, "secret123")

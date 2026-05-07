@@ -47,7 +47,7 @@ class TestGeneratePassphrase:
 
     def test_respects_custom_word_count(self):
         passphrase = generate_passphrase(6)
-        # Verify by matching against wordlist — account for hyphenated words
+        # Verify by matching against wordlist -- account for hyphenated words
         found = [w for w in WORDLIST if w in passphrase]
         assert len(found) >= 6
 

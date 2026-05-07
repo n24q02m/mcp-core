@@ -181,7 +181,7 @@ async def poll_for_result(
 
                 plaintext = decrypt(aes_key, ciphertext, iv, tag)
 
-                # Don't delete session — keep alive for bidirectional messaging.
+                # Don't delete session -- keep alive for bidirectional messaging.
                 # Session auto-expires via TTL (10 min).
 
                 return json.loads(plaintext)
@@ -290,7 +290,7 @@ async def notify_complete(
     cover a few poll cycles. If the process exits before the scheduled delete
     fires, the relay server's 10-minute TTL reclaims the session.
 
-    Errors from ``send_message`` are logged to stderr and swallowed — this
+    Errors from ``send_message`` are logged to stderr and swallowed -- this
     helper is best-effort post-setup notification and must not fail the
     caller's primary flow.
     """

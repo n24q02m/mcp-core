@@ -15,7 +15,7 @@ The lock file stores 4 lines of human-readable metadata (padded to 512 bytes)::
 
 On Windows we lock a single sentinel byte at a high offset (past the
 metadata region) so readers on separate handles can still ``read_text``
-the metadata while the lock is held — without that, ``msvcrt.locking`` at
+the metadata while the lock is held -- without that, ``msvcrt.locking`` at
 offset 0 makes the whole file unreadable from other processes.
 
 ``sweep_stale_locks`` removes lock files whose ``spawned_at`` is older than
@@ -85,7 +85,7 @@ def _locks_dir(root: Path | None = None) -> Path:
 
 
 def _lock_dir() -> Path:
-    """No-arg variant of ``_locks_dir`` — easy monkeypatch target for tests."""
+    """No-arg variant of ``_locks_dir`` -- easy monkeypatch target for tests."""
     return _locks_dir(None)
 
 

@@ -1,4 +1,4 @@
-"""Helper to register `config__open_relay` MCP tool — HTTP-only mode.
+"""Helper to register `config__open_relay` MCP tool -- HTTP-only mode.
 
 After the stdio-pure + http-multi-user split, the relay config form is
 served by the HTTP server itself at ``<PUBLIC_URL>/authorize``. The
@@ -20,7 +20,7 @@ from mcp_core.relay.browser import try_open_browser as _try_open_browser
 
 
 def _build_open_relay_handler(server_name: str, public_url: str | None):
-    """Closure factory — separated out for testability."""
+    """Closure factory -- separated out for testability."""
 
     def open_relay() -> dict[str, Any]:
         """Open the relay form for {server_name}.

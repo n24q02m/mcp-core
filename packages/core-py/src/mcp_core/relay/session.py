@@ -1,4 +1,4 @@
-"""Single active form session token state — D11.
+"""Single active form session token state -- D11.
 
 Prevents racing 2+ Claude Code sessions concurrently filling the relay form
 for the same server. Only one bridge holds the active form session at a time;

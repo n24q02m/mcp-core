@@ -44,7 +44,7 @@ def test_mark_setup_complete_sets_flag_without_losing_other_keys(isolated_config
 
 def test_mark_setup_complete_works_when_no_prior_config(isolated_config):
     """First-time setup: no config exists yet. mark_setup_complete should
-    create an entry with just the flag — useful for all-optional schemas."""
+    create an entry with just the flag -- useful for all-optional schemas."""
     mark_setup_complete("demo")
     saved = read_config("demo")
     assert saved is not None
@@ -53,7 +53,7 @@ def test_mark_setup_complete_works_when_no_prior_config(isolated_config):
 
 def test_write_config_does_not_auto_carry_forward_flag(isolated_config):
     """write_config replaces the whole entry. Flag carry-forward is the
-    caller's responsibility — by design."""
+    caller's responsibility -- by design."""
     write_config("demo", {"API_KEY": "k1", SETUP_COMPLETE_KEY: "true"})
     write_config("demo", {"API_KEY": "k2"})
     saved = read_config("demo")

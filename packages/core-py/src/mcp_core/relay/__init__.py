@@ -1,6 +1,6 @@
 """Relay client: passphrase generation, session creation, polling.
 
-Also exposes ``register_relay_form_tool`` — the stdio-mode counterpart to
+Also exposes ``register_relay_form_tool`` -- the stdio-mode counterpart to
 ``register_open_relay_tool`` (HTTP-daemon mode). See ``transient`` module.
 """
 

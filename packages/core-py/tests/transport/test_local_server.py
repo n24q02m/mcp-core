@@ -625,7 +625,7 @@ class TestStartLocalServerBackground:
             assert handle.host == "127.0.0.1"
             assert handle.port > 0
 
-            # /.well-known is public — hit it to prove server is serving.
+            # /.well-known is public -- hit it to prove server is serving.
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
                     f"http://{handle.host}:{handle.port}/.well-known/oauth-authorization-server",

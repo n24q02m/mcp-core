@@ -153,7 +153,7 @@ class TestRenderCredentialForm:
         }
         rendered = render_credential_form(schema, submit_url="https://example.com/submit")
 
-        # User-supplied alert("xss") content must be escaped — the raw script body
+        # User-supplied alert("xss") content must be escaped -- the raw script body
         # injected by the attacker must not appear verbatim inside the server-name element.
         assert 'alert("xss")</script>' not in rendered
         # User-supplied <img> tag (from label) must not appear as a live tag
@@ -197,7 +197,7 @@ class TestRenderCredentialForm:
 
 
 # ---------------------------------------------------------------------------
-# Prefill rendering — driver passes ``?prefill_<KEY>=<VALUE>`` so users see
+# Prefill rendering -- driver passes ``?prefill_<KEY>=<VALUE>`` so users see
 # fields filled and only have to click Connect (then handle OTP/2FA in-form).
 # ---------------------------------------------------------------------------
 

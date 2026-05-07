@@ -28,8 +28,8 @@ def test_gate_skips_when_required_field_present():
 def test_gate_opens_when_peer_shared_keys_do_not_satisfy_schema():
     """Regression for the wet-mcp bug: CRG share-keys writes JINA/GEMINI to
     wet's config.enc, but wet's schema requires GOOGLE_DRIVE_CLIENT_ID. The
-    pre-fix gate returned ``existing_config is None`` → False (since some keys
-    exist) → no auto-open. The new gate checks schema completeness."""
+    pre-fix gate returned ``existing_config is None`` -> False (since some keys
+    exist) -> no auto-open. The new gate checks schema completeness."""
     schema_with_gdrive = {
         "server": "wet-mcp-like",
         "fields": [
@@ -59,7 +59,7 @@ def test_gate_uses_setup_complete_for_all_optional_schema():
 
 def test_gate_falls_back_to_null_check_when_no_schema():
     """Some servers (e.g. godot) have no relay_schema. The gate must still
-    work — fall back to ``existing_config is not None``."""
+    work -- fall back to ``existing_config is not None``."""
 
     # In run_http_server, the actual logic is:
     #   config_complete = (

@@ -1,4 +1,4 @@
-"""mcp-clean-state CLI — D14.
+"""mcp-clean-state CLI -- D14.
 
 Removes MCP server credentials, locks, tools cache, and per-server token caches.
 By default preserves app data (SQLite, diskcache, SearXNG state).
@@ -38,7 +38,7 @@ def _home() -> Path:
 
 
 def _python_config_base() -> Path:
-    """Where Python core-py writes config.enc — platformdirs convention.
+    """Where Python core-py writes config.enc -- platformdirs convention.
 
     Linux: ``~/.config/mcp``. macOS: ``~/Library/Application Support/mcp``.
     Windows: ``%LOCALAPPDATA%\\mcp``.
@@ -47,7 +47,7 @@ def _python_config_base() -> Path:
 
 
 def _ts_config_base() -> Path | None:
-    """Where TS core-ts writes config.enc on Windows — Node electron convention.
+    """Where TS core-ts writes config.enc on Windows -- Node electron convention.
 
     On Windows: ``%APPDATA%\\mcp\\Config``. On POSIX, TS uses the same
     ``~/.config/mcp`` dir as Python so we return None to avoid duplicate
@@ -85,7 +85,7 @@ def _config_paths() -> list[Path]:
         seen.add(key)
         paths.append(p)
 
-    # Python core-py + TS core-ts config.enc — platform-specific.
+    # Python core-py + TS core-ts config.enc -- platform-specific.
     for base in (_python_config_base(), _ts_config_base(), _legacy_posix_base()):
         if base is None:
             continue
@@ -149,7 +149,7 @@ def _enumerate(servers: list[str], keep_data: bool) -> list[Path]:
 
 def _confirm() -> bool:
     if not sys.stdin.isatty():
-        # Non-interactive — auto-yes
+        # Non-interactive -- auto-yes
         return True
     print("Proceed? [y/N] ", end="", flush=True)
     line = sys.stdin.readline().strip().lower()
@@ -157,7 +157,7 @@ def _confirm() -> bool:
 
 
 def _lock_dir() -> Path:
-    """Lock files directory — same legacy location used by lifecycle.lock."""
+    """Lock files directory -- same legacy location used by lifecycle.lock."""
     return _legacy_posix_base() / "locks"
 
 

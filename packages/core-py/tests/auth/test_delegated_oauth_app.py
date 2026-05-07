@@ -147,7 +147,7 @@ def test_redirect_callback_exchanges_code_and_calls_on_token_received(monkeypatc
         assert form["grant_type"] == "authorization_code"
         assert form["code"] == "upstream-auth-code"
         assert form["redirect_uri"] == "http://localhost/callback"
-        # Client credentials default to HTTP Basic (RFC 6749 §2.3.1).
+        # Client credentials default to HTTP Basic (RFC 6749 Section 2.3.1).
         expected_basic = base64.b64encode(b"upstream-client:shh").decode("ascii")
         assert request.headers.get("authorization") == f"Basic {expected_basic}"
         assert "client_id" not in form

@@ -1,4 +1,4 @@
-"""D17 wiring integration tests — helpers wired into production paths.
+"""D17 wiring integration tests -- helpers wired into production paths.
 
 These tests verify the credential-save refresh wiring:
 
@@ -15,7 +15,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_authorize_post_calls_refresh_cache(tmp_path, monkeypatch):
-    """D17.2 — credential-save wrapper calls _refresh_capabilities_cache_after_save.
+    """D17.2 -- credential-save wrapper calls _refresh_capabilities_cache_after_save.
 
     Simulates the path: relay form submitted -> on_credentials_saved wrapper
     (_on_credentials_saved_with_refresh) -> _refresh_capabilities_cache_after_save.
@@ -78,7 +78,7 @@ async def test_authorize_post_calls_refresh_cache(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_authorize_post_calls_refresh_cache_with_async_callback(tmp_path, monkeypatch):
-    """D17.2 — refresh helper called even when on_credentials_saved is async.
+    """D17.2 -- refresh helper called even when on_credentials_saved is async.
 
     Exercises the ``isawaitable`` branch in ``_on_credentials_saved_with_refresh``
     where the original callback returns a coroutine that must be awaited before
@@ -98,7 +98,7 @@ async def test_authorize_post_calls_refresh_cache_with_async_callback(tmp_path, 
 
     original_saved_calls: list[dict] = []
 
-    # async callback — returns a coroutine when called
+    # async callback -- returns a coroutine when called
     async def async_on_credentials_saved(credentials: dict, context: dict) -> dict | None:
         original_saved_calls.append(credentials)
         return None  # success: no error result

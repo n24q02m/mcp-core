@@ -63,7 +63,7 @@ def test_all_optional_schema_without_flag_is_incomplete():
 
 
 def test_all_optional_schema_with_string_false_is_incomplete():
-    """Regression test: any-truthy-string bug — bool('false') is True in Python."""
+    """Regression test: any-truthy-string bug -- bool('false') is True in Python."""
     config = {"_setup_complete": "false"}
     assert is_schema_complete(config, SCHEMA_ALL_OPTIONAL) is False
 

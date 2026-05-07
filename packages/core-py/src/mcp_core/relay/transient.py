@@ -50,7 +50,7 @@ def _generate_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-# Form HTML uses ``textContent`` only — no ``innerHTML`` with untrusted
+# Form HTML uses ``textContent`` only -- no ``innerHTML`` with untrusted
 # content. Two distinct placeholders for two contexts:
 #   * ``__SERVER_NAME_HTML__`` rendered into HTML markup (escaped via
 #     ``html.escape``).

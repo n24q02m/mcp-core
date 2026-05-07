@@ -130,7 +130,7 @@ def schedule_reload_exit() -> None:
     up fresh credentials from disk.
 
     Only relevant for stdio-mode servers whose client supervises restart. HTTP-
-    mode servers update credentials in-process and MUST NOT call this — an exit
+    mode servers update credentials in-process and MUST NOT call this -- an exit
     mid-OAuth-device-code flow kills the user's verification window. Skipped
     under pytest (PYTEST_CURRENT_TEST) and when MCP_NO_RELOAD is set.
     """
@@ -192,7 +192,7 @@ def mark_setup_complete(server_name: str) -> None:
 
     Called by ``local_oauth_app.authorize_post`` after a successful credential
     save. Lets ``runLocalServer`` distinguish "user has submitted the form"
-    from "config.enc has values written by a peer / bootstrap path" — see
+    from "config.enc has values written by a peer / bootstrap path" -- see
     ``mcp_core.auth.credential_form.is_schema_complete`` for the consumer.
 
     Idempotent: calling twice produces the same end state. Creates a new entry

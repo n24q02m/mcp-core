@@ -114,11 +114,11 @@ def try_open_browser(url: str) -> bool:
         import sys
 
         banner = f"""
-\x1b[93m╔{"═" * 78}╗
-║  \x1b[91mACTION REQUIRED: Browser auto-open failed.\x1b[93m {" " * 33}║
-║  \x1b[97mPlease manually open this URL to continue setup:\x1b[93m {" " * 27}║
-║  \x1b[36m{url:{74}s}\x1b[93m  ║
-╚{"═" * 78}╝\x1b[0m
+\x1b[93m+{"-" * 78}+
+|  \x1b[91mACTION REQUIRED: Browser auto-open failed.\x1b[93m {" " * 33}|
+|  \x1b[97mPlease manually open this URL to continue setup:\x1b[93m {" " * 27}|
+|  \x1b[36m{url:{74}s}\x1b[93m  |
++{"-" * 78}+\x1b[0m
 """
         print(banner, file=sys.stderr)
 

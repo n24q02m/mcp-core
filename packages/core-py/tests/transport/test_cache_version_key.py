@@ -47,7 +47,7 @@ def test_persist_atomic_replace_on_existing(tmp_path, monkeypatch):
 
 
 def test_persist_silent_on_oserror(tmp_path, monkeypatch):
-    """D10 root cause for #384 — Windows write may fail; silently skip cache, no exception."""
+    """D10 root cause for #384 -- Windows write may fail; silently skip cache, no exception."""
     monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
 
     def fake_atomic_write(path, content):
