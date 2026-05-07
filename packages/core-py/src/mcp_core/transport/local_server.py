@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 
 # Callback may be sync or async. Async lets callbacks perform I/O without
-# running-loop hacks. See mcp_core.auth.local_oauth_app for details.
+# complex event loop management. See mcp_core.auth.local_oauth_app for details.
 #
 # Credential callback now receives a second arg ``context`` (``SubjectContext``)
 # carrying the per-authorize-request ``sub``. Consumers that want multi-user
