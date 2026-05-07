@@ -57,6 +57,7 @@ from mcp_core.auth.relay_login import (
     require_relay_session,
 )
 from mcp_core.auth.well_known import (
+    derive_base_url,
     authorization_server_metadata,
     protected_resource_metadata,
 )
@@ -252,17 +253,6 @@ def create_delegated_oauth_app(
         for k in expired:
             del store[k]
 
-    def _base_url(request: Request) -> str:
-        """Derive the public base URL. See ``local_oauth_app._base_url`` for
-        the resolution order; this function is the delegated-flow twin and
-        must stay in lock-step so both well-known documents agree on the
-        issuer.
-        """
-        public_url = os.environ.get("PUBLIC_URL")
-        if public_url:
-            return public_url.rstrip("/")
-        return str(request.base_url).rstrip("/")
-
     def mark_setup_complete(key: str | None = None) -> None:
         k = key or server_name
         _setup_status[k] = "complete"
@@ -312,7 +302,7 @@ def create_delegated_oauth_app(
         }
         _prune_expired(pending_sessions, _SESSION_TTL_S)
 
-        base = _base_url(request)
+        base = derive_base_url(request)
         upstream_redirect = f"{base}{upstream.callback_path}"
         qs: dict[str, str] = {
             "client_id": upstream.client_id,
@@ -355,7 +345,7 @@ def create_delegated_oauth_app(
                 status_code=400,
             )
 
-        base = _base_url(request)
+        base = derive_base_url(request)
         form_data: dict[str, str] = {
             "grant_type": "authorization_code",
             "code": code,
@@ -637,10 +627,10 @@ def create_delegated_oauth_app(
         return JSONResponse(_setup_status)
 
     async def well_known_as(request: Request) -> JSONResponse:
-        return JSONResponse(authorization_server_metadata(_base_url(request)))
+        return JSONResponse(authorization_server_metadata(derive_base_url(request)))
 
     async def well_known_pr(request: Request) -> JSONResponse:
-        base = _base_url(request)
+        base = derive_base_url(request)
         return JSONResponse(protected_resource_metadata(resource=base, authorization_servers=[base]))
 
     async def register_handler(request: Request) -> JSONResponse:
@@ -683,7 +673,7 @@ def create_delegated_oauth_app(
         so ``local-browser`` as ``client_id`` works for both redirect and
         device-code flows.
         """
-        base = _base_url(request)
+        base = derive_base_url(request)
         _code_verifier = secrets.token_urlsafe(64)
         _challenge_digest = hashlib.sha256(_code_verifier.encode("ascii")).digest()
         code_challenge = base64.urlsafe_b64encode(_challenge_digest).rstrip(b"=").decode("ascii")

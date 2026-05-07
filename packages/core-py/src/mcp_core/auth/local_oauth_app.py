@@ -44,6 +44,7 @@ from mcp_core.auth.relay_login import (
     require_relay_session,
 )
 from mcp_core.auth.well_known import (
+    derive_base_url,
     authorization_server_metadata,
     protected_resource_metadata,
 )
@@ -199,26 +200,6 @@ def create_local_oauth_app(
         for k in expired:
             del store[k]
 
-    def _base_url(request: Request) -> str:
-        """Derive the public base URL from the request.
-
-        Resolution order:
-        1. ``PUBLIC_URL`` env var -- trusted, explicit. This is the
-           remote-deploy convention (oci-vm-prod) where the container sits
-           behind CF Tunnel -> Caddy (HTTP internal) but is served to clients
-           over HTTPS. Starlette's ``request.base_url`` reflects the scheme
-           the ASGI server saw (HTTP from the proxy), so without this override
-           OAuth 2.1 metadata would leak ``http://`` as the issuer and strict
-           clients reject the discovery document.
-        2. Starlette ``request.base_url`` -- uses ``X-Forwarded-Proto`` /
-           ``X-Forwarded-Host`` when ``ProxyHeadersMiddleware`` is mounted,
-           otherwise the raw socket scheme.
-        """
-        public_url = os.environ.get("PUBLIC_URL")
-        if public_url:
-            return public_url.rstrip("/")
-        return str(request.base_url).rstrip("/")
-
     # ------------------------------------------------------------------
     # Route handlers
     # ------------------------------------------------------------------
@@ -276,7 +257,7 @@ def create_local_oauth_app(
 
         _prune_expired(pending_sessions, _SESSION_TTL_S)
 
-        base = _base_url(request)
+        base = derive_base_url(request)
         submit_url = f"{base}/authorize?nonce={nonce}"
         if custom_credential_form_html is not None:
             html_content = custom_credential_form_html(relay_schema, submit_url, prefill=prefill)
@@ -628,12 +609,12 @@ def create_local_oauth_app(
 
     async def well_known_as(request: Request) -> JSONResponse:
         """GET /.well-known/oauth-authorization-server -- RFC 8414."""
-        base = _base_url(request)
+        base = derive_base_url(request)
         return JSONResponse(authorization_server_metadata(base))
 
     async def well_known_pr(request: Request) -> JSONResponse:
         """GET /.well-known/oauth-protected-resource -- RFC 9728."""
-        base = _base_url(request)
+        base = derive_base_url(request)
         return JSONResponse(
             protected_resource_metadata(
                 resource=base,
@@ -683,7 +664,7 @@ def create_local_oauth_app(
         """
         from starlette.responses import RedirectResponse
 
-        base = _base_url(request)
+        base = derive_base_url(request)
 
         # Generate PKCE pair for this bootstrap session.
         # We reuse the ``pending_sessions`` store keyed by nonce so the
