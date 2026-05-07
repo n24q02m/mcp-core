@@ -1,4 +1,3 @@
-
 /**
  * MCP relay edge auth — password gate for ``/authorize``.
  *
@@ -196,7 +195,7 @@ export async function loginGetHandler(
             </form>
         </div>
     </div>` // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-  res.send(renderFormShell("Relay login", bodyHtml.replace("NEXT_VALUE_PLACEHOLDER", safeNext)))
+  res.send(renderFormShell('Relay login', bodyHtml.replace('NEXT_VALUE_PLACEHOLDER', safeNext)))
 }
 
 export async function loginPostHandler(

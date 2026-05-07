@@ -68,7 +68,7 @@ export type OAuthTokens = Record<string, unknown>
  * token issued to the MCP client. Returning `void` / `undefined` falls
  * back to `'local-user'` (single-user mode).
  */
-export type TokenCallback = (tokens: OAuthTokens) => string | undefined | void | Promise<string | undefined | void>
+export type TokenCallback = (tokens: OAuthTokens) => string | undefined | Promise<string | undefined>
 
 export interface DelegatedOAuthAppOptions {
   serverName: string

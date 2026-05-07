@@ -87,7 +87,7 @@ export class PerPluginStore {
     const iv = blob.subarray(0, 12)
     const tag = blob.subarray(blob.length - 16)
     const data = blob.subarray(12, blob.length - 16)
-    const decipher = createDecipheriv("aes-256-gcm", await this.key(), iv, { authTagLength: 16 })
+    const decipher = createDecipheriv('aes-256-gcm', await this.key(), iv, { authTagLength: 16 })
     decipher.setAuthTag(tag)
     try {
       const plaintext = Buffer.concat([decipher.update(data), decipher.final()])
