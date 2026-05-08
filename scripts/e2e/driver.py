@@ -719,7 +719,7 @@ async def run_multi_session_invariant_config(
     if mode == "http":
         # Multi-session-http invariant per spec C3: ≤ 1 HTTP daemon per plugin.
         # PASS = 0 (no server running, valid state) OR 1 (correctly shared).
-        # FAIL = ≥ 2 (daemon proliferation BUG).
+        # FAIL = ≥ 2 (daemon proliferation invariant violation).
         # User runs server themselves per stdio-pure spec; driver doesn't spawn.
         pids = await _count_http_daemon_pids(plugin)
         if len(pids) <= 1:
