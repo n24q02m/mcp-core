@@ -245,6 +245,9 @@ configs:
     plugin: imagine-mcp
     cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "imagine-mcp==1.4.0b1", "imagine-mcp"]
     env: {MCP_TRANSPORT: stdio}
+    skret_namespace: /imagine-mcp/prod
+    skret_keys: [GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY]
+    skret_optional: [GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY]
     expected_tools_min: 3
 
   - id: telegram-stdio-direct
@@ -253,6 +256,8 @@ configs:
     plugin: better-telegram-mcp
     cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "better-telegram-mcp==4.11.0b2", "better-telegram-mcp"]
     env: {MCP_TRANSPORT: stdio}
+    skret_namespace: /better-telegram-mcp/prod
+    skret_keys: [TELEGRAM_BOT_TOKEN]
     expected_tools_min: 5
 
   # ============================================================
