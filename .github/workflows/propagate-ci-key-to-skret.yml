@@ -1,0 +1,19 @@
+name: Propagate CI_APP_KEY to skret (one-shot)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  propagate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set CI_APP_KEY secret on skret
+        env:
+          GH_TOKEN: ${{ secrets.PROPAGATION_PAT }}
+          CI_APP_KEY_VALUE: ${{ secrets.CI_APP_KEY }}
+        run: |
+          printf '%s' "$CI_APP_KEY_VALUE" | gh secret set CI_APP_KEY -R n24q02m/skret --body-file -
+          echo "CI_APP_KEY pushed to n24q02m/skret"
