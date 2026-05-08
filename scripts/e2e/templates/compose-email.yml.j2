@@ -7,6 +7,11 @@ services:
       HOST: "0.0.0.0"
       PORT: "8080"
       TRANSPORT_MODE: "http"
+      # Force IPv4-first DNS resolution so Outlook device-code fetch
+      # to login.microsoftonline.com works inside Docker networks
+      # without IPv6 routing (encountered 2026-05-08 on Docker Desktop:
+      # AAAA returned, A absent → Node fetch picks IPv6 and fails).
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
       # HTTP is always multi-user (per spec
       # 2026-05-01-stdio-pure-http-multiuser.md §5.2.3) -- PUBLIC_URL +
       # DCR secret are always set; the legacy mode-flavor env was
