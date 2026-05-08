@@ -26,6 +26,9 @@ services:
       # so the same skret value works regardless of which env-var name the
       # runtime reads.
       MCP_DCR_SERVER_SECRET: "{{ mcp_dcr_server_secret }}"
+      # mcp-core 1.14+ requires CREDENTIAL_SECRET for HTTP multi-user
+      # AES-GCM key derivation (per-JWT-sub credential store).
+      CREDENTIAL_SECRET: "e2e-test-credential-secret-32bytes-fixed-for-determinism"
       # Telegram is single-user by design: a Telethon session is bound to
       # one physical phone number. The legacy "multi-user OAuth via remote
       # relay" path (oauth_server.py + mcp_core.relay.client.create_session)
