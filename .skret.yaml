@@ -1,0 +1,8 @@
+version: "1"
+default_env: prod
+project: mcp-core
+environments:
+  prod:
+    provider: aws
+    region: ap-southeast-1
+    path: /mcp-core/prod

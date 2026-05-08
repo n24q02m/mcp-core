@@ -38,7 +38,7 @@
       "pinDigests": true
     },
     {
-      "description": "Pin PSR to v10 — block Renovate downgrades",
+      "description": "Pin PSR to v10 \u2014 block Renovate downgrades",
       "matchPackagePatterns": ["^python-semantic-release/"],
       "matchManagers": ["github-actions"],
       "allowedVersions": ">=10.0.0"
@@ -65,9 +65,18 @@
       "enabled": false
     },
     {
-      "description": "Pin pydantic <2.13 — cohere>=6.1.0 caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+ which breaks downstream wet/mnemo/crg.",
+      "description": "Pin pydantic <2.13 \u2014 cohere>=6.1.0 caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+ which breaks downstream wet/mnemo/crg.",
       "matchPackageNames": ["pydantic"],
       "allowedVersions": "<2.13"
     }
-  ]
+  ],
+  "semanticCommits": "enabled",
+  "commitMessagePrefix": "fix(deps):",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "semanticCommitType": "fix",
+  "semanticCommitScope": "deps",
+  "golang": {
+    "postUpdateOptions": ["gomodTidy"]
+  }
 }
