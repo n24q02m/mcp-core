@@ -359,45 +359,51 @@ export async function runHttpServer(
   return {
     port: actualPort,
     host,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
-        const delegatedShutdown = oauthApp && 'shutdown' in oauthApp ? oauthApp.shutdown() : Promise.resolve()
-        delegatedShutdown
-          .then(async () => {
-            // Drain per-session transports + servers so their open SSE streams
-            // and tool-call timers don't keep the event loop alive after the
-            // HTTP server closes.
-            for (const transport of transports.values()) {
-              try {
-                await transport.close()
-              } catch {
-                /* best-effort cleanup */
-              }
+    close: async () => {
+      if (oauthApp && 'shutdown' in oauthApp) {
+        await oauthApp.shutdown()
+      }
+
+      // Drain per-session transports + servers so their open SSE streams
+      // and tool-call timers don't keep the event loop alive after the
+      // HTTP server closes.
+      for (const transport of transports.values()) {
+        try {
+          await transport.close()
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+      for (const server of servers.values()) {
+        try {
+          await server.close()
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+      transports.clear()
+      servers.clear()
+
+      if (lockRefreshInterval !== null) {
+        clearInterval(lockRefreshInterval)
+      }
+
+      return new Promise<void>((resolve, reject) => {
+        httpServer.close(async (err) => {
+          if (lockFile) {
+            try {
+              await fs.promises.unlink(lockFile)
+            } catch {
+              /* best-effort cleanup */
             }
-            for (const server of servers.values()) {
-              try {
-                await server.close()
-              } catch {
-                /* best-effort cleanup */
-              }
-            }
-            transports.clear()
-            servers.clear()
-          })
-          .then(() => {
-            if (lockRefreshInterval !== null) {
-              clearInterval(lockRefreshInterval)
-            }
-            httpServer.close((err) => {
-              if (lockFile) {
-                try {
-                  fs.unlinkSync(lockFile)
-                } catch {}
-              }
-              err ? reject(err) : resolve()
-            })
-          })
-          .catch(reject)
+          }
+          if (err) {
+            reject(err)
+          } else {
+            resolve()
+          }
+        })
       })
+    }
   }
 }
