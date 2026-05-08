@@ -14,6 +14,9 @@ services:
       # only affects per-isolation tests, not basic protocol smoke.
       PUBLIC_URL: "http://127.0.0.1:{{ host_port }}"
       MCP_DCR_SERVER_SECRET: "{{ mcp_dcr_server_secret }}"
+      # mcp-core 1.14+ requires CREDENTIAL_SECRET for HTTP multi-user
+      # AES-GCM key derivation (per-JWT-sub credential store).
+      CREDENTIAL_SECRET: "e2e-test-credential-secret-32bytes-fixed-for-determinism"
       {% if gemini_api_key is defined and gemini_api_key -%}
       GEMINI_API_KEY: "{{ gemini_api_key }}"
       {%- endif %}
