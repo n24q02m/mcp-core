@@ -243,7 +243,7 @@ configs:
     type: stdio-direct
     repo: imagine-mcp
     plugin: imagine-mcp
-    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "imagine-mcp==1.2.0b2", "imagine-mcp"]
+    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "imagine-mcp==1.4.0b1", "imagine-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 3
 
@@ -251,7 +251,7 @@ configs:
     type: stdio-direct
     repo: better-telegram-mcp
     plugin: better-telegram-mcp
-    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "better-telegram-mcp==4.9.0b4", "better-telegram-mcp"]
+    cmd: ["uvx", "--python", "3.13", "--prerelease=allow", "--from", "better-telegram-mcp==4.11.0b2", "better-telegram-mcp"]
     env: {MCP_TRANSPORT: stdio}
     expected_tools_min: 5
 
