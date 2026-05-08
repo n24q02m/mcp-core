@@ -755,10 +755,27 @@ async def run_stdio_direct_config(config: dict) -> dict:
     from mcp.client.session import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
+    env = {**os.environ, **config.get("env", {})}
+
+    # Inject skret creds into stdio env when matrix specifies a namespace.
+    # imagine-mcp + better-telegram-mcp refuse to start in stdio mode without
+    # provider API keys / bot token (stricter than wet/mnemo/crg which accept
+    # absent keys at tools/list time).
+    skret_ns = config.get("skret_namespace")
+    if skret_ns:
+        keys = list(config.get("skret_keys", []) or [])
+        optional = list(config.get("skret_optional", []) or [])
+        required = [k for k in keys if k not in optional]
+        if required or optional:
+            creds = load_namespace_required(skret_ns, required, optional)
+            for k, v in creds.items():
+                if v is not None:
+                    env[k] = str(v)
+
     server_params = StdioServerParameters(
         command=config["cmd"][0],
         args=list(config["cmd"][1:]),
-        env={**os.environ, **config.get("env", {})},
+        env=env,
     )
 
     results: dict = {"config_id": config["id"], "passed": False, "errors": []}
