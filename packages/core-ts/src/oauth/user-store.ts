@@ -33,7 +33,8 @@ export class SqliteUserStore implements IUserCredentialStore {
 
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
-    this.db.exec(`
+    this.db
+      .prepare(`
       CREATE TABLE IF NOT EXISTS users (
         user_id TEXT PRIMARY KEY,
         encrypted_config BLOB NOT NULL,
@@ -41,6 +42,7 @@ export class SqliteUserStore implements IUserCredentialStore {
         updated_at INTEGER NOT NULL
       )
     `)
+      .run()
   }
 
   private encrypt(plaintext: string): Buffer {
