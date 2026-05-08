@@ -24,6 +24,17 @@
 </details>
 <!-- END: AUTO-GENERATED-CROSS-PROMO -->
 
+## Table of contents
+
+- [Packages](#packages)
+- [What you get](#what-you-get)
+- [Quick start (Python)](#quick-start-python)
+- [Quick start (TypeScript)](#quick-start-typescript)
+- [Documentation](#documentation)
+- [Development](#development)
+- [License](#license)
+
+
 
 Unified MCP Streamable HTTP 2025-11-25 transport, OAuth 2.1 Authorization
 Server, lifecycle management, install automation, and shared embedding
