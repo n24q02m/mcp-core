@@ -103,6 +103,17 @@ await http.connect()
 // Then mount http.handleRequest(req, res) on your http.Server / Express / Hono.
 ```
 
+## Documentation
+
+Full docs at **[mcp.n24q02m.com/servers/mcp-core/](https://mcp.n24q02m.com/servers/mcp-core/)** (Foundation library section in the MCP n24q02m unified docs site):
+
+- [Architecture](https://mcp.n24q02m.com/servers/mcp-core/architecture/) -- transport, OAuth AS, lifecycle, multi-user primitives
+- [Trust model](https://mcp.n24q02m.com/servers/mcp-core/trust-model/) -- threat model + key-handling guarantees
+- [Migration](https://mcp.n24q02m.com/servers/mcp-core/migration/) -- breaking-change history and upgrade paths from `mcp-relay-core`
+- [Shared services](https://mcp.n24q02m.com/servers/mcp-core/shared-services/) -- embedding daemon + ancillary docker-compose stack
+
+Source of truth lives in [`n24q02m/claude-plugins/plugins/mcp-core/`](https://github.com/n24q02m/claude-plugins/tree/main/plugins/mcp-core). Edit there; this repo's `docs/` directory is intentionally minimal post-migration.
+
 ## Development
 
 ```bash
