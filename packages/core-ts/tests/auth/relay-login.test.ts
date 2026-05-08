@@ -158,7 +158,7 @@ describe('relay-login', () => {
     expect(captured).toContain('class="field-group"')
     expect(captured).toContain('class="field-label"')
     expect(captured).toContain('class="field-input"')
-    expect(captured).toContain('class="required-badge"')
+    expect(captured).toContain('class="required-badge" aria-hidden="true"')
     expect(captured).toContain('class="submit-btn"')
     // Behavioural contract preserved.
     expect(captured).toContain('action="/login"')
