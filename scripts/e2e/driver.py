@@ -307,7 +307,16 @@ def run_t2_config(config: dict, deployment: str) -> None:
         compose_file.write_text(compose_yaml, encoding="utf-8")
 
         subprocess.run(
-            ["docker", "compose", "-f", str(compose_file), "up", "-d"],
+            [
+                "docker",
+                "compose",
+                "-f",
+                str(compose_file),
+                "up",
+                "-d",
+                "--pull",
+                "always",
+            ],
             check=True,
         )
         base_url = f"http://127.0.0.1:{port}"
