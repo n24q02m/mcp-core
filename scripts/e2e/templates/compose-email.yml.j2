@@ -1,6 +1,12 @@
 services:
   email-mcp-test:
     image: ghcr.io/n24q02m/better-email-mcp:{{ image_tag | default('beta') }}
+    # Force public DNS so login.microsoftonline.com returns A records.
+    # Default Docker DNS (127.0.0.11) only returned AAAA on Windows
+    # Docker Desktop tested 2026-05-08, breaking IPv4-only egress.
+    dns:
+      - "8.8.8.8"
+      - "1.1.1.1"
     ports:
       - "127.0.0.1:{{ host_port }}:8080"
     environment:
