@@ -150,3 +150,23 @@ class TestValidation:
         installer.install("claude-code")
         tmp_files = list(tmp_path.glob(".claude.json.*.tmp"))
         assert tmp_files == []
+
+
+class TestAtomicWriteError:
+    def test_atomic_write_cleanup_on_error(self, installer: AgentInstaller, tmp_path: Path) -> None:
+        from unittest.mock import patch
+        import os
+
+        found_tmp_files = []
+
+        def side_effect(src, dst):
+            if os.path.exists(src):
+                found_tmp_files.append(src)
+            raise Exception("rename failed")
+
+        with patch("mcp_core.install.agents.os.replace", side_effect=side_effect):
+            with pytest.raises(Exception, match="rename failed"):
+                installer.install("claude-code")
+
+        assert len(found_tmp_files) == 1
+        assert not os.path.exists(found_tmp_files[0])
