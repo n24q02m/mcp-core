@@ -15,5 +15,5 @@ jobs:
           GH_TOKEN: ${{ secrets.PROPAGATION_PAT }}
           CI_APP_KEY_VALUE: ${{ secrets.CI_APP_KEY }}
         run: |
-          printf '%s' "$CI_APP_KEY_VALUE" | gh secret set CI_APP_KEY -R n24q02m/skret --body-file -
+          printf '%s' "$CI_APP_KEY_VALUE" | gh secret set CI_APP_KEY -R n24q02m/skret
           echo "CI_APP_KEY pushed to n24q02m/skret"
