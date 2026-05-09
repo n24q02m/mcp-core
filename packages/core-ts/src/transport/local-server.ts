@@ -330,7 +330,9 @@ export async function runHttpServer(
 
       if (!configComplete) {
         const setupUrl = `http://${host}:${actualPort}/`
-        await tryOpenBrowser(setupUrl)
+        if (process.env.NODE_ENV !== 'test') {
+          await tryOpenBrowser(setupUrl)
+        }
       }
     } catch {
       /* best-effort: never crash startup on browser-open failure */
