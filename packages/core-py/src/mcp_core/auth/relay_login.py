@@ -108,7 +108,7 @@ async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
                 <div class="field-group">
                     <label for="field-password" class="field-label">
                         Relay password
-                        <span class="required-badge">Required</span>
+                        <span class="required-badge" aria-hidden="true">Required</span>
                     </label>
                     <input
                         id="field-password"
