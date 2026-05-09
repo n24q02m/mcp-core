@@ -64,145 +64,16 @@ configs:
     test: "stub mode (no exe required)"
 
   # ============================================================
-  # T2 non-interaction (driver pre-fills relay form, 6 configs)
-  # ============================================================
-
-  # notion-paste-token REMOVED 2026-05-02 per spec 2026-05-01-stdio-pure-http-multiuser.md §5.2.1:
-  # Phase 1.3.A collapsed notion HTTP MCP_MODE flavors (remote-oauth | local-relay) → single
-  # remote-oauth always-multi-user. Local-relay paste-token form no longer exists.
-  # Notion HTTP testing now happens via:
-  #  - notion-stdio (t2-non-interaction): paste integration secret via env (NOTION_TOKEN)
-  #  - notion-oauth (t3-staging): full OAuth delegated flow against
-  #    notion-mcp.n24q02m.com (Notion app dashboard requires production-registered callback)
-
-  - id: email-gmail
-    repo: better-email-mcp
-    tier: t2-non-interaction
-    auth: relay
-    skret_namespace: /better-email-mcp/prod
-    # Email's relay form is JS-rendered (no static <input>) and POSTs a
-    # single ``EMAIL_CREDENTIALS`` field with format
-    # ``email1:pass1,email2:pass2``. skret stores the assembled string +
-    # the legacy GMAIL_EMAIL/GMAIL_APP_PASSWORD pair under the same
-    # namespace so older docs keep working.
-    skret_keys: [EMAIL_CREDENTIALS, MCP_DCR_SERVER_SECRET]
-
-  - id: telegram-bot
-    repo: better-telegram-mcp
-    tier: t2-non-interaction
-    auth: relay
-    skret_namespace: /better-telegram-mcp/prod
-    skret_keys: [TELEGRAM_BOT_TOKEN, MCP_DCR_SERVER_SECRET]
-
-  - id: crg
-    repo: better-code-review-graph
-    tier: t2-non-interaction
-    auth: relay
-    skret_namespace: /better-code-review-graph/prod
-    skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
-    skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
-
-  - id: imagine
-    repo: imagine-mcp
-    tier: t2-non-interaction
-    auth: relay
-    skret_namespace: /imagine-mcp/prod
-    skret_keys: [GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY, MCP_DCR_SERVER_SECRET]
-    skret_optional: [GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY]
-
-  - id: godot-with-exe
-    repo: better-godot-mcp
-    tier: t2-non-interaction
-    auth: none
-    requires_local_resource: "godot binary on PATH or GODOT_PATH env"
-
-  # ============================================================
-  # T2 interaction (driver fills, user clicks at upstream gate, 4 configs)
-  # ============================================================
-
-  - id: email-outlook
-    repo: better-email-mcp
-    tier: t2-interaction
-    auth: relay
-    flow: device-code
-    # ``spawn-setup.ts:182`` routes outlook.com / hotmail.com / live.com
-    # accounts through ``initiateOutlookDeviceCode`` — the server reads
-    # the email from the relay form, identifies the Outlook domain via
-    # ``isOutlookDomain``, and initiates Microsoft Device Code OAuth2.
-    # HTTP mode is always multi-user: refresh token stored at
-    # ``~/.better-email-mcp/tokens/<sub>.json`` (per JWT sub).
-    # OUTLOOK_CLIENT_ID falls back to the bundled public Azure client at
-    # ``oauth2.ts:88`` (d56f8c71-...) so no skret entry is required.
-    skret_namespace: /better-email-mcp/prod
-    skret_keys: [OUTLOOK_EMAIL, MCP_DCR_SERVER_SECRET]
-    user_gate: "Click Microsoft device-code link"
-
-  - id: telegram-user
-    repo: better-telegram-mcp
-    tier: t2-interaction
-    auth: relay
-    flow: browser-form
-    # User mode (MTProto) requires phone -> OTP -> optional 2FA password,
-    # all chained in the same /authorize form via next_step responses
-    # (otp_required / password_required). The driver cannot fill OTP/2FA
-    # server-to-server (they come from the user's phone, not skret), so
-    # it announces the local /authorize URL and waits for the form to
-    # navigate the browser into the local callback listener after the
-    # multi-step exchange completes.
-    skret_namespace: /better-telegram-mcp/prod
-    skret_keys: [TELEGRAM_PHONE, MCP_DCR_SERVER_SECRET]
-    user_gate: "Type OTP + 2FA password in browser"
-
-  # wet-full / mnemo-full: relay form posts API keys (optional) + triggers
-  # GDrive Device Code OAuth. HTTP mode is always multi-user (PUBLIC_URL
-  # set, per-JWT-sub credential storage at
-  # ``~/.<server>-mcp/subs/<sub>/tokens/google_drive.json`` -- wet-mcp
-  # commit 52ec8da, mnemo-mcp commit b0b66e4 closes the cross-user
-  # GDrive token leak gap from spec 2026-04-25 #134/#187).
-  - id: wet-full
-    repo: wet-mcp
-    tier: t2-interaction
-    auth: relay
-    flow: device-code
-    skret_namespace: /wet-mcp/prod
-    skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
-    skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
-    user_gate: "Click GDrive device-code link"
-
-  - id: mnemo-full
-    repo: mnemo-mcp
-    tier: t2-interaction
-    auth: relay
-    flow: device-code
-    skret_namespace: /mnemo-mcp/prod
-    skret_keys: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY, MCP_DCR_SERVER_SECRET]
-    skret_optional: [JINA_AI_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, COHERE_API_KEY]
-    user_gate: "Click GDrive device-code link"
-
-  # ============================================================
-  # T3 staging (notion-oauth — beta deploy -> staging E2E gate, 1 config)
-  # ============================================================
-
-  - id: notion-oauth
-    repo: better-notion-mcp
-    tier: t3-staging
-    auth: oauth
-    flow: oauth-redirect
-    # No local Docker spin-up; driver hits the staging URL directly. The
-    # Notion app dashboard has the staging callback prod-registered:
-    #     redirect_uri = https://notion-mcp-staging.n24q02m.com/auth/callback
-    # Driver flow:
-    #   1. CI/CD just dispatched ``release beta`` -> staging redeployed.
-    #   2. Driver opens upstream Notion ``/oauth/authorize?...&state=<x>``
-    #      -> announces URL via user_gate.
-    #   3. User clicks "Allow" -> Notion redirects to staging callback.
-    #   4. Staging exchanges code -> JWT -> driver retrieves JWT via
-    #      ``acquire_jwt_via_upstream_consent`` against the staging URL.
-    #   5. PASS -> dispatch stable CD; FAIL -> investigate before stable.
-    deployment: [staging]
-    staging_url: https://notion-mcp-staging.n24q02m.com
-    user_gate: "Click 'Allow' on the Notion consent screen"
-
+  # T2 driver matrix DROPPED 2026-05-03 per
+  # ``feedback_drop_t2_for_test_b.md`` + Test B matrix-in-settings
+  # (``~/.claude/skills/mcp-dev/references/test-b-matrix-in-settings.md``).
+  # Removed: email-gmail, telegram-bot, crg, imagine, godot-with-exe
+  # (t2-non-interaction relay), email-outlook, telegram-user, wet-full,
+  # mnemo-full (t2-interaction relay), notion-oauth (t3-staging).
+  # All those configs now exercised through real Claude Code via the
+  # 20-cell matrix-in-settings fixture. Rationale: code-driven test
+  # KHÔNG validate được real CC integration (relay browser flow +
+  # plugin.json env block + OAuth/JWT round-trip + transport switch).
   # ============================================================
   # stdio-direct (Task 6 — drives plugin via Python MCP SDK
   # ``stdio_client`` instead of HTTP. One per default-stdio

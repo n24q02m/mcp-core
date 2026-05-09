@@ -59,16 +59,18 @@ def _tiered(configs: list[dict]) -> list[dict]:
     return [c for c in configs if c.get("type") != "stdio-direct"]
 
 
-def test_matrix_has_32_configs() -> None:
+def test_matrix_has_22_configs() -> None:
     data = _load()
-    # 16 tier-axis pre-2026-05-02
-    #   (5 t0-only + 6 t2-non-interaction + 4 t2-interaction + 1 t3-staging)
-    # + 5 stdio-direct (parallel axis, 2026-04-30)
-    # + 9 stdio configs (8 plugin + 1 negative, 2026-05-02 §5.5.3)
-    # + 2 multi-session invariants (2026-05-02 §5.5.3)
-    # + 1 stdio-pure-strict-no-fallback (2026-05-02 hardening)
-    # = 32.
-    assert len(data["configs"]) == 32
+    # 2026-05-09: 32 -> 22 by dropping T2 driver matrix per
+    # ``feedback_drop_t2_for_test_b.md`` (replaced by Test B
+    # matrix-in-settings fixture). Removed 10 entries:
+    #   - 4 t2-non-interaction relay (email-gmail, telegram-bot, crg, imagine)
+    #   - 1 t2-non-interaction Docker driver (godot-with-exe)
+    #   - 4 t2-interaction (email-outlook, telegram-user, wet-full, mnemo-full)
+    #   - 1 t3-staging (notion-oauth)
+    # Remaining 22 = 5 t0-only + 5 stdio-direct + 8 stdio (env/none) +
+    # 1 negative + 1 strict-no-fallback + 2 multi-session.
+    assert len(data["configs"]) == 22
 
 
 def test_matrix_tier_distribution() -> None:
@@ -78,47 +80,33 @@ def test_matrix_tier_distribution() -> None:
     t2_non = [c for c in tiered if c["tier"] == "t2-non-interaction"]
     t2_int = [c for c in tiered if c["tier"] == "t2-interaction"]
     t3_staging = [c for c in tiered if c["tier"] == "t3-staging"]
-    # 2026-05-02 final: 5 t0-only + (6 relay/none non-int + 9 stdio +
-    # 2 multi-session + 1 strict-no-fallback = 18 t2-non-interaction)
-    # + 4 t2-interaction + 1 t3-staging.
+    # 2026-05-09 distribution after T2 driver matrix drop:
+    # 5 t0-only + 12 t2-non-interaction (8 stdio env + 1 negative +
+    # 1 strict-no-fallback + 2 multi-session) + 0 t2-interaction +
+    # 0 t3-staging.
     assert len(t0_only) == 5
-    assert len(t2_non) == 17
-    assert len(t2_int) == 4
-    assert len(t3_staging) == 1
+    assert len(t2_non) == 12
+    assert len(t2_int) == 0
+    assert len(t3_staging) == 0
 
 
 def test_matrix_auth_modes_in_documented_superset() -> None:
-    """Configs span the documented ``{none, oauth, relay, env}`` superset.
+    """Configs span the documented ``{none, env}`` superset post-2026-05-09.
 
-    ``oauth`` re-enters the matrix on 2026-04-28 with the t3-staging
-    notion-oauth config. ``env`` joins on 2026-05-02 for stdio-pure
-    configs that pull credentials from skret (or run cred-less) and
-    spawn ``uvx <plugin>`` directly. stdio-direct configs are on a
-    parallel axis and have no ``auth`` field (no upstream identity).
+    ``oauth`` and ``relay`` were removed 2026-05-09 alongside the T2
+    driver matrix drop (per ``feedback_drop_t2_for_test_b.md``). Real
+    OAuth and relay flows are now exercised through Test B
+    matrix-in-settings. ``env`` (stdio-pure with skret-injected env
+    vars) and ``none`` (cred-less smoke) remain as the post-drop
+    superset. stdio-direct configs are on a parallel axis and have no
+    ``auth`` field.
     """
     data = _load()
     auths = {c["auth"] for c in _tiered(data["configs"])}
-    assert auths <= {"none", "oauth", "relay", "env"}, (
-        f"unexpected auth modes outside documented superset: {auths}"
+    assert auths <= {"none", "env"}, (
+        f"unexpected auth modes outside post-drop superset: {auths}"
     )
-    assert "oauth" in auths, "notion-oauth t3-staging missing from matrix"
     assert "env" in auths, "stdio-pure env configs missing from matrix"
-
-
-def test_notion_oauth_is_t3_staging() -> None:
-    """notion-oauth is the sole t3-staging tier config and uses staging_url."""
-    data = _load()
-    notion = [c for c in data["configs"] if c["id"] == "notion-oauth"]
-    assert len(notion) == 1, "notion-oauth must be present as the t3-staging gate"
-    cfg = notion[0]
-    assert cfg["tier"] == "t3-staging"
-    assert cfg["auth"] == "oauth"
-    assert cfg.get("deployment") == ["staging"], (
-        "notion-oauth deployment must be exactly [staging]"
-    )
-    assert "staging_url" in cfg and cfg["staging_url"].startswith("https://"), (
-        "notion-oauth must declare https staging_url"
-    )
 
 
 def test_matrix_ids_unique() -> None:
@@ -143,11 +131,6 @@ def test_t2_configs_have_skret_namespace_when_auth_present() -> None:
             continue
         if c["auth"] == "none":
             continue
-        # t3-staging hits a deployed instance; skret values are injected by
-        # the staging deployment's own runtime (not by the local driver),
-        # so the matrix entry has no skret_namespace.
-        if c["tier"] == "t3-staging":
-            continue
         if c["id"] in multi_plugin_ids:
             continue
         assert "skret_namespace" in c, f"{c['id']} missing skret_namespace"
@@ -155,22 +138,22 @@ def test_t2_configs_have_skret_namespace_when_auth_present() -> None:
 
 
 def test_no_deployment_axis_on_t2_configs() -> None:
-    """Per spec ``2026-05-01-stdio-pure-http-multiuser.md`` §5.5.2.
+    """Per spec ``2026-05-01-stdio-pure-http-multiuser.md`` §5.5.2 +
+    ``feedback_drop_t2_for_test_b.md`` (2026-05-09 drop).
 
     HTTP mode is always multi-user (single deployment shape), so the
     legacy ``deployment: [local, remote]`` matrix axis is dropped from
-    every T2 config. ``t3-staging`` keeps ``deployment: [staging]`` as
-    its only allowed value (notion-oauth special flow).
+    every T2 config. ``t3-staging`` (the only tier that ever had
+    ``deployment: [staging]``) was itself dropped 2026-05-09 alongside
+    the T2 driver matrix.
     """
     data = _load()
     for c in _tiered(data["configs"]):
-        if c["tier"] == "t3-staging":
-            continue
         if c["tier"] == "t0-only":
             continue
         assert "deployment" not in c, (
             f"{c['id']} (tier={c['tier']}) must not declare a "
-            "deployment axis after 2026-05-02 spec"
+            "deployment axis after 2026-05-09 drop"
         )
 
 
