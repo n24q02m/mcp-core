@@ -48,11 +48,18 @@ export function __resetRelayLoginState(): void {
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
-  // Hash both strings with SHA-256 before comparing to avoid leaking length
-  // information, as crypto.timingSafeEqual throws on mismatched lengths.
-  const ha = crypto.createHash('sha256').update(a).digest()
-  const hb = crypto.createHash('sha256').update(b).digest()
-  return crypto.timingSafeEqual(ha, hb)
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+
+  // crypto.timingSafeEqual throws if lengths differ. To avoid leaking the length
+  // of the secret via early return timing differences, we always compare buffers
+  // of the secret's length.
+  const isLengthEqual = bufA.length === bufB.length
+  const compareTarget = isLengthEqual ? bufA : bufB
+
+  const isEqual = crypto.timingSafeEqual(bufB, compareTarget)
+
+  return isLengthEqual && isEqual
 }
 
 function bumpFail(ip: string): { blocked: boolean; retryAfter: number } {
