@@ -50,8 +50,8 @@ export function __resetRelayLoginState(): void {
 function timingSafeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a)
   const bb = Buffer.from(b)
-  if (ab.length !== bb.length) return false
-  return crypto.timingSafeEqual(ab, bb)
+  const isLengthEqual = ab.length === bb.length
+  return crypto.timingSafeEqual(ab, isLengthEqual ? bb : ab) && isLengthEqual
 }
 
 function bumpFail(ip: string): { blocked: boolean; retryAfter: number } {

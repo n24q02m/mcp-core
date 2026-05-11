@@ -51,8 +51,8 @@ export function validateSessionToken(token: string): boolean {
   }
   const a = Buffer.from(state.token)
   const b = Buffer.from(token)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
+  const isLengthEqual = a.length === b.length
+  return timingSafeEqual(a, isLengthEqual ? b : a) && isLengthEqual
 }
 
 export function getActiveSession(): ActiveFormSession | null {
