@@ -107,12 +107,11 @@ interface AuthCodeEntry {
 
 function s256Verify(codeVerifier: string, codeChallenge: string): boolean {
   const computed = createHash('sha256').update(codeVerifier, 'ascii').digest('base64url')
-  if (computed.length !== codeChallenge.length) return false
-  try {
-    return timingSafeEqual(Buffer.from(computed, 'ascii'), Buffer.from(codeChallenge, 'ascii'))
-  } catch {
-    return false
-  }
+  const ab = Buffer.from(computed, 'ascii')
+  const bb = Buffer.from(codeChallenge, 'ascii')
+  const isLengthEqual = ab.length === bb.length
+  const compareTo = isLengthEqual ? ab : bb
+  return timingSafeEqual(bb, compareTo) && isLengthEqual
 }
 
 /**
