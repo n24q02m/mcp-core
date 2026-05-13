@@ -35,8 +35,7 @@ export async function getMode(serverName: string): Promise<ServerMode> {
   }
 
   // Has keys other than _mode -> configured
-  const nonModeKeys = Object.keys(config).filter((k) => k !== MODE_KEY)
-  if (nonModeKeys.length > 0) {
+  if (Object.keys(config).some((k) => k !== MODE_KEY)) {
     return 'configured'
   }
 

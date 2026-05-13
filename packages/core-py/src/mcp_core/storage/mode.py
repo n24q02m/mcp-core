@@ -50,8 +50,7 @@ def get_mode(server_name: str) -> ServerMode:
         return "local"
 
     # Has keys other than _mode (or _mode with different value) -> configured
-    non_mode_keys = [k for k in config if k != _MODE_KEY]
-    if non_mode_keys:
+    if any(k != _MODE_KEY for k in config):
         return "configured"
 
     return None
