@@ -328,7 +328,7 @@ export async function runHttpServer(
         ? isSchemaComplete(existingConfig, options.relaySchema)
         : existingConfig !== null
 
-      if (!configComplete) {
+      if (!configComplete && process.env.NODE_ENV !== 'test') {
         const setupUrl = `http://${host}:${actualPort}/`
         await tryOpenBrowser(setupUrl)
       }
