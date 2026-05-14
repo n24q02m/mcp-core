@@ -125,13 +125,17 @@ export class OAuthProvider {
       const digest = createHash('sha256').update(codeVerifier).digest('base64url')
       const expected = Buffer.from(digest)
       const actual = Buffer.from(preAuth.codeChallenge)
-      if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      const isLengthEqual = expected.length === actual.length
+      const compareActual = isLengthEqual ? actual : expected
+      if (!timingSafeEqual(expected, compareActual) || !isLengthEqual) {
         throw new Error('invalid_grant: PKCE verification failed')
       }
     } else if (preAuth.codeChallengeMethod === 'plain') {
       const expected = Buffer.from(codeVerifier)
       const actual = Buffer.from(preAuth.codeChallenge)
-      if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+      const isLengthEqual = expected.length === actual.length
+      const compareActual = isLengthEqual ? actual : expected
+      if (!timingSafeEqual(expected, compareActual) || !isLengthEqual) {
         throw new Error('invalid_grant: PKCE plain verification failed')
       }
     } else {
