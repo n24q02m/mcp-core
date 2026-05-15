@@ -50,8 +50,13 @@ export function __resetRelayLoginState(): void {
 function timingSafeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a)
   const bb = Buffer.from(b)
-  if (ab.length !== bb.length) return false
-  return crypto.timingSafeEqual(ab, bb)
+  const isLengthEqual = ab.length === bb.length
+  // crypto.timingSafeEqual throws if lengths differ.
+  // We compare bb against itself if lengths don't match to avoid the error
+  // while ensuring we don't leak length via early return.
+  const target = isLengthEqual ? ab : bb
+  const isMatch = crypto.timingSafeEqual(target, bb)
+  return isLengthEqual && isMatch
 }
 
 function bumpFail(ip: string): { blocked: boolean; retryAfter: number } {
