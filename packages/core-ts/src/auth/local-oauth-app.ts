@@ -741,9 +741,12 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
    * ``"error:<message>"`` so the frontend poll handler can surface the
    * message and stop spinning. Whitespace is collapsed to keep the value
    * single-line (the frontend inlines it verbatim).
+   *
+   * Performance: We use regex replacement instead of split/filter/join
+   * to avoid intermediate array allocations, reducing latency.
    */
   function markSetupFailed(key = 'gdrive', error = 'unknown error'): void {
-    const collapsed = String(error).split(/\s+/).filter(Boolean).join(' ')
+    const collapsed = String(error).replace(/\s+/g, ' ').trim()
     const message = collapsed.length > 0 ? collapsed : 'unknown error'
     setupStatus[key] = `error:${message}`
   }
