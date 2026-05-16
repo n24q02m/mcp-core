@@ -100,6 +100,24 @@ async def test_correct_password_sets_cookie_and_redirects() -> None:
     assert "mcp_relay_session=" in set_cookie
 
 
+async def test_login_post_invalid_next_open_redirect() -> None:
+    configure_relay_login("secret123")
+    # Absolute URL
+    result = await login_post_handler({"password": "secret123", "next": "https://evil.com"}, ip="4.4.4.4")
+    assert result.status_code == 302
+    assert result.headers.get("location") == "/authorize"
+
+    # Protocol-relative URL
+    result = await login_post_handler({"password": "secret123", "next": "//evil.com"}, ip="4.4.4.4")
+    assert result.status_code == 302
+    assert result.headers.get("location") == "/authorize"
+
+    # Missing slash
+    result = await login_post_handler({"password": "secret123", "next": "authorize"}, ip="4.4.4.4")
+    assert result.status_code == 302
+    assert result.headers.get("location") == "/authorize"
+
+
 async def test_brute_force_6th_attempt_429() -> None:
     configure_relay_login("secret123")
     for _ in range(5):

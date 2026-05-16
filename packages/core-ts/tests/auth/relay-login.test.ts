@@ -137,6 +137,37 @@ describe('relay-login', () => {
     expect(stub.status()).toBe(401)
   })
 
+  it('login POST invalid next param prevents open redirect', async () => {
+    configureRelayLogin('secret123')
+
+    // Absolute URL
+    let req: RelayLoginRequest = {
+      body: { password: 'secret123', next: 'https://evil.com' },
+      ip: '1.2.3.6'
+    }
+    let stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.redirect()).toBe('/authorize')
+
+    // Protocol-relative URL
+    req = {
+      body: { password: 'secret123', next: '//evil.com' },
+      ip: '1.2.3.6'
+    }
+    stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.redirect()).toBe('/authorize')
+
+    // Missing slash
+    req = {
+      body: { password: 'secret123', next: 'authorize' },
+      ip: '1.2.3.6'
+    }
+    stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.redirect()).toBe('/authorize')
+  })
+
   it('login GET reuses shared form shell (visual parity with credential form)', async () => {
     let captured = ''
     const res: Pick<RelayLoginResponse, 'send' | 'set'> = {

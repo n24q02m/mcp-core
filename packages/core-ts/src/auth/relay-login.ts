@@ -211,7 +211,10 @@ export async function loginPostHandler(
     return
   }
   const password = String(req.body?.password ?? '')
-  const next = String(req.body?.next ?? '/authorize')
+  let next = String(req.body?.next ?? '/authorize')
+  if (!next.startsWith('/') || next.startsWith('//')) {
+    next = '/authorize'
+  }
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
     bumpFail(ip)
     res.status(401).send('Invalid password.')
