@@ -126,6 +126,17 @@ describe('relay-login', () => {
     expect(stub.redirect()).toBeNull()
   })
 
+  it('external URL in next falls back to /authorize', async () => {
+    configureRelayLogin('secret123')
+    const req: RelayLoginRequest = {
+      body: { password: 'secret123', next: 'http://malicious.com' },
+      ip: '1.2.3.4'
+    }
+    const stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.redirect()).toBe('/authorize')
+  })
+
   it('wrong password 401', async () => {
     configureRelayLogin('secret123')
     const req: RelayLoginRequest = {

@@ -86,6 +86,13 @@ async def test_login_get_escapes_next_param() -> None:
     assert "&quot;" in body
 
 
+async def test_external_url_in_next_falls_back_to_authorize() -> None:
+    configure_relay_login("secret123")
+    res = await login_post_handler({"password": "secret123", "next": "http://malicious.com"}, "1.2.3.4")
+    assert res.status_code == 302
+    assert res.headers["location"] == "/authorize"
+
+
 async def test_wrong_password_401() -> None:
     configure_relay_login("secret123")
     result = await login_post_handler({"password": "wrong", "next": "/authorize"}, ip="1.1.1.1")
