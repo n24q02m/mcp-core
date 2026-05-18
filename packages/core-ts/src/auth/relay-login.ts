@@ -146,7 +146,10 @@ export async function loginGetHandler(
   req: Pick<RelayLoginRequest, 'query'>,
   res: Pick<RelayLoginResponse, 'send' | 'set'>
 ): Promise<void> {
-  const next = req.query?.next ?? '/authorize'
+  let next = String(req.query?.next ?? '/authorize')
+  if (!next.startsWith('/') || next.startsWith('//')) {
+    next = '/authorize'
+  }
   res.set?.('Content-Type', 'text/html')
   // ``next`` flows from the query string but every interpolation is run
   // through ``escapeHtml`` (defined above) which replaces &, <, >, ", and
@@ -211,7 +214,10 @@ export async function loginPostHandler(
     return
   }
   const password = String(req.body?.password ?? '')
-  const next = String(req.body?.next ?? '/authorize')
+  let next = String(req.body?.next ?? '/authorize')
+  if (!next.startsWith('/') || next.startsWith('//')) {
+    next = '/authorize'
+  }
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
     bumpFail(ip)
     res.status(401).send('Invalid password.')
