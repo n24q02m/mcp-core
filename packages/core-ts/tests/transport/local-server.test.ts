@@ -18,6 +18,7 @@ import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
 vi.mock('../../src/relay/browser.js', () => ({
   tryOpenBrowser: vi.fn()
 }))
+
 import { type HttpServerHandle, runHttpServer } from '../../src/transport/local-server.js'
 
 const SCHEMA: RelayConfigSchema = {
