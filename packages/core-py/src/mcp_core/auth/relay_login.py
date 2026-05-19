@@ -92,7 +92,11 @@ async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
     "Connect" styling. The form keeps a plain HTML POST (no JavaScript) so the
     gate works even with a strict CSP that blocks inline scripts.
     """
-    safe_next = next.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    next_str = str(next)
+    if not next_str.startswith("/") or next_str.startswith("//"):
+        next_str = "/authorize"
+
+    safe_next = next_str.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     body_html = f"""    <div class="container">
         <div class="card">
             <div class="server-header">
@@ -145,6 +149,9 @@ async def login_post_handler(form: dict, ip: str) -> Response:
         )
     password = str(form.get("password", ""))
     next_ = str(form.get("next", "/authorize"))
+    if not next_.startswith("/") or next_.startswith("//"):
+        next_ = "/authorize"
+
     if not _configured_password or not hmac.compare_digest(password.encode(), _configured_password.encode()):
         _bump_fail(ip)
         return Response("Invalid password.", status_code=401)

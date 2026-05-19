@@ -101,6 +101,32 @@ describe('relay-login', () => {
     expect(stub.redirect()).toBe('/login?next=%2Fauthorize%3Fsession%3Dabc')
   })
 
+  it('login POST defaults next param to /authorize on malicious open redirect attempt', async () => {
+    configureRelayLogin('secret123')
+    const req: RelayLoginRequest = {
+      body: { password: 'secret123', next: '//malicious.com/phishing' },
+      ip: '127.0.0.1'
+    }
+    const stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.status()).toBe(0) // The handler doesn't set status explicitly on success, defaults to 0 via test stub
+    expect(stub.redirect()).toBe('/authorize')
+  })
+
+  it('login GET defaults next param to /authorize on malicious open redirect attempt', async () => {
+    let capturedHtml = ''
+    const res: Pick<RelayLoginResponse, 'send' | 'set'> = {
+      send: (body?: unknown) => {
+        capturedHtml = String(body ?? '')
+        return undefined as never
+      },
+      set: () => undefined as never
+    }
+    await loginGetHandler({ query: { next: '//malicious.com' } }, res)
+    expect(capturedHtml).toContain('name="next" value="/authorize"')
+    expect(capturedHtml).not.toContain('//malicious.com')
+  })
+
   it('valid cookie passes middleware', async () => {
     configureRelayLogin('secret123')
     // Pre-seed session via POST.

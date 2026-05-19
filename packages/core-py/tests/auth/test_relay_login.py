@@ -100,6 +100,21 @@ async def test_correct_password_sets_cookie_and_redirects() -> None:
     assert "mcp_relay_session=" in set_cookie
 
 
+async def test_open_redirect_mitigation() -> None:
+    configure_relay_login("secret123")
+
+    # POST malicious redirect
+    result = await login_post_handler({"password": "secret123", "next": "//malicious.com"}, ip="2.2.2.2")
+    assert result.status_code == 302
+    assert result.headers.get("location") == "/authorize"
+
+    # GET malicious redirect
+    response = await login_get_handler(next="//malicious.com")
+    body = response.body.decode()
+    assert 'name="next" value="/authorize"' in body
+    assert "//malicious.com" not in body
+
+
 async def test_brute_force_6th_attempt_429() -> None:
     configure_relay_login("secret123")
     for _ in range(5):
