@@ -465,8 +465,8 @@ function renderField(field: ConfigField, value = ''): string {
 
   const requiredAttr = required ? ' required' : ''
   const requiredBadge = required
-    ? '<span class="required-badge">Required</span>'
-    : '<span class="optional-badge">Optional</span>'
+    ? '<span class="required-badge" aria-hidden="true">Required</span>'
+    : '<span class="optional-badge" aria-hidden="true">Optional</span>'
 
   const valueAttr = value ? ` value="${escapeHtml(value)}"` : ''
 
