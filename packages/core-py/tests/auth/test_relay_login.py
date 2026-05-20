@@ -107,3 +107,12 @@ async def test_brute_force_6th_attempt_429() -> None:
     result = await login_post_handler({"password": "wrong", "next": "/"}, ip="3.3.3.3")
     assert result.status_code == 429
     assert "retry-after" in {k.lower() for k in result.headers.keys()}
+
+
+async def test_prevents_open_redirect() -> None:
+    configure_relay_login("secret123")
+    result = await login_post_handler(
+        {"password": "secret123", "next": "https://evil.com"}, ip="1.2.3.4"
+    )
+    assert result.status_code == 302
+    assert result.headers.get("location") == "/authorize"

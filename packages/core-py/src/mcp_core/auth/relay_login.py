@@ -145,6 +145,8 @@ async def login_post_handler(form: dict, ip: str) -> Response:
         )
     password = str(form.get("password", ""))
     next_ = str(form.get("next", "/authorize"))
+    if not next_.startswith("/") or next_.startswith("//"):
+        next_ = "/authorize"
     if not _configured_password or not hmac.compare_digest(password.encode(), _configured_password.encode()):
         _bump_fail(ip)
         return Response("Invalid password.", status_code=401)

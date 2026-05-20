@@ -183,6 +183,17 @@ describe('relay-login', () => {
     expect(captured).toContain('&quot;')
   })
 
+  it('prevents open redirect on successful login', async () => {
+    configureRelayLogin('secret123')
+    const req: RelayLoginRequest = {
+      body: { password: 'secret123', next: 'https://evil.com' },
+      ip: '1.2.3.4'
+    }
+    const stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.redirect()).toBe('/authorize')
+  })
+
   it('brute force 6th attempt within 15min returns 429', async () => {
     configureRelayLogin('secret123')
     const ip = '9.9.9.9'
