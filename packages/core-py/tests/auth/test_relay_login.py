@@ -67,7 +67,7 @@ async def test_login_get_uses_shared_form_shell() -> None:
     assert 'class="field-group"' in body
     assert 'class="field-label"' in body
     assert 'class="field-input"' in body
-    assert 'class="required-badge"' in body
+    assert 'class="required-badge" aria-hidden="true"' in body
     assert 'class="submit-btn"' in body
     # Behavioural contract preserved (POST endpoint, hidden next, password input).
     assert 'action="/login"' in body
