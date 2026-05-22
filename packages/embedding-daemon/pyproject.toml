@@ -22,9 +22,9 @@ classifiers = [
 ]
 dependencies = [
     "fastapi>=0.136.1",
-    "uvicorn>=0.46.0",
-    "onnxruntime>=1.25.1",
-    "numpy>=2.4.4",
+    "uvicorn>=0.47.0",
+    "onnxruntime>=1.26.0",
+    "numpy>=2.4.6",
     "httpx>=0.28.1",
     # Keep pydantic <2.13 so downstream consumers using cohere>=6.1.0 can resolve
     # (cohere caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+).
@@ -39,7 +39,7 @@ dependencies = [
 # Re-add the dep (and gate `LlamaDiskCache` behind a JSON/msgpack alternative
 # or runtime opt-in) when the GGUF backend lands.
 gguf = []
-cuda = ["onnxruntime-gpu>=1.25.1"]
+cuda = ["onnxruntime-gpu>=1.26.0"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
@@ -54,8 +54,8 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
-    "ruff>=0.15.12",
-    "ty>=0.0.34",
+    "ruff>=0.15.14",
+    "ty>=0.0.38",
 ]
 
 [tool.hatch.build.targets.wheel]
