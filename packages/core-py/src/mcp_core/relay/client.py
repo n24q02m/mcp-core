@@ -6,7 +6,7 @@ import json
 import secrets
 import sys
 from dataclasses import dataclass
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 
 import httpx
 from cryptography.hazmat.primitives.asymmetric.ec import (
@@ -24,6 +24,22 @@ from mcp_core.crypto.ecdh import (
 from mcp_core.crypto.kdf import derive_aes_key
 from mcp_core.relay.wordlist import WORDLIST
 from mcp_core.schema.types import RelayConfigSchema
+
+
+def _safe_urljoin(base_url: str, path: str) -> str:
+    """Safely join a base URL and a path, ensuring valid scheme to prevent SSRF."""
+    if not base_url.startswith(("http://", "https://")):
+        msg = f"Invalid base_url scheme: {base_url}"
+        raise ValueError(msg)
+    # Ensure trailing slash for proper urljoin behavior with paths that don't start with /
+    # But since we use paths starting with / like "/api/sessions", it will replace the path
+    # if we are not careful.
+    # urljoin("http://x.com", "/api/sessions") -> "http://x.com/api/sessions"
+    # urljoin("http://x.com/foo", "/api/sessions") -> "http://x.com/api/sessions"
+    # Usually base_url is the root. We'll strip trailing slash from base and leading from path to be safe.
+    base = base_url if base_url.endswith("/") else f"{base_url}/"
+    p = path.lstrip("/")
+    return urljoin(base, p)
 
 
 def generate_passphrase(word_count: int = 4) -> str:
@@ -111,7 +127,7 @@ async def create_session(
 
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"{relay_base_url}/api/sessions",
+            _safe_urljoin(relay_base_url, "/api/sessions"),
             json=body,
         )
         if response.status_code >= 400:
@@ -119,7 +135,7 @@ async def create_session(
             raise RuntimeError(msg)
 
     pub_key_b64 = export_public_key(public_key)
-    relay_url = f"{relay_base_url}/authorize?s={session_id}#k={pub_key_b64}&p={quote(passphrase)}"
+    relay_url = f"{_safe_urljoin(relay_base_url, '/authorize')}?s={session_id}#k={pub_key_b64}&p={quote(passphrase)}"
 
     return RelaySession(
         session_id=session_id,
@@ -156,7 +172,7 @@ async def poll_for_result(
 
     async with httpx.AsyncClient() as client:
         while time.monotonic() < deadline:
-            response = await client.get(f"{relay_base_url}/api/sessions/{session.session_id}")
+            response = await client.get(_safe_urljoin(relay_base_url, f"/api/sessions/{session.session_id}"))
 
             if response.status_code == 200:
                 body = response.json()
@@ -164,7 +180,7 @@ async def poll_for_result(
                 if body.get("status") == "skipped":
                     # Cleanup session (best effort)
                     try:
-                        await client.delete(f"{relay_base_url}/api/sessions/{session.session_id}")
+                        await client.delete(_safe_urljoin(relay_base_url, f"/api/sessions/{session.session_id}"))
                     except Exception:
                         pass
                     msg = "RELAY_SKIPPED"
@@ -220,7 +236,7 @@ async def send_message(
     """
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"{relay_base_url}/api/sessions/{session_id}/messages",
+            _safe_urljoin(relay_base_url, f"/api/sessions/{session_id}/messages"),
             json=message,
         )
         if response.status_code >= 400:
@@ -257,7 +273,7 @@ async def poll_for_responses(
 
     async with httpx.AsyncClient() as client:
         while time.monotonic() < deadline:
-            response = await client.get(f"{relay_base_url}/api/sessions/{session_id}/responses")
+            response = await client.get(_safe_urljoin(relay_base_url, f"/api/sessions/{session_id}/responses"))
             if response.status_code >= 400:
                 msg = f"Failed to poll responses: {response.status_code}"
                 raise RuntimeError(msg)
@@ -311,7 +327,7 @@ async def notify_complete(
         try:
             await asyncio.sleep(grace_period_s)
             async with httpx.AsyncClient() as client:
-                await client.delete(f"{relay_base_url}/api/sessions/{session_id}")
+                await client.delete(_safe_urljoin(relay_base_url, f"/api/sessions/{session_id}"))
         except Exception:  # noqa: BLE001
             # Best-effort cleanup; the relay server's TTL will reclaim if this
             # fails (e.g. process exits before the sleep resolves).
