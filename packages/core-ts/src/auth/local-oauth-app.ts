@@ -746,7 +746,8 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
    * single-line (the frontend inlines it verbatim).
    */
   function markSetupFailed(key = 'gdrive', error = 'unknown error'): void {
-    const collapsed = String(error).split(/\s+/).filter(Boolean).join(' ')
+    // ⚡ Bolt: Replace multiple array allocations (.split.filter.join) with regex replace for faster whitespace collapsing
+    const collapsed = String(error).replace(/\s+/g, ' ').trim()
     const message = collapsed.length > 0 ? collapsed : 'unknown error'
     setupStatus[key] = `error:${message}`
   }
