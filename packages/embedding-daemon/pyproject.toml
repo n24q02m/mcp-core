@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "fastapi>=0.136.3",
-    "uvicorn>=0.47.0",
+    "uvicorn>=0.48.0",
     "onnxruntime>=1.26.0",
     "numpy>=2.4.6",
     "httpx>=0.28.1",
