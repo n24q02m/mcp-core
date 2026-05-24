@@ -2,6 +2,204 @@
 
 <!-- version list -->
 
+## v1.15.0-beta.1 (2026-05-24)
+
+### Bug Fixes
+
+- Add missing error path test for cache persistence OSError
+  ([#172](https://github.com/n24q02m/mcp-core/pull/172),
+  [`37b8016`](https://github.com/n24q02m/mcp-core/commit/37b80167acb43d5b2fc6a99f974a08d3d9221029))
+
+- Bump crg-stdio-direct pin to 3.15.0b1 for v1.6 E2E matrix
+  ([`4692eb6`](https://github.com/n24q02m/mcp-core/commit/4692eb6715ef5539d0fd5a27cb45f96e7e168ce3))
+
+- Bump crg-stdio-direct pin to 3.15.1b2 for current beta cycle
+  ([`5367c87`](https://github.com/n24q02m/mcp-core/commit/5367c87f7c7f4efe42fa2a166e678b3cba2120ac))
+
+- Bump vitest timeout to 60s for slow CI Windows runner
+  ([`ad2ea8b`](https://github.com/n24q02m/mcp-core/commit/ad2ea8b7fff5ce5f33ee99fd9e019f45e9d35625))
+
+- Centralize _base_url derivation in well_known.derive_base_url
+  ([`b8c2606`](https://github.com/n24q02m/mcp-core/commit/b8c2606ea0fa9a131e06f9e305b2317fe49394a3))
+
+- Drop --body-file flag (older gh CLI on runner)
+  ([`7a075d8`](https://github.com/n24q02m/mcp-core/commit/7a075d84f039fbc8672a038c9a6a0667b01f6b8c))
+
+- Harden core-ts crypto + suppress semgrep FPs + bump test timeout
+  ([`c460581`](https://github.com/n24q02m/mcp-core/commit/c460581db73785c409113c108a9e11d510aa4b3e))
+
+- Inject skret env into stdio-direct configs (v2)
+  ([`48d27e4`](https://github.com/n24q02m/mcp-core/commit/48d27e45ce36186b240f22012a18e545a864d3ef))
+
+- Pin e2e matrix stdio-direct to imagine 1.4.0b1 + telegram 4.11.0b2 betas
+  ([`7079702`](https://github.com/n24q02m/mcp-core/commit/7079702358c79f5aba504eaf4753c2ba30535188))
+
+- Reject $, (, ) in try_open_browser URL validation
+  ([`e316983`](https://github.com/n24q02m/mcp-core/commit/e3169831a84575f3c2138cf2cd96f4c7c1e848ac))
+
+- Remove one-shot CI_APP_KEY propagation workflow (job done)
+  ([`8d0f162`](https://github.com/n24q02m/mcp-core/commit/8d0f162bee7487ce2a01fbbdb0279821f96cf362))
+
+- Rephrase BUG label to invariant violation in driver.py comment
+  ([`bc647cf`](https://github.com/n24q02m/mcp-core/commit/bc647cf3cbbe8de4177f07bb83f79f6d64d9f430))
+
+- Rephrase running-loop-hacks comment to clearer wording
+  ([`71bd4b1`](https://github.com/n24q02m/mcp-core/commit/71bd4b168bc8212f8e54c48717477d189b14d3ee))
+
+- Replace filter+map+every with single-pass loop in isSchemaComplete
+  ([`6b57679`](https://github.com/n24q02m/mcp-core/commit/6b576794d45394a3c875cb0636f0b77388076060))
+
+- Replace sync fs.unlinkSync with async fs.promises.unlink on HTTP shutdown
+  ([`a883715`](https://github.com/n24q02m/mcp-core/commit/a8837154ef88d8b6f08ee1dc1c4b70391eaeb667))
+
+- Resolve timing attack vulnerabilities in timingSafeEqual
+  ([#223](https://github.com/n24q02m/mcp-core/pull/223),
+  [`3738a06`](https://github.com/n24q02m/mcp-core/commit/3738a0694bcae6931713111b660411331c1f0f03))
+
+- Resolve tryOpenBrowser timeout in local-server.test.ts
+  ([#223](https://github.com/n24q02m/mcp-core/pull/223),
+  [`3738a06`](https://github.com/n24q02m/mcp-core/commit/3738a0694bcae6931713111b660411331c1f0f03))
+
+- Secure PowerShell browser open via env var instead of command concat
+  ([`b1fdabc`](https://github.com/n24q02m/mcp-core/commit/b1fdabc26e49e548306acad10a650cf33d559009))
+
+- Test agents atomic write error path ([#175](https://github.com/n24q02m/mcp-core/pull/175),
+  [`ce187cf`](https://github.com/n24q02m/mcp-core/commit/ce187cf5f0b6eaa6aac2e4150e01e8371b10505a))
+
+- Use prepared statement instead of db.exec in SqliteUserStore
+  ([`a71e692`](https://github.com/n24q02m/mcp-core/commit/a71e692ad3750c910c1b7c630f1e5bb7fb92f79d))
+
+- **a11y**: Hide redundant Required/Optional badges from screen readers
+  ([#241](https://github.com/n24q02m/mcp-core/pull/241),
+  [`c1dbdd4`](https://github.com/n24q02m/mcp-core/commit/c1dbdd40663c84220e2df37929a857c2fa6b7245))
+
+- **core-ts**: Add missing authTagLength to createCipheriv call
+  ([#250](https://github.com/n24q02m/mcp-core/pull/250),
+  [`5a39fb2`](https://github.com/n24q02m/mcp-core/commit/5a39fb2611c5f71614e375d72115069e788b0733))
+
+- **deps**: Bump idna and urllib3 in the uv group across 3 directories
+  ([#236](https://github.com/n24q02m/mcp-core/pull/236),
+  [`bb9f234`](https://github.com/n24q02m/mcp-core/commit/bb9f2340c27ab305c4fcd9ad174d3cb67456a3e9))
+
+- **deps**: Lock file maintenance ([#248](https://github.com/n24q02m/mcp-core/pull/248),
+  [`cbe278e`](https://github.com/n24q02m/mcp-core/commit/cbe278e4cedb2e3782a801e006af48a779adcd22))
+
+- **deps**: Lock file maintenance ([#201](https://github.com/n24q02m/mcp-core/pull/201),
+  [`9146183`](https://github.com/n24q02m/mcp-core/commit/914618357b129f6e680e98a6af9da36c4dafb329))
+
+- **deps**: Re-run CI for lock file maintenance
+  ([#248](https://github.com/n24q02m/mcp-core/pull/248),
+  [`cbe278e`](https://github.com/n24q02m/mcp-core/commit/cbe278e4cedb2e3782a801e006af48a779adcd22))
+
+- **deps**: Re-run CI for lock file maintenance
+  ([#201](https://github.com/n24q02m/mcp-core/pull/201),
+  [`9146183`](https://github.com/n24q02m/mcp-core/commit/914618357b129f6e680e98a6af9da36c4dafb329))
+
+- **deps**: Refresh lock file maintenance ([#201](https://github.com/n24q02m/mcp-core/pull/201),
+  [`9146183`](https://github.com/n24q02m/mcp-core/commit/914618357b129f6e680e98a6af9da36c4dafb329))
+
+- **deps**: Update actions/create-github-app-token digest to bcd2ba4
+  ([#217](https://github.com/n24q02m/mcp-core/pull/217),
+  [`27ddf2f`](https://github.com/n24q02m/mcp-core/commit/27ddf2f9f1cbb74ec2ebe5aab8172da7d48fb7a7))
+
+- **deps**: Update actions/dependency-review-action action to v5
+  ([#202](https://github.com/n24q02m/mcp-core/pull/202),
+  [`40fbc54`](https://github.com/n24q02m/mcp-core/commit/40fbc5497929f8650c600ee277c7db84b7ac9c5d))
+
+- **deps**: Update codecov/codecov-action digest to e79a696
+  ([#243](https://github.com/n24q02m/mcp-core/pull/243),
+  [`f32b5d8`](https://github.com/n24q02m/mcp-core/commit/f32b5d82ad54012a44251707f6f238019418285e))
+
+- **deps**: Update non-major dependencies ([#247](https://github.com/n24q02m/mcp-core/pull/247),
+  [`c155dc3`](https://github.com/n24q02m/mcp-core/commit/c155dc3302d06a8d91d9e7d9d6b872e24fe8355f))
+
+- **deps**: Update non-major dependencies ([#200](https://github.com/n24q02m/mcp-core/pull/200),
+  [`ff2ba1b`](https://github.com/n24q02m/mcp-core/commit/ff2ba1b3a8aecae130f59aefa41339d8d072f8f9))
+
+- **deps**: Update non-major dependencies ([#167](https://github.com/n24q02m/mcp-core/pull/167),
+  [`3d1e76b`](https://github.com/n24q02m/mcp-core/commit/3d1e76b58042a0f8f7fae6cee0b3d17efb2f695d))
+
+- **deps**: Update oven/bun:1-alpine Docker digest to 5acc90a
+  ([#218](https://github.com/n24q02m/mcp-core/pull/218),
+  [`3078766`](https://github.com/n24q02m/mcp-core/commit/307876683cfba97a1e3f8d7df41ee9e68958993d))
+
+- **deps**: Update semgrep/semgrep Docker digest to 7cad2bc
+  ([#244](https://github.com/n24q02m/mcp-core/pull/244),
+  [`9c2c47c`](https://github.com/n24q02m/mcp-core/commit/9c2c47c8d4ca9bb64631c07eccc43099394fef13))
+
+- **deps**: Update step-security/harden-runner digest to ab7a940
+  ([#245](https://github.com/n24q02m/mcp-core/pull/245),
+  [`52983b4`](https://github.com/n24q02m/mcp-core/commit/52983b414835a7497f55f645d058d8508b40d4d5))
+
+- **e2e**: Add public DNS to email compose + error-type announce
+  ([`5a109f9`](https://github.com/n24q02m/mcp-core/commit/5a109f9060929510fd69cef474171465488ea666))
+
+- **e2e**: Drop T2 driver matrix entries (replaced by Test B matrix-in-settings)
+  ([#205](https://github.com/n24q02m/mcp-core/pull/205),
+  [`e782818`](https://github.com/n24q02m/mcp-core/commit/e78281897b55e5e3aef63d0948813974b71ad23e))
+
+- **e2e**: Force docker pull always + ipv4-first DNS for outlook
+  ([`4a0d32c`](https://github.com/n24q02m/mcp-core/commit/4a0d32cbbe7b6443973268702d61cf72d2dc45ca))
+
+- **e2e**: Inject CREDENTIAL_SECRET env for multi-user mode
+  ([`9875953`](https://github.com/n24q02m/mcp-core/commit/9875953a0ceaab7b1f09a447e07a3f8df47dde1d))
+
+- **e2e**: Inject skret env into stdio-direct configs and tighten browser URL validation
+  ([`de39607`](https://github.com/n24q02m/mcp-core/commit/de3960770e3dfda25a736b81bf2e8eec1e679f5e))
+
+- **security**: Fix timing leak in constant-time comparison
+  ([#223](https://github.com/n24q02m/mcp-core/pull/223),
+  [`3738a06`](https://github.com/n24q02m/mcp-core/commit/3738a0694bcae6931713111b660411331c1f0f03))
+
+- **security**: Use safe urljoin to prevent SSRF in relay client
+  ([#219](https://github.com/n24q02m/mcp-core/pull/219),
+  [`4924ebf`](https://github.com/n24q02m/mcp-core/commit/4924ebfa4cd2da92b333f3e2c18af18e1d157090))
+
+- **security**: Validate next redirect param in relay login
+  ([#242](https://github.com/n24q02m/mcp-core/pull/242),
+  [`cf80c27`](https://github.com/n24q02m/mcp-core/commit/cf80c270989cb97488951320f39a86e4bd9a59fb))
+
+### Chores
+
+- **deps**: Lock file maintenance ([#168](https://github.com/n24q02m/mcp-core/pull/168),
+  [`461fc74`](https://github.com/n24q02m/mcp-core/commit/461fc7411d6222314f33842bf96ece8b7ef907e3))
+
+### Features
+
+- Add comprehensive tests for isOAuthField and isSecretField
+  ([#170](https://github.com/n24q02m/mcp-core/pull/170),
+  [`1a5f480`](https://github.com/n24q02m/mcp-core/commit/1a5f4809ce869765430d59a706cc16b2f52772c4))
+
+- Add Table of contents heading + auto-generated link list (Spec E Wave 2)
+  ([`f3121d2`](https://github.com/n24q02m/mcp-core/commit/f3121d2dc7e8826e6da7a60309be965ff69192aa))
+
+- Add test coverage for registerOpenRelayTool HTTP mode
+  ([#176](https://github.com/n24q02m/mcp-core/pull/176),
+  [`8e11258`](https://github.com/n24q02m/mcp-core/commit/8e11258b41d2322a65cf77468770275c6e46d130))
+
+- Migrate docs/ content to mcp.n24q02m.com unified site (Spec F Phase 4)
+  ([`f96a267`](https://github.com/n24q02m/mcp-core/commit/f96a267c3e95a880e9a0eebe0608ac8ce68f41db))
+
+- One-shot propagate CI_APP_KEY to n24q02m/skret
+  ([`f8723cb`](https://github.com/n24q02m/mcp-core/commit/f8723cbcfa61de6a46d488677770b6e3cc84bc52))
+
+- Replace intermediate string collapse allocations with regex
+  ([#249](https://github.com/n24q02m/mcp-core/pull/249),
+  [`3c1983b`](https://github.com/n24q02m/mcp-core/commit/3c1983bc22d70c5c53e8598d448db773d202f9b4))
+
+- Retrofit Tier 1 governance files via repo-bootstrap apply (Spec E Wave 4)
+  ([`363efbf`](https://github.com/n24q02m/mcp-core/commit/363efbfd62b67afcd8624681c54ad202afc9cce8))
+
+- Sync cross-promo section ([#190](https://github.com/n24q02m/mcp-core/pull/190),
+  [`8d3adb7`](https://github.com/n24q02m/mcp-core/commit/8d3adb75c6d9ac6338b3feed57ded7200ccf1159))
+
+### Testing
+
+- Add coverage for uvicorn import error and backends
+  ([#173](https://github.com/n24q02m/mcp-core/pull/173),
+  [`6932ea2`](https://github.com/n24q02m/mcp-core/commit/6932ea24cf8ba4e9935f3a6b65e6b36ee5abca3e))
+
+
 ## v1.14.0 (2026-05-06)
 
 
