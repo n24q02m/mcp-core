@@ -100,7 +100,7 @@ export class PerPluginStore {
   async save(payload: Record<string, unknown>): Promise<void> {
     await mkdir(dirname(this.credPath), { recursive: true, mode: 0o700 })
     const iv = randomBytes(12)
-    const cipher = createCipheriv('aes-256-gcm', await this.key(), iv)
+    const cipher = createCipheriv('aes-256-gcm', await this.key(), iv, { authTagLength: 16 })
     const plaintext = Buffer.from(JSON.stringify(payload), 'utf-8')
     const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
     const tag = cipher.getAuthTag()
