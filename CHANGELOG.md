@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v1.15.0-beta.2 (2026-05-25)
+
+### Bug Fixes
+
+- **a11y**: Explicitly link labels to inputs in local oauth app
+  ([#253](https://github.com/n24q02m/mcp-core/pull/253),
+  [`252f0db`](https://github.com/n24q02m/mcp-core/commit/252f0db138f0bf1a4d59408bc282e8acc5b2e67b))
+
+- **deps**: Lock file maintenance ([#252](https://github.com/n24q02m/mcp-core/pull/252),
+  [`c7d9e30`](https://github.com/n24q02m/mcp-core/commit/c7d9e30edeca3aa16514aa74504d3b0289000510))
+
+- **deps**: Update uvicorn to >=0.48.0 ([#251](https://github.com/n24q02m/mcp-core/pull/251),
+  [`13b70c3`](https://github.com/n24q02m/mcp-core/commit/13b70c3f21d704ed099006a962c8fb607e6dade8))
+
+### Features
+
+- **transport**: Add authDisabled flag to OAuthMiddleware for external auth boundary
+  ([`d303aa0`](https://github.com/n24q02m/mcp-core/commit/d303aa07166570266a7a01c270e18512d02a3cda))
+
+- **transport**: Plumb authDisabled through runHttpServer for inline auth bypass
+  ([`15163a5`](https://github.com/n24q02m/mcp-core/commit/15163a5d440a1b57daa95ea1cb9dee8b942c7433))
+
+
 ## v1.15.0-beta.1 (2026-05-24)
 
 ### Bug Fixes
