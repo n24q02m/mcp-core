@@ -94,3 +94,49 @@ def test_bearer_scheme_case_insensitive(jwt_issuer: JWTIssuer, client: TestClien
     )
     assert response.status_code == 200
     assert response.json()["user"]["sub"] == "user-456"
+
+
+def _build_bypass_app(jwt_issuer: JWTIssuer) -> Starlette:
+    return Starlette(
+        routes=[Route("/test", _protected_route)],
+        middleware=[
+            Middleware(
+                OAuthMiddleware,
+                jwt_issuer=jwt_issuer,
+                resource_metadata_url=RESOURCE_METADATA_URL,
+                auth_disabled=True,
+            )
+        ],
+    )
+
+
+@pytest.fixture
+def bypass_client(jwt_issuer: JWTIssuer) -> TestClient:
+    return TestClient(_build_bypass_app(jwt_issuer))
+
+
+def test_auth_disabled_allows_missing_token(bypass_client: TestClient) -> None:
+    response = bypass_client.get("/test")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user"] == {"sub": "anonymous", "anonymous": True}
+
+
+def test_auth_disabled_allows_invalid_token(bypass_client: TestClient) -> None:
+    response = bypass_client.get(
+        "/test",
+        headers={"Authorization": "Bearer not-a-valid-jwt"},
+    )
+    assert response.status_code == 200
+    assert response.json()["user"]["sub"] == "anonymous"
+
+
+def test_auth_disabled_does_not_verify_jwt(bypass_client: TestClient) -> None:
+    # An alg=none token would fail real verification; bypass mode must
+    # short-circuit before any JWT decode.
+    response = bypass_client.get(
+        "/test",
+        headers={"Authorization": "Bearer eyJhbGciOiJub25lIn0.e30.invalid"},
+    )
+    assert response.status_code == 200
+    assert response.json()["user"]["anonymous"] is True

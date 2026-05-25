@@ -117,4 +117,46 @@ describe('OAuthMiddleware', () => {
     const ok = await middleware.validate(req, res)
     expect(ok).toBe(true)
   })
+
+  describe('authDisabled option', () => {
+    let bypassMiddleware: OAuthMiddleware
+
+    beforeAll(() => {
+      bypassMiddleware = new OAuthMiddleware({
+        jwtIssuer: issuer,
+        resourceMetadataUrl: 'http://127.0.0.1:9999/.well-known/oauth-protected-resource',
+        authDisabled: true
+      })
+    })
+
+    it('attaches anonymous user when no Authorization header', async () => {
+      const req = makeRequest()
+      const { res, getStatus } = makeResponse()
+      const ok = await bypassMiddleware.validate(req, res)
+      expect(ok).toBe(true)
+      expect(getStatus()).toBe(200) // never wrote a challenge
+      const user = (req as IncomingMessage & { user?: Record<string, unknown> }).user
+      expect(user).toEqual({ sub: 'anonymous', anonymous: true })
+    })
+
+    it('attaches anonymous user even with garbage token', async () => {
+      const req = makeRequest({ authorization: 'Bearer not-a-valid-jwt' })
+      const { res } = makeResponse()
+      const ok = await bypassMiddleware.validate(req, res)
+      expect(ok).toBe(true)
+      const user = (req as IncomingMessage & { user?: Record<string, unknown> }).user
+      expect(user?.sub).toBe('anonymous')
+      expect(user?.anonymous).toBe(true)
+    })
+
+    it('does not call JWT verification when disabled', async () => {
+      // Ensure the bypass path short-circuits before any JWT work — pass a token
+      // that would fail signature verification if the issuer were consulted.
+      const req = makeRequest({ authorization: 'Bearer eyJhbGciOiJub25lIn0.e30.invalid' })
+      const { res, getStatus } = makeResponse()
+      const ok = await bypassMiddleware.validate(req, res)
+      expect(ok).toBe(true)
+      expect(getStatus()).toBe(200)
+    })
+  })
 })

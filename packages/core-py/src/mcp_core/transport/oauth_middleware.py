@@ -40,10 +40,20 @@ class OAuthMiddleware(BaseHTTPMiddleware):
         jwt_issuer: JWTIssuer,
         *,
         resource_metadata_url: str,
+        auth_disabled: bool = False,
     ) -> None:
         super().__init__(app)
         self._jwt_issuer = jwt_issuer
         self._resource_metadata_url = resource_metadata_url
+        self._auth_disabled = auth_disabled
+        if auth_disabled:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "auth_disabled=True -- Bearer token validation skipped. "
+                "Caller must enforce authentication at the network boundary "
+                "(e.g. reverse proxy, API gateway)."
+            )
 
     @property
     def jwt_issuer(self) -> JWTIssuer:
@@ -66,6 +76,10 @@ class OAuthMiddleware(BaseHTTPMiddleware):
         return {"WWW-Authenticate": ", ".join(parts)}
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if self._auth_disabled:
+            request.state.user = {"sub": "anonymous", "anonymous": True}
+            return await call_next(request)
+
         auth_header = request.headers.get("authorization")
         if not auth_header:
             return Response(status_code=401, headers=self._challenge_header())

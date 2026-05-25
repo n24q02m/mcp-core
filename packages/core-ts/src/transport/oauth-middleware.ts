@@ -17,6 +17,14 @@ import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 export interface OAuthMiddlewareOptions {
   jwtIssuer: JWTIssuer
   resourceMetadataUrl: string
+  /**
+   * When `true`, skip Bearer token validation and attach an anonymous user
+   * claim. Intended for deployments behind an external auth boundary
+   * (reverse proxy, API gateway like agentgateway/Zitadel) where the caller
+   * has already verified identity. Logs a warning on construction; the
+   * deployer is responsible for ensuring upstream auth is in place.
+   */
+  authDisabled?: boolean
 }
 
 export interface AuthenticatedRequest extends IncomingMessage {
@@ -50,18 +58,33 @@ function extractBearerToken(authHeader: string | undefined): string | null {
 export class OAuthMiddleware {
   private readonly _issuer: JWTIssuer
   private readonly _resourceMetadataUrl: string
+  private readonly _authDisabled: boolean
 
   constructor(options: OAuthMiddlewareOptions) {
     this._issuer = options.jwtIssuer
     this._resourceMetadataUrl = options.resourceMetadataUrl
+    this._authDisabled = options.authDisabled === true
+    if (this._authDisabled) {
+      console.warn(
+        '[mcp-core OAuthMiddleware] auth_disabled=true — Bearer token validation skipped. ' +
+          'Caller must enforce authentication at the network boundary (e.g. reverse proxy, API gateway).'
+      )
+    }
   }
 
   /**
    * Validate the request. Returns `true` if the request should proceed
    * (and attaches `req.user` on success). Returns `false` if the
    * middleware has already written a 401 response.
+   *
+   * When constructed with `authDisabled: true`, this short-circuits to
+   * `true` and attaches `{ sub: 'anonymous', anonymous: true }` to `req.user`.
    */
   async validate(req: AuthenticatedRequest, res: ServerResponse): Promise<boolean> {
+    if (this._authDisabled) {
+      req.user = { sub: 'anonymous', anonymous: true }
+      return true
+    }
     const token = extractBearerToken(req.headers.authorization)
     if (!token) {
       writeChallenge(res, this._resourceMetadataUrl)
