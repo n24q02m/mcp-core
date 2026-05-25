@@ -1046,26 +1046,26 @@ export function renderField(field: RelayConfigField, currentValue: unknown): str
   if (isSecretField(field)) {
     if (currentValue) {
       return (
-        `<div class="field secret-field"><label>${escapeHtml(label)}</label> ` +
-        `<input type="password" name="${escapeHtml(name)}" value="" ` +
+        `<div class="field secret-field"><label for="field-${escapeHtml(name)}">${escapeHtml(label)}</label> ` +
+        `<input id="field-${escapeHtml(name)}" type="password" name="${escapeHtml(name)}" value="" ` +
         `placeholder="${escapeHtml(SECRET_PLACEHOLDER)}" ` +
         `data-secret-configured="true"> ` +
-        `<label class="replace-toggle"><input type="checkbox" ` +
+        `<label for="replace-${escapeHtml(name)}" class="replace-toggle"><input id="replace-${escapeHtml(name)}" type="checkbox" ` +
         `name="__replace_${escapeHtml(name)}" value="1"> Replace this credential</label>` +
         `</div>`
       )
     }
     return (
-      `<div class="field secret-field"><label>${escapeHtml(label)}</label> ` +
-      `<input type="password" name="${escapeHtml(name)}" value="" ` +
+      `<div class="field secret-field"><label for="field-${escapeHtml(name)}">${escapeHtml(label)}</label> ` +
+      `<input id="field-${escapeHtml(name)}" type="password" name="${escapeHtml(name)}" value="" ` +
       `placeholder="${escapeHtml(label)}"></div>`
     )
   }
 
   const valueAttr = currentValue !== null && currentValue !== undefined ? escapeHtml(String(currentValue)) : ''
   return (
-    `<div class="field"><label>${escapeHtml(label)}</label> ` +
-    `<input type="${escapeHtml(fieldType)}" name="${escapeHtml(name)}" ` +
+    `<div class="field"><label for="field-${escapeHtml(name)}">${escapeHtml(label)}</label> ` +
+    `<input id="field-${escapeHtml(name)}" type="${escapeHtml(fieldType)}" name="${escapeHtml(name)}" ` +
     `value="${valueAttr}"></div>`
   )
 }

@@ -839,24 +839,24 @@ def render_field(field: dict, current_value: Any) -> str:
     if is_secret_field(field):
         if current_value:
             return (
-                f'<div class="field secret-field"><label>{_escape(label)}</label> '
-                f'<input type="password" name="{_escape(name)}" value="" '
+                f'<div class="field secret-field"><label for="field-{_escape(name)}">{_escape(label)}</label> '
+                f'<input id="field-{_escape(name)}" type="password" name="{_escape(name)}" value="" '
                 f'placeholder="{_escape(_SECRET_PLACEHOLDER)}" '
                 f'data-secret-configured="true"> '
-                f'<label class="replace-toggle"><input type="checkbox" '
+                f'<label for="replace-{_escape(name)}" class="replace-toggle"><input id="replace-{_escape(name)}" type="checkbox" '
                 f'name="__replace_{_escape(name)}" value="1"> Replace this credential</label>'
                 f"</div>"
             )
         return (
-            f'<div class="field secret-field"><label>{_escape(label)}</label> '
-            f'<input type="password" name="{_escape(name)}" value="" '
+            f'<div class="field secret-field"><label for="field-{_escape(name)}">{_escape(label)}</label> '
+            f'<input id="field-{_escape(name)}" type="password" name="{_escape(name)}" value="" '
             f'placeholder="{_escape(label)}"></div>'
         )
 
     value_attr = _escape(str(current_value)) if current_value is not None else ""
     return (
-        f'<div class="field"><label>{_escape(label)}</label> '
-        f'<input type="{_escape(field_type)}" name="{_escape(name)}" '
+        f'<div class="field"><label for="field-{_escape(name)}">{_escape(label)}</label> '
+        f'<input id="field-{_escape(name)}" type="{_escape(field_type)}" name="{_escape(name)}" '
         f'value="{value_attr}"></div>'
     )
 
