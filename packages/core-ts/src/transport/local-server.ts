@@ -97,6 +97,20 @@ export interface RunHttpServerOptions {
    * request in AsyncLocalStorage (e.g., for per-user token lookup).
    */
   authScope?: (claims: JWTClaims, next: () => Promise<void>) => Promise<void>
+  /**
+   * When `true`, skip Bearer token validation on the MCP endpoint and treat
+   * the caller as anonymous. Intended for deployments behind an external
+   * auth boundary (reverse proxy, API gateway like agentgateway/Zitadel) that
+   * already enforces authentication. The deployer is responsible for ensuring
+   * the network in front of this server is locked down — anyone who can
+   * reach `/mcp` directly will get tool access.
+   *
+   * Wire via env var: `authDisabled: process.env.MCP_AUTH_DISABLE === '1'`.
+   *
+   * When set, `authScope` (if provided) receives anonymous claims
+   * `{ sub: 'anonymous', anonymous: true }`.
+   */
+  authDisabled?: boolean
 }
 
 export interface HttpServerHandle {
@@ -217,6 +231,19 @@ export async function runHttpServer(
   }
 
   async function mcpHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // Bearer auth bypass for deployments behind an external auth boundary.
+    // Caller (reverse proxy, API gateway) is trusted to enforce auth upstream.
+    if (jwtIssuer && options.authDisabled) {
+      const anonymousClaims = { sub: 'anonymous', anonymous: true } as unknown as JWTClaims
+      if (options.authScope) {
+        await options.authScope(anonymousClaims, async () => {
+          await handleSessionRequest(req, res)
+        })
+        return
+      }
+      await handleSessionRequest(req, res)
+      return
+    }
     // Bearer auth if configured.
     if (jwtIssuer) {
       const authHeader = req.headers.authorization
