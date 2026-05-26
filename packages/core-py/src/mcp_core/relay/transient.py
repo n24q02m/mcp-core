@@ -141,9 +141,9 @@ def _render_form_fields(relay_schema: dict[str, Any] | None) -> tuple[str, str]:
         placeholder = html.escape(str(field.get("placeholder", "")), quote=True)
         required_attr = " required" if field.get("required") else ""
         parts.append(
-            f"<label>{label_text}<br>"
-            f"<input type='{input_type}' name='{name_attr}' "
-            f"placeholder='{placeholder}'{required_attr}></label><br>"
+            f"<label for='field-{name_attr}'>{label_text}</label><br>"
+            f"<input id='field-{name_attr}' type='{input_type}' name='{name_attr}' "
+            f"placeholder='{placeholder}'{required_attr}><br>"
         )
     return "".join(parts), "fields"
 
