@@ -85,12 +85,12 @@ describe('renderCredentialForm', () => {
     expect(html).toContain('textContent')
   })
 
-  it('includes step input accessibility (aria-labelledby)', () => {
+  it('includes step input accessibility (explicit label via for attribute)', () => {
     const html = renderCredentialForm(
       { server: 'test', displayName: 'Test', fields: [] },
       { submitUrl: '/authorize?nonce=abc' }
     )
-    expect(html).toMatch(/setAttribute\s*\(\s*["']aria-labelledby["']/)
+    expect(html).toMatch(/setAttribute\s*\(\s*["']for["']\s*,\s*["']step-input["']\s*\)/)
   })
 
   it('renders optional fields with correct marker', () => {
