@@ -217,6 +217,83 @@ class TestBearerMCPApp:
         assert response.json() == {"ok": True}
 
 
+class TestBearerMCPAppAuthDisabled:
+    """When auth_disabled=True, skip JWT validation and attach anonymous claims."""
+
+    def test_allows_missing_authorization_when_disabled(self, tmp_path: Path) -> None:
+        from mcp_core.oauth.jwt_issuer import JWTIssuer
+        from starlette.responses import JSONResponse
+
+        jwt_issuer = JWTIssuer(server_name="test", keys_dir=tmp_path / "jwt-keys")
+
+        async def dummy_app(scope, receive, send):
+            resp = JSONResponse({"ok": True})
+            await resp(scope, receive, send)
+
+        bearer_app = BearerMCPApp(inner=dummy_app, jwt_issuer=jwt_issuer, auth_disabled=True)
+
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+
+        app = Starlette(routes=[Route("/mcp", endpoint=bearer_app)])
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/mcp")
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+
+    def test_allows_garbage_token_when_disabled(self, tmp_path: Path) -> None:
+        from mcp_core.oauth.jwt_issuer import JWTIssuer
+        from starlette.responses import JSONResponse
+
+        jwt_issuer = JWTIssuer(server_name="test", keys_dir=tmp_path / "jwt-keys")
+
+        async def dummy_app(scope, receive, send):
+            resp = JSONResponse({"ok": True})
+            await resp(scope, receive, send)
+
+        bearer_app = BearerMCPApp(inner=dummy_app, jwt_issuer=jwt_issuer, auth_disabled=True)
+
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+
+        app = Starlette(routes=[Route("/mcp", endpoint=bearer_app)])
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/mcp", headers={"Authorization": "Bearer not-a-jwt"})
+        assert response.status_code == 200
+
+    def test_anonymous_claims_passed_to_auth_scope_when_disabled(self, tmp_path: Path) -> None:
+        from mcp_core.oauth.jwt_issuer import JWTIssuer
+        from starlette.responses import JSONResponse
+
+        jwt_issuer = JWTIssuer(server_name="test", keys_dir=tmp_path / "jwt-keys")
+        captured_claims: list[dict] = []
+
+        async def dummy_app(scope, receive, send):
+            resp = JSONResponse({"ok": True})
+            await resp(scope, receive, send)
+
+        async def scope_capture(claims, next_):
+            captured_claims.append(claims)
+            await next_()
+
+        bearer_app = BearerMCPApp(
+            inner=dummy_app,
+            jwt_issuer=jwt_issuer,
+            auth_scope=scope_capture,
+            auth_disabled=True,
+        )
+
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+
+        app = Starlette(routes=[Route("/mcp", endpoint=bearer_app)])
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/mcp")
+        assert response.status_code == 200
+        assert len(captured_claims) == 1
+        assert captured_claims[0] == {"sub": "anonymous", "anonymous": True}
+
+
 # ---------------------------------------------------------------------------
 # run_http_server (smoke test -- only verifiable parts)
 # ---------------------------------------------------------------------------

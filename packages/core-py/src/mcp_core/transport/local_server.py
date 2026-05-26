@@ -71,13 +71,40 @@ class BearerMCPApp:
     remain publicly accessible.
     """
 
-    def __init__(self, inner: ASGIApp, jwt_issuer: JWTIssuer, auth_scope: AuthScope | None = None) -> None:
+    def __init__(
+        self,
+        inner: ASGIApp,
+        jwt_issuer: JWTIssuer,
+        auth_scope: AuthScope | None = None,
+        *,
+        auth_disabled: bool = False,
+    ) -> None:
         self._inner = inner
         self._jwt_issuer = jwt_issuer
         self._auth_scope = auth_scope
+        self._auth_disabled = auth_disabled
+        if auth_disabled:
+            logger.warning(
+                "BearerMCPApp auth_disabled=True -- Bearer token validation skipped. "
+                "Caller must enforce authentication at the network boundary "
+                "(e.g. reverse proxy, API gateway)."
+            )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
+            await self._inner(scope, receive, send)
+            return
+
+        # Bypass JWT validation when behind external auth boundary (gateway).
+        if self._auth_disabled:
+            anonymous_claims: dict[str, Any] = {"sub": "anonymous", "anonymous": True}
+            if self._auth_scope is not None:
+
+                async def _next() -> None:
+                    await self._inner(scope, receive, send)
+
+                await self._auth_scope(anonymous_claims, _next)
+                return
             await self._inner(scope, receive, send)
             return
 
@@ -135,6 +162,7 @@ def build_local_app(
     custom_credential_form_html: Callable[..., str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
+    auth_disabled: bool = False,
 ) -> tuple[Starlette, JWTIssuer]:
     """Construct a combined Starlette app with OAuth AS + MCP transport.
 
@@ -238,8 +266,13 @@ def build_local_app(
     )
     mcp_asgi_handler = StreamableHTTPASGIApp(session_manager)
 
-    # Wrap with Bearer auth
-    bearer_mcp_app = BearerMCPApp(inner=mcp_asgi_handler, jwt_issuer=jwt_issuer, auth_scope=auth_scope)
+    # Wrap with Bearer auth (bypass if auth_disabled=True).
+    bearer_mcp_app = BearerMCPApp(
+        inner=mcp_asgi_handler,
+        jwt_issuer=jwt_issuer,
+        auth_scope=auth_scope,
+        auth_disabled=auth_disabled,
+    )
 
     # Combine OAuth routes + /mcp route into a single Starlette app
     # Reuse the OAuth app's routes and add our /mcp endpoint
@@ -338,6 +371,7 @@ async def run_http_server(
     custom_credential_form_html: Callable[..., str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
+    auth_disabled: bool = False,
 ) -> None:
     """Start MCP server with local OAuth AS on 127.0.0.1.
 
@@ -453,6 +487,7 @@ async def run_http_server(
         custom_credential_form_html=custom_credential_form_html,
         delegated_oauth=delegated_oauth,
         auth_scope=auth_scope,
+        auth_disabled=auth_disabled,
     )
 
     # Wire setup completion + failure callbacks. ``mark_setup_complete``
