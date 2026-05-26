@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.15.0-beta.3 (2026-05-26)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#254](https://github.com/n24q02m/mcp-core/pull/254),
+  [`e3d3fa5`](https://github.com/n24q02m/mcp-core/commit/e3d3fa5362cb35acdf320b20685b89ab347602bd))
+
+### Features
+
+- Explicitly link label and input elements in transient form
+  ([#255](https://github.com/n24q02m/mcp-core/pull/255),
+  [`4948701`](https://github.com/n24q02m/mcp-core/commit/494870122d6d4ebdfeb1cecd2322b7a5cf442527))
+
+- **transport**: Add auth_disabled to BearerMCPApp + run_http_server (Python parity)
+  ([`ae893e2`](https://github.com/n24q02m/mcp-core/commit/ae893e222cb121e3a670aff15b2e5625bb15965e))
+
+
 ## v1.15.0-beta.2 (2026-05-25)
 
 ### Bug Fixes
