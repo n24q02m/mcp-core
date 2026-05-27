@@ -49,11 +49,11 @@ mcp-clean-state = "mcp_core.scripts.clean_state:main"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
-    "pytest-asyncio>=1.3.0",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.15.14",
-    "ty>=0.0.39",
+    "ty>=0.0.40",
 ]
 
 [tool.hatch.build.targets.wheel]
