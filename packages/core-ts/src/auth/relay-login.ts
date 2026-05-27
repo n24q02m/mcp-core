@@ -148,7 +148,7 @@ export async function loginGetHandler(
   res: Pick<RelayLoginResponse, 'send' | 'set'>
 ): Promise<void> {
   let next = String(req.query?.next ?? '/authorize')
-  if (!next.startsWith('/') || next.startsWith('//')) {
+  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\') || next.startsWith('\\\\')) {
     next = '/authorize'
   }
   res.set?.('Content-Type', 'text/html')
@@ -216,7 +216,7 @@ export async function loginPostHandler(
   }
   const password = String(req.body?.password ?? '')
   let next = String(req.body?.next ?? '/authorize')
-  if (!next.startsWith('/') || next.startsWith('//')) {
+  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\') || next.startsWith('\\\\')) {
     next = '/authorize'
   }
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
