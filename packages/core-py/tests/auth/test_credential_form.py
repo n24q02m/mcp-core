@@ -23,11 +23,11 @@ def test_render_form_error_retry_reenables_controls():
     assert re.search(r"buttonEl\.disabled\s*=\s*false", html)
 
 
-def test_render_form_step_input_has_aria_label():
-    """Step input must be associated with prompt via aria-labelledby."""
+def test_render_form_step_input_has_explicit_label():
+    """Step input must be associated with explicit label via for attribute."""
     schema = {"server": "test", "displayName": "Test", "fields": []}
     html = render_credential_form(schema, submit_url="/authorize?nonce=abc")
-    assert re.search(r'setAttribute\(\s*"aria-labelledby"\s*,\s*"step-prompt"', html)
+    assert re.search(r'setAttribute\(\s*"for"\s*,\s*"step-input"\s*\)', html)
     assert re.search(r'promptEl\.id\s*=\s*"step-prompt"', html)
 
 
