@@ -2,19 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 // Mock child_process and fs/promises before importing the module
 vi.mock('node:child_process', () => ({
-  execFile: vi.fn(
-    (
-      _cmd: string,
-      _args: string[],
-      _options: Record<string, unknown> | ((err: Error | null) => void),
-      cb?: (err: Error | null) => void
-    ) => {
-      const callback = typeof _options === 'function' ? _options : cb
-      if (callback) {
-        callback(new Error('no display'))
-      }
+  execFile: vi.fn((_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
+    const callback = typeof _options === 'function' ? _options : cb
+    if (callback) {
+      callback(new Error('no display'))
     }
-  )
+  })
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -74,17 +67,12 @@ describe('tryOpenBrowser', () => {
       vi.mocked(execFile).mockClear()
       Object.defineProperty(process, 'platform', { value: 'darwin' })
       vi.mocked(execFile).mockImplementation(
-        (
-          _cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             callback(null)
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
@@ -103,17 +91,12 @@ describe('tryOpenBrowser', () => {
 
     it('never throws even when execFile fails', async () => {
       vi.mocked(execFile).mockImplementation(
-        (
-          _cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             callback(new Error('command not found'))
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
@@ -145,17 +128,12 @@ describe('tryOpenBrowser', () => {
     it('returns false when /proc/version is not found', async () => {
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'))
       vi.mocked(execFile).mockImplementation(
-        (
-          _cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             callback(new Error('command not found'))
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
@@ -169,17 +147,12 @@ describe('tryOpenBrowser', () => {
       vi.mocked(execFile).mockClear()
       Object.defineProperty(process, 'platform', { value: 'win32' })
       vi.mocked(execFile).mockImplementation(
-        (
-          _cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             callback(new Error('fail'))
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
@@ -190,17 +163,12 @@ describe('tryOpenBrowser', () => {
     it('uses powershell.exe with EncodedCommand and embedded URL on win32', async () => {
       Object.defineProperty(process, 'platform', { value: 'win32' })
       vi.mocked(execFile).mockImplementation(
-        (
-          _cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             callback(null)
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
@@ -229,12 +197,7 @@ describe('tryOpenBrowser', () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockResolvedValue('linux version microsoft')
       vi.mocked(execFile).mockImplementation(
-        (
-          cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (cmd: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             if (cmd === 'wslview') {
@@ -243,7 +206,7 @@ describe('tryOpenBrowser', () => {
               callback(null)
             }
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
@@ -260,17 +223,12 @@ describe('tryOpenBrowser', () => {
     it('uses open on darwin', async () => {
       Object.defineProperty(process, 'platform', { value: 'darwin' })
       vi.mocked(execFile).mockImplementation(
-        (
-          _cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             callback(null)
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
@@ -284,17 +242,12 @@ describe('tryOpenBrowser', () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'))
       vi.mocked(execFile).mockImplementation(
-        (
-          _cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             callback(null)
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
@@ -308,17 +261,12 @@ describe('tryOpenBrowser', () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockResolvedValue('linux version microsoft')
       vi.mocked(execFile).mockImplementation(
-        (
-          _cmd: string,
-          _args: unknown,
-          _options: Record<string, unknown> | ((err: Error | null) => void),
-          cb?: (err: Error | null) => void
-        ) => {
+        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
           const callback = typeof _options === 'function' ? _options : cb
           if (callback) {
             callback(null)
           }
-          return {} as ReturnType<typeof execFile>
+          return {} as any
         }
       )
 
