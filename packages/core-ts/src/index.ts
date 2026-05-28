@@ -26,6 +26,7 @@ export {
 export * from './crypto/index.js'
 // OAuth 2.1 multi-user infrastructure (HTTP mode)
 export { JWTIssuer } from './oauth/jwt-issuer.js'
+export { verifyPKCE } from './oauth/pkce.js'
 export {
   InMemoryAuthCache,
   type IOAuthSessionCache,

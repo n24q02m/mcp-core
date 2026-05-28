@@ -6,49 +6,17 @@
  * and uses the Relay Server purely as a UI consent transport.
  */
 
-import { createHash, timingSafeEqual } from 'node:crypto'
 import { createSession, pollForResult, type RelaySession } from '../relay/client.js'
 import type { RelayConfigSchema } from '../schema/types.js'
+import { InMemoryAuthCache, type IOAuthSessionCache, type PreAuthSession } from './cache.js'
 import type { JWTIssuer } from './jwt-issuer.js'
+import { verifyPKCE } from './pkce.js'
 
-export interface PreAuthSession {
-  sessionId: string
-  clientId: string
-  redirectUri: string
-  state: string
-  codeChallenge: string
-  codeChallengeMethod: string
-  /** Serialized CryptoKeyPair for later credential retrieval */
-  keyPairJwk: JsonWebKey
-  passphrase: string
-  expiresAt: number
-}
-
-export interface IOAuthSessionCache {
-  save(session: PreAuthSession): void
-  getAndDelete(sessionId: string): PreAuthSession | null
-}
-
-export class InMemoryAuthCache implements IOAuthSessionCache {
-  private cache = new Map<string, PreAuthSession>()
-
-  save(session: PreAuthSession): void {
-    this.cache.set(session.sessionId, session)
-    // Cleanup expired entries
-    const now = Math.floor(Date.now() / 1000)
-    for (const [id, sess] of this.cache) {
-      if (sess.expiresAt < now) this.cache.delete(id)
-    }
-  }
-
-  getAndDelete(sessionId: string): PreAuthSession | null {
-    const sess = this.cache.get(sessionId)
-    if (!sess) return null
-    this.cache.delete(sessionId)
-    if (sess.expiresAt < Math.floor(Date.now() / 1000)) return null
-    return sess
-  }
-}
+export {
+  InMemoryAuthCache,
+  type IOAuthSessionCache,
+  type PreAuthSession
+} from './cache.js'
 
 export interface OAuthProviderOptions {
   serverName: string
@@ -121,27 +89,27 @@ export class OAuthProvider {
     if (!preAuth) throw new Error('invalid_grant: Expired or invalid code')
 
     // Verify PKCE
-    if (preAuth.codeChallengeMethod === 'S256') {
-      const digest = createHash('sha256').update(codeVerifier).digest('base64url')
-      const expected = Buffer.from(digest)
-      const actual = Buffer.from(preAuth.codeChallenge)
-      const isLengthEqual = expected.length === actual.length
-      const compareActual = isLengthEqual ? actual : expected
-      if (!timingSafeEqual(expected, compareActual) || !isLengthEqual) {
-        throw new Error('invalid_grant: PKCE verification failed')
-      }
-    } else if (preAuth.codeChallengeMethod === 'plain') {
-      const expected = Buffer.from(codeVerifier)
-      const actual = Buffer.from(preAuth.codeChallenge)
-      const isLengthEqual = expected.length === actual.length
-      const compareActual = isLengthEqual ? actual : expected
-      if (!timingSafeEqual(expected, compareActual) || !isLengthEqual) {
-        throw new Error('invalid_grant: PKCE plain verification failed')
-      }
-    } else {
-      throw new Error('unsupported_challenge_method')
-    }
+    verifyPKCE(codeVerifier, preAuth.codeChallenge, preAuth.codeChallengeMethod)
 
+    // Reconstruct relay session
+    const reconstructedSession = await this.reconstructRelaySession(preAuth)
+
+    // Poll for credentials (short timeout — form already submitted)
+    const credentials = await pollForResult(this.relayBaseUrl, reconstructedSession, 1000, 10_000)
+
+    // Extract unique user_id
+    const userId = userIdExtractor(credentials)
+    if (!userId) throw new Error('server_error: Unable to extract user_id from credentials')
+
+    // Issue access token
+    const accessToken = await this.jwtIssuer.issueAccessToken(userId)
+    return { accessToken, credentials }
+  }
+
+  /**
+   * Reconstruct relay session from pre-auth session.
+   */
+  private async reconstructRelaySession(preAuth: PreAuthSession): Promise<RelaySession> {
     // Reconstruct key pair to decrypt relay credentials
     const privateKey = await crypto.subtle.importKey(
       'jwk',
@@ -157,23 +125,12 @@ export class OAuthProvider {
       true,
       []
     )
-    const reconstructedSession: RelaySession = {
+    return {
       sessionId: preAuth.sessionId,
       keyPair: { privateKey, publicKey },
       passphrase: preAuth.passphrase,
       relayUrl: ''
     }
-
-    // Poll for credentials (short timeout — form already submitted)
-    const credentials = await pollForResult(this.relayBaseUrl, reconstructedSession, 1000, 10_000)
-
-    // Extract unique user_id
-    const userId = userIdExtractor(credentials)
-    if (!userId) throw new Error('server_error: Unable to extract user_id from credentials')
-
-    // Issue access token
-    const accessToken = await this.jwtIssuer.issueAccessToken(userId)
-    return { accessToken, credentials }
   }
 
   /**
