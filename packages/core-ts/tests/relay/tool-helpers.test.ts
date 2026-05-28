@@ -59,4 +59,18 @@ describe('registerOpenRelayTool', () => {
     expect(result.url).toBe('https://example.com/authorize')
     expect(result.status).toBe('unconfigured')
   })
+
+  it('registered handler returns stdio_unsupported when publicUrl is null', async () => {
+    const mcp = {
+      tool: vi.fn()
+    }
+    registerOpenRelayTool(mcp as unknown as ToolRegistrar, 'test-server', null)
+
+    const handler = mcp.tool.mock.calls[0][1]
+    const result = await handler()
+
+    expect(result.status).toBe('stdio_unsupported')
+    expect(result.url).toBe('')
+    expect(result.browserOpened).toBe(false)
+  })
 })
