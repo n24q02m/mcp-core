@@ -1,28 +1,33 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   __resetRelayLoginState,
   configureRelayLogin,
-  loginPostHandler,
   loginGetHandler,
+  loginPostHandler,
   type RelayLoginRequest,
   type RelayLoginResponse
 } from '../../src/auth/relay-login.js'
 
-function makeResponseStub() {
+function makeResponseStub(): {
+  res: RelayLoginResponse
+  redirect: () => string | null
+  body: () => string
+} {
   let redirectUrl: string | null = null
-  let capturedBody: string = ''
-  const res: any = {
-    status: () => res,
-    send: (body: any) => {
-      capturedBody = String(body)
+  let capturedBody = ''
+  const res: RelayLoginResponse = {
+    status: (_code: number) => res,
+    send: (body?: unknown) => {
+      capturedBody = String(body ?? '')
       return res
     },
-    cookie: () => res,
-    set: () => res,
+    cookie: (_name: string, _value: string, _options?: unknown) => res,
+    set: (_name: string, _value: string) => res,
     redirect: (url: string) => {
       redirectUrl = url
       return res
-    }
+    },
+    header: (_name: string, _value: string) => res
   }
   return { res, redirect: () => redirectUrl, body: () => capturedBody }
 }
@@ -52,7 +57,7 @@ describe('Open Redirect Targeted Tests', () => {
   describe('loginPostHandler', () => {
     it.each(payloads)('should block next="%s"', async (payload) => {
       const stub = makeResponseStub()
-      const req: any = {
+      const req: RelayLoginRequest = {
         body: { password: 'password123', next: payload },
         ip: '1.2.3.4'
       }
@@ -64,7 +69,7 @@ describe('Open Redirect Targeted Tests', () => {
   describe('loginGetHandler', () => {
     it.each(payloads)('should block next="%s"', async (payload) => {
       const stub = makeResponseStub()
-      const req: any = {
+      const req: RelayLoginRequest = {
         query: { next: payload }
       }
       await loginGetHandler(req, stub.res)
