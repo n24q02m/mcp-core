@@ -143,14 +143,30 @@ function escapeHtml(s: string): string {
   })
 }
 
+/**
+ * Validates the ``next`` parameter to prevent Open Redirect vulnerabilities.
+ *
+ * It must start with a single ``/`` and NOT be followed by another ``/``,
+ * ``\\``, or any whitespace/control character that some browsers might
+ * normalize into a protocol-relative URL.
+ */
+function getSafeNext(input: unknown): string {
+  const next = String(input ?? '/authorize')
+  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\') || next.startsWith('\\\\')) {
+    return '/authorize'
+  }
+  // Block cases like "/ google.com" or "/\tgoogle.com" (ASCII <= 32).
+  if (next.length > 1 && next.charCodeAt(1) <= 32) {
+    return '/authorize'
+  }
+  return next
+}
+
 export async function loginGetHandler(
   req: Pick<RelayLoginRequest, 'query'>,
   res: Pick<RelayLoginResponse, 'send' | 'set'>
 ): Promise<void> {
-  let next = String(req.query?.next ?? '/authorize')
-  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\') || next.startsWith('\\\\')) {
-    next = '/authorize'
-  }
+  const next = getSafeNext(req.query?.next)
   res.set?.('Content-Type', 'text/html')
   // ``next`` flows from the query string but every interpolation is run
   // through ``escapeHtml`` (defined above) which replaces &, <, >, ", and
@@ -215,10 +231,7 @@ export async function loginPostHandler(
     return
   }
   const password = String(req.body?.password ?? '')
-  let next = String(req.body?.next ?? '/authorize')
-  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\') || next.startsWith('\\\\')) {
-    next = '/authorize'
-  }
+  const next = getSafeNext(req.body?.next)
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
     bumpFail(ip)
     res.status(401).send('Invalid password.')

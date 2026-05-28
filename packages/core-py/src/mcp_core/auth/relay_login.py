@@ -20,6 +20,7 @@ import html
 import hmac
 import secrets
 import time
+from typing import Any
 from urllib.parse import quote
 
 from starlette.responses import HTMLResponse, RedirectResponse, Response
@@ -64,6 +65,22 @@ def _clear_fail(ip: str) -> None:
     _fails.pop(ip, None)
 
 
+def _get_safe_next(input_val: Any) -> str:
+    """Validates the ``next`` parameter to prevent Open Redirect vulnerabilities.
+
+    It must start with a single ``/`` and NOT be followed by another ``/``,
+    ``\\``, or any whitespace/control character that some browsers might
+    normalize into a protocol-relative URL.
+    """
+    next_ = str(input_val or "/authorize")
+    if not next_.startswith("/") or next_.startswith("//") or next_.startswith("/\\") or next_.startswith("\\\\"):
+        return "/authorize"
+    # Block cases like "/ google.com" or "/\tgoogle.com" (ASCII <= 32).
+    if len(next_) > 1 and ord(next_[1]) <= 32:
+        return "/authorize"
+    return next_
+
+
 async def require_relay_session(
     cookies: dict[str, str],
     original_url: str,
@@ -93,8 +110,7 @@ async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
     "Connect" styling. The form keeps a plain HTML POST (no JavaScript) so the
     gate works even with a strict CSP that blocks inline scripts.
     """
-    if not next.startswith("/") or next.startswith("//") or next.startswith("/\\") or next.startswith("\\\\"):
-        next = "/authorize"
+    next = _get_safe_next(next)
     safe_next = html.escape(str(next))
     body_html = f"""    <div class="container">
         <div class="card">
@@ -147,9 +163,7 @@ async def login_post_handler(form: dict, ip: str) -> Response:
             headers={"Retry-After": str(retry_after)},
         )
     password = str(form.get("password", ""))
-    next_ = str(form.get("next", "/authorize"))
-    if not next_.startswith("/") or next_.startswith("//") or next_.startswith("/\\") or next_.startswith("\\\\"):
-        next_ = "/authorize"
+    next_ = _get_safe_next(form.get("next"))
     if not _configured_password or not hmac.compare_digest(password.encode(), _configured_password.encode()):
         _bump_fail(ip)
         return Response("Invalid password.", status_code=401)
