@@ -5,6 +5,7 @@ from mcp_core.relay.session import (
     release_session,
     is_session_active,
     validate_session_token,
+    get_active_session,
 )
 
 
@@ -34,6 +35,10 @@ def test_is_session_active_after_claim():
     assert is_session_active() is True
 
 
+def test_is_session_active_no_session():
+    assert is_session_active() is False
+
+
 def test_release_clears_session():
     claim_session(client_id="bridge-1")
     release_session()
@@ -45,6 +50,15 @@ def test_session_expires_after_ttl(monkeypatch):
     monkeypatch.setattr(
         "mcp_core.relay.session._now",
         lambda: info.expires_at + timedelta(seconds=1),
+    )
+    assert is_session_active() is False
+
+
+def test_is_session_active_exactly_at_expiry(monkeypatch):
+    info = claim_session(client_id="bridge-1")
+    monkeypatch.setattr(
+        "mcp_core.relay.session._now",
+        lambda: info.expires_at,
     )
     assert is_session_active() is False
 
@@ -61,3 +75,36 @@ def test_validate_token_mismatch():
 
 def test_validate_token_no_session():
     assert validate_session_token("any") is False
+
+
+def test_validate_token_expired(monkeypatch):
+    info = claim_session(client_id="bridge-1")
+    monkeypatch.setattr(
+        "mcp_core.relay.session._now",
+        lambda: info.expires_at + timedelta(seconds=1),
+    )
+    assert validate_session_token(info.token) is False
+    # Verify state is cleared
+    assert is_session_active() is False
+
+
+def test_get_active_session_none():
+    assert get_active_session() is None
+
+
+def test_get_active_session_active():
+    info = claim_session(client_id="bridge-1")
+    active = get_active_session()
+    assert active == info
+
+
+def test_get_active_session_expired(monkeypatch):
+    info = claim_session(client_id="bridge-1")
+    monkeypatch.setattr(
+        "mcp_core.relay.session._now",
+        lambda: info.expires_at + timedelta(seconds=1),
+    )
+    assert get_active_session() is None
+    # Verify state is cleared
+    monkeypatch.undo()
+    assert is_session_active() is False
