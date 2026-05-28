@@ -61,6 +61,7 @@ class TestDeriveSharedSecret:
 
         assert secret_ab.hex() != secret_ac.hex()
 
+
 class TestExportImportPrivateKey:
     def test_exports_and_imports_private_key_as_base64url(self):
         private_key, _ = generate_key_pair()
