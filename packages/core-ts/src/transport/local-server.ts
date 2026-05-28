@@ -95,7 +95,7 @@ export interface HttpServerHandle {
  * Start a local OAuth + MCP server and return a handle.
  */
 export async function runHttpServer(options: RunHttpServerOptions): Promise<HttpServerHandle> {
-  const { serverFactory, port: wantedPort = 0, host = '127.0.0.1' } = options
+  const { serverFactory, serverName, port: wantedPort = 0, host = '127.0.0.1' } = options
 
   let oauthApp: LocalOAuthAppResult | DelegatedOAuthAppResult | undefined
   let jwtIssuer: JWTIssuer | undefined
@@ -106,19 +106,19 @@ export async function runHttpServer(options: RunHttpServerOptions): Promise<Http
 
   if (options.delegatedOAuth) {
     oauthApp = await createDelegatedOAuthApp({
-      serverName: options.serverName,
+      serverName,
       flow: options.delegatedOAuth.flow,
-      upstream: options.delegatedOAuth.upstream,
+      upstream: options.delegatedOAuth.upstream as any,
       onTokenReceived: options.delegatedOAuth.onTokenReceived
     })
     jwtIssuer = oauthApp.jwtIssuer
   } else if (options.relaySchema) {
     oauthApp = await createLocalOAuthApp({
-      serverName: options.serverName,
+      serverName,
       relaySchema: options.relaySchema,
       onCredentialsSaved: options.onCredentialsSaved,
       onStepSubmitted: options.onStepSubmitted,
-      customCredentialFormHtml: options.customCredentialFormHtml
+      customCredentialFormHtml: options.customCredentialFormHtml as any
     })
     jwtIssuer = oauthApp.jwtIssuer
   }
@@ -203,7 +203,7 @@ export async function runHttpServer(options: RunHttpServerOptions): Promise<Http
     }
 
     if (pathname === '/health') {
-      jsonResponse(res, 200, { status: 'ok', server: options.serverName })
+      jsonResponse(res, 200, { status: 'ok', server: serverName })
       return
     }
 
@@ -235,13 +235,13 @@ export async function runHttpServer(options: RunHttpServerOptions): Promise<Http
   const addr = httpServer.address() as AddressInfo
   const actualPort = addr.port
 
-  const swept = sweepStaleLocks(options.serverName)
+  const swept = sweepStaleLocks(serverName)
   if (swept > 0) {
-    console.error(`[runHttpServer] cleaned ${swept} stale lock(s) for ${options.serverName}`)
+    console.error(`[runHttpServer] cleaned ${swept} stale lock(s) for ${serverName}`)
   }
 
   const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
-  const lock = new LifecycleLock(options.serverName, actualPort, proxyToken)
+  const lock = new LifecycleLock(serverName, actualPort, proxyToken)
   lock.acquire()
   const lockFile = lock.path
 
@@ -252,7 +252,7 @@ export async function runHttpServer(options: RunHttpServerOptions): Promise<Http
 
   if (oauthApp) {
     try {
-      const existingConfig = await readConfig(options.serverName)
+      const existingConfig = await readConfig(serverName)
       const configComplete = options.relaySchema
         ? isSchemaComplete(existingConfig, options.relaySchema)
         : existingConfig !== null
