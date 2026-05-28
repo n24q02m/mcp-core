@@ -393,21 +393,10 @@ export async function runHttpServer(
 
       // Drain per-session transports + servers so their open SSE streams
       // and tool-call timers don't keep the event loop alive after the
-      // HTTP server closes.
-      for (const transport of transports.values()) {
-        try {
-          await transport.close()
-        } catch {
-          /* best-effort cleanup */
-        }
-      }
-      for (const server of servers.values()) {
-        try {
-          await server.close()
-        } catch {
-          /* best-effort cleanup */
-        }
-      }
+      await Promise.all([
+        ...Array.from(transports.values()).map((t) => t.close().catch(() => {})),
+        ...Array.from(servers.values()).map((s) => s.close().catch(() => {}))
+      ])
       transports.clear()
       servers.clear()
 
