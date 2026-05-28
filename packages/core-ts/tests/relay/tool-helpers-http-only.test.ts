@@ -14,9 +14,28 @@ describe('buildOpenRelayHandler -- HTTP mode', () => {
     })
     const result = await handler()
     expect(result.url).toBe('http://127.0.0.1:8080/authorize')
-    expect(result.status).toMatch(/configured|unconfigured/)
+    expect(result.status).toBe('unconfigured')
     expect(result.browserOpened).toBe(true)
     expect(tryOpenBrowser).toHaveBeenCalledWith('http://127.0.0.1:8080/authorize')
+  })
+
+  it('strips trailing slashes from publicUrl', async () => {
+    const handler = buildOpenRelayHandler({
+      serverName: 'test-server',
+      publicUrl: 'http://127.0.0.1:8080/'
+    })
+    const result = await handler()
+    expect(result.url).toBe('http://127.0.0.1:8080/authorize')
+  })
+
+  it('handles browser open failure', async () => {
+    vi.mocked(tryOpenBrowser).mockResolvedValueOnce(false)
+    const handler = buildOpenRelayHandler({
+      serverName: 'test-server',
+      publicUrl: 'http://127.0.0.1:8080'
+    })
+    const result = await handler()
+    expect(result.browserOpened).toBe(false)
   })
 
   it('returns stdio_unsupported in stdio mode (null publicUrl)', async () => {
@@ -48,12 +67,11 @@ describe('registerOpenRelayTool', () => {
   })
 
   it('registered handler works correctly', async () => {
-    const mcp = {
-      tool: vi.fn()
-    }
-    registerOpenRelayTool(mcp as unknown as ToolRegistrar, 'test-server', 'https://example.com')
+    const tool = vi.fn()
+    const mcp: ToolRegistrar = { tool }
+    registerOpenRelayTool(mcp, 'test-server', 'https://example.com')
 
-    const handler = mcp.tool.mock.calls[0][1]
+    const handler = tool.mock.calls[0][1]
     const result = await handler()
 
     expect(result.url).toBe('https://example.com/authorize')
