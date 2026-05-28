@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v1.16.0-beta.1 (2026-05-28)
+
+### Bug Fixes
+
+- **auth**: Prevent open redirect bypass via backslashes in relay login
+  ([#259](https://github.com/n24q02m/mcp-core/pull/259),
+  [`9db71bf`](https://github.com/n24q02m/mcp-core/commit/9db71bfe3da739aff22f0eafda1c3913b9b01db3))
+
+- **core-py**: Relax pydantic to >=2.12.5,<3 for downstream pydantic 2.13 compat
+  ([`49130c8`](https://github.com/n24q02m/mcp-core/commit/49130c8f82c1dddba92d27d594f1e5e77a034eea))
+
+- **deps**: Update non-major dependencies ([#256](https://github.com/n24q02m/mcp-core/pull/256),
+  [`9c3f9b3`](https://github.com/n24q02m/mcp-core/commit/9c3f9b3a0ac0bd5b9bdf7f06876524f0e91ecc2d))
+
+### Features
+
+- Refactor dynamic step prompt to use explicit label linking
+  ([#258](https://github.com/n24q02m/mcp-core/pull/258),
+  [`6556e68`](https://github.com/n24q02m/mcp-core/commit/6556e687a16ddf84f611bc9f24579e24b5f42e2d))
+
+
 ## v1.15.0 (2026-05-26)
 
 
