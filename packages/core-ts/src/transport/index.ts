@@ -1,11 +1,11 @@
 export {
   type HttpServerHandle,
-  type JWTClaims,
   type RunHttpServerOptions,
   runHttpServer
 } from './local-server.js'
 export {
   type AuthenticatedRequest,
+  type JWTClaims,
   OAuthMiddleware,
   type OAuthMiddlewareOptions
 } from './oauth-middleware.js'

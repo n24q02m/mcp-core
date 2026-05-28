@@ -23,7 +23,6 @@ import * as path from 'node:path'
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import type { JWTPayload } from 'jose'
 import type { RelayConfigSchema } from '../auth/credential-form.js'
 import { isSchemaComplete } from '../auth/credential-form.js'
 import {
@@ -42,9 +41,7 @@ import { refreshLockTimestamp, sweepStaleLocks, writeLockFile } from '../lifecyc
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 import { tryOpenBrowser } from '../relay/browser.js'
 import { readConfig } from '../storage/config-file.js'
-
-/** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
-export type JWTClaims = JWTPayload
+import type { JWTClaims } from './oauth-middleware.js'
 
 export interface RunHttpServerOptions {
   /** Identifier used for JWT iss/aud and credential storage. */
@@ -213,7 +210,7 @@ export async function runHttpServer(
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sessionId) => {
-          transports.set(sessionId, transport!)
+          transports.set(sessionId, transport as StreamableHTTPServerTransport)
           servers.set(sessionId, server)
         },
         onsessionclosed: (sessionId) => {

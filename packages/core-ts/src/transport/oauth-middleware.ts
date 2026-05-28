@@ -6,13 +6,17 @@
  * with `WWW-Authenticate: Bearer resource_metadata="..."` per RFC 6750 +
  * RFC 9728 (OAuth 2.1 protected resource metadata discovery).
  *
- * Success attaches the validated claims to `(req as any).user` so
+ * Success attaches the validated claims to `req.user` so
  * downstream handlers can read the subject without re-validating.
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import type { JWTPayload } from 'jose'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
+
+/** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
+export type JWTClaims = JWTPayload
 
 export interface OAuthMiddlewareOptions {
   jwtIssuer: JWTIssuer
@@ -28,7 +32,7 @@ export interface OAuthMiddlewareOptions {
 }
 
 export interface AuthenticatedRequest extends IncomingMessage {
-  user?: Record<string, unknown>
+  user?: JWTClaims
 }
 
 function writeChallenge(res: ServerResponse, resourceMetadataUrl: string, error?: string): void {
