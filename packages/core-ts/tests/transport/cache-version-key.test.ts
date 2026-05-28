@@ -7,14 +7,14 @@
  * failure crashed the bridge).
  */
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as cacheModule from '../../src/transport/cache.js'
-import { cacheFilename, loadToolsCache, persistToolsCache } from '../../src/transport/cache.js'
+import { cacheDir, cacheFilename, loadToolsCache, persistToolsCache } from '../../src/transport/cache.js'
 
 let dir: string
 
@@ -61,5 +61,36 @@ describe('tools cache', () => {
     })
     expect(() => persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [])).not.toThrow()
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+  })
+
+  it('cacheDir returns a string', () => {
+    vi.restoreAllMocks()
+    const path = cacheDir()
+    expect(typeof path).toBe('string')
+    expect(path.length).toBeGreaterThan(0)
+  })
+
+  it('loadToolsCache returns null on missing file', () => {
+    expect(loadToolsCache('missing', 0, '1.0.0', '1.0.0')).toBeNull()
+  })
+
+  it('loadToolsCache returns null on invalid JSON', () => {
+    const path = join(dir, cacheFilename('bad-json', 0, '1.0.0', '1.0.0'))
+    writeFileSync(path, 'not json')
+    expect(loadToolsCache('bad-json', 0, '1.0.0', '1.0.0')).toBeNull()
+  })
+
+  it('loadToolsCache returns null if tools is not an array', () => {
+    const path = join(dir, cacheFilename('not-array', 0, '1.0.0', '1.0.0'))
+    writeFileSync(path, JSON.stringify({ tools: 'not an array', srvVersion: '1.0.0', coreVersion: '1.0.0' }))
+    expect(loadToolsCache('not-array', 0, '1.0.0', '1.0.0')).toBeNull()
+  })
+
+  it('persistToolsCache creates directory if missing', () => {
+    const nestedDir = join(dir, 'nested', 'cache')
+    vi.spyOn(cacheModule, 'cacheDir').mockReturnValue(nestedDir)
+    const tools = [{ name: 'test' }]
+    persistToolsCache('nested-mcp', 123, '1.0.0', '1.0.0', tools)
+    expect(loadToolsCache('nested-mcp', 123, '1.0.0', '1.0.0')).toEqual(tools)
   })
 })
