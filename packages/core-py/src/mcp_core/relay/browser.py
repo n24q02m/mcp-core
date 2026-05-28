@@ -2,7 +2,6 @@
 
 import base64
 import logging
-import os
 import re
 import subprocess
 import time
@@ -28,21 +27,17 @@ def _is_wsl() -> bool:
         return False
 
 
-def _open_in_powershell(url: str, extra_env: dict[str, str] | None = None) -> bool:
+def _open_in_powershell(url: str) -> bool:
     """Open URL using powershell.exe -EncodedCommand."""
     try:
-        command = "Start-Process $env:MCP_BROWSER_URL"
+        base64_url = base64.b64encode(url.encode("utf-8")).decode("ascii")
+        command = f"$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('{base64_url}')); Start-Process $url"
         encoded_command = base64.b64encode(command.encode("utf-16le")).decode("ascii")
-        env = os.environ.copy()
-        if extra_env:
-            env.update(extra_env)
-        env["MCP_BROWSER_URL"] = url
         subprocess.run(
             ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_command],
             check=True,
             capture_output=True,
             timeout=10,
-            env=env,
         )
         return True
     except (FileNotFoundError, subprocess.SubprocessError):
@@ -64,9 +59,7 @@ def _open_in_wsl(url: str) -> bool:
         pass
 
     # Fallback to powershell.exe -EncodedCommand
-    wslenv = os.environ.get("WSLENV", "")
-    new_wslenv = (f"{wslenv}:" if wslenv else "") + "MCP_BROWSER_URL/u"
-    return _open_in_powershell(url, extra_env={"WSLENV": new_wslenv})
+    return _open_in_powershell(url)
 
 
 def try_open_browser(url: str) -> bool:
