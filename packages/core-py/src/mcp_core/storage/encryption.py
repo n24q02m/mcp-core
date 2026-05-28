@@ -9,38 +9,40 @@ import os
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-_SALT = b"mcp-relay-config"
-_EXPORT_SALT = b"mcp-relay-export"
+LEGACY_SALT = b"mcp-relay-config"
+LEGACY_EXPORT_SALT = b"mcp-relay-export"
 PBKDF2_ITERATIONS = 600_000
 LEGACY_PBKDF2_ITERATIONS = 100_000
 
 
-def derive_file_key(machine_id: str, username: str, iterations: int = PBKDF2_ITERATIONS) -> bytes:
+def derive_file_key(machine_id: str, username: str, salt: bytes, iterations: int = PBKDF2_ITERATIONS) -> bytes:
     """Derive AES-256 key from machine ID and username using PBKDF2.
 
     Args:
         machine_id: Machine identifier string.
         username: OS username string.
+        salt: Random salt.
         iterations: Number of PBKDF2 iterations.
 
     Returns:
         32-byte AES key.
     """
     key_material = f"{machine_id}:{username}".encode()
-    return hashlib.pbkdf2_hmac("sha256", key_material, _SALT, iterations, dklen=32)
+    return hashlib.pbkdf2_hmac("sha256", key_material, salt, iterations, dklen=32)
 
 
-def derive_passphrase_key(passphrase: str, iterations: int = PBKDF2_ITERATIONS) -> bytes:
+def derive_passphrase_key(passphrase: str, salt: bytes, iterations: int = PBKDF2_ITERATIONS) -> bytes:
     """Derive AES-256 key from passphrase using PBKDF2 (for export/import).
 
     Args:
         passphrase: User-provided passphrase.
+        salt: Random salt.
         iterations: Number of PBKDF2 iterations.
 
     Returns:
         32-byte AES key.
     """
-    return hashlib.pbkdf2_hmac("sha256", passphrase.encode("utf-8"), _EXPORT_SALT, iterations, dklen=32)
+    return hashlib.pbkdf2_hmac("sha256", passphrase.encode("utf-8"), salt, iterations, dklen=32)
 
 
 def encrypt_data(key: bytes, plaintext: str) -> bytes:

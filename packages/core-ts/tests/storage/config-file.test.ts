@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -12,6 +12,15 @@ import {
   setConfigPath,
   writeConfig
 } from '../../src/storage/config-file.js'
+import {
+  deriveFileKey,
+  derivePassphraseKey,
+  encryptData,
+  LEGACY_EXPORT_SALT,
+  LEGACY_SALT,
+  PBKDF2_ITERATIONS
+} from '../../src/storage/encryption.js'
+import { getMachineId, getUsername } from '../../src/storage/machine-id.js'
 
 let tempDir: string
 
@@ -147,19 +156,22 @@ describe('exportConfig + importConfig', () => {
     expect(await readConfig('local-server')).toEqual({ key: 'local-val' })
     expect(await readConfig('remote-server')).toEqual({ key: 'remote-val' })
   }, 60000)
+
+  it('imports legacy (unsalted) export data', async () => {
+    const store = { version: 1, servers: { legacy: { k: 'v' } } }
+    const key = await derivePassphraseKey('pass', LEGACY_EXPORT_SALT, PBKDF2_ITERATIONS)
+    const encrypted = await encryptData(key, JSON.stringify(store))
+
+    await importConfig('pass', encrypted)
+    expect(await readConfig('legacy')).toEqual({ k: 'v' })
+  }, 60000)
 })
 
 describe('config validation', () => {
   it('throws on invalid version', async () => {
     const invalidStore = { version: 2, servers: {} }
-    // Manually write an invalid file to test loadStore validation
-    const { encryptData } = await import('../../src/storage/encryption.js')
-    const { getMachineId, getUsername } = await import('../../src/storage/machine-id.js')
-    const { deriveFileKey } = await import('../../src/storage/encryption.js')
-    const { writeFile } = await import('node:fs/promises')
-
     const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
-    const key = await deriveFileKey(machineId, username)
+    const key = await deriveFileKey(machineId, username, LEGACY_SALT)
     const encrypted = await encryptData(key, JSON.stringify(invalidStore))
     await writeFile(join(tempDir, 'config.enc'), encrypted)
 
@@ -168,13 +180,8 @@ describe('config validation', () => {
 
   it('throws on invalid servers object', async () => {
     const invalidStore = { version: 1, servers: 'not-an-object' }
-    const { encryptData } = await import('../../src/storage/encryption.js')
-    const { getMachineId, getUsername } = await import('../../src/storage/machine-id.js')
-    const { deriveFileKey } = await import('../../src/storage/encryption.js')
-    const { writeFile } = await import('node:fs/promises')
-
     const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
-    const key = await deriveFileKey(machineId, username)
+    const key = await deriveFileKey(machineId, username, LEGACY_SALT)
     const encrypted = await encryptData(key, JSON.stringify(invalidStore))
     await writeFile(join(tempDir, 'config.enc'), encrypted)
 
@@ -183,16 +190,30 @@ describe('config validation', () => {
 
   it('throws on invalid server config (non-string value)', async () => {
     const invalidStore = { version: 1, servers: { bad: { key: 123 } } }
-    const { encryptData } = await import('../../src/storage/encryption.js')
-    const { getMachineId, getUsername } = await import('../../src/storage/machine-id.js')
-    const { deriveFileKey } = await import('../../src/storage/encryption.js')
-    const { writeFile } = await import('node:fs/promises')
-
     const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
-    const key = await deriveFileKey(machineId, username)
+    const key = await deriveFileKey(machineId, username, LEGACY_SALT)
     const encrypted = await encryptData(key, JSON.stringify(invalidStore))
     await writeFile(join(tempDir, 'config.enc'), encrypted)
 
     await expect(readConfig('any')).rejects.toThrow('Invalid config schema')
+  })
+})
+
+describe('migration', () => {
+  it('migrates from legacy unsalted format', async () => {
+    const store = { version: 1, servers: { old: { data: 'val' } } }
+    const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
+    const key = await deriveFileKey(machineId, username, LEGACY_SALT)
+    const encrypted = await encryptData(key, JSON.stringify(store))
+    await writeFile(join(tempDir, 'config.enc'), encrypted)
+
+    // Read should trigger migration
+    const config = await readConfig('old')
+    expect(config).toEqual({ data: 'val' })
+
+    // Verify file now has salt prepended (length should increase by 16)
+    const { readFile } = await import('node:fs/promises')
+    const migratedData = await readFile(join(tempDir, 'config.enc'))
+    expect(migratedData.length).toBe(encrypted.length + 16)
   })
 })
