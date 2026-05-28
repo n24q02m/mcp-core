@@ -1,11 +1,13 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   DEFAULT_LOCK_TTL_HOURS,
+  lockDir,
+  locksDir,
   refreshLockTimestamp,
   sweepStaleLocks,
   writeLockFile
@@ -118,5 +120,21 @@ describe('writeLockFile', () => {
     expect(lines[1]).toBe('12345')
     expect(lines[2]).toBe('tok')
     expect(new Date(lines[3])).toBeInstanceOf(Date)
+  })
+})
+
+describe('locksDir and lockDir', () => {
+  it('locksDir(root) returns the provided root', () => {
+    expect(locksDir('/custom/path')).toBe('/custom/path')
+  })
+
+  it('locksDir() returns the default path based on homedir()', () => {
+    const expected = join(homedir(), '.config', 'mcp', 'locks')
+    expect(locksDir()).toBe(expected)
+  })
+
+  it('lockDir() returns the default path', () => {
+    const expected = join(homedir(), '.config', 'mcp', 'locks')
+    expect(lockDir()).toBe(expected)
   })
 })
