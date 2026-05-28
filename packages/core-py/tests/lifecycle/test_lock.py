@@ -32,7 +32,7 @@ def unique_name() -> str:
 class TestAcquireAndRelease:
     def test_acquires_and_releases(self, lock_root: Path, unique_name: str) -> None:
         lock = LifecycleLock(name=unique_name, port=9000, root=lock_root)
-        lock_file = lock_root / f"{unique_name}-9000.lock"
+        lock_file = lock_root / f"{unique_name}.lock"
 
         with lock:
             assert lock_file.exists(), "lock file must exist while held"
@@ -53,7 +53,7 @@ class TestAcquireAndRelease:
     def test_lock_stores_pid_and_port(self, lock_root: Path, unique_name: str) -> None:
         """While held, the lock file contains the current PID and port."""
         lock = LifecycleLock(name=unique_name, port=9000, root=lock_root)
-        lock_file = lock_root / f"{unique_name}-9000.lock"
+        lock_file = lock_root / f"{unique_name}.lock"
 
         with lock:
             content = lock_file.read_text(encoding="utf-8")
@@ -63,17 +63,18 @@ class TestAcquireAndRelease:
 
     def test_path_property_exposes_lock_file_location(self, lock_root: Path, unique_name: str) -> None:
         lock = LifecycleLock(name=unique_name, port=9000, root=lock_root)
-        assert lock.path == lock_root / f"{unique_name}-9000.lock"
+        assert lock.path == lock_root / f"{unique_name}.lock"
 
 
 class TestDifferentLocksDoNotConflict:
-    def test_different_ports_do_not_conflict(self, lock_root: Path, unique_name: str) -> None:
+    def test_different_ports_DO_conflict(self, lock_root: Path, unique_name: str) -> None:
         lock_a = LifecycleLock(name=unique_name, port=9000, root=lock_root)
         lock_b = LifecycleLock(name=unique_name, port=9001, root=lock_root)
 
-        with lock_a, lock_b:
-            assert (lock_root / f"{unique_name}-9000.lock").exists()
-            assert (lock_root / f"{unique_name}-9001.lock").exists()
+        with lock_a:
+            with pytest.raises(RuntimeError, match='another process holds'):
+                with lock_b:
+                    pass
 
     def test_different_names_do_not_conflict(self, lock_root: Path) -> None:
         name_a = f"srv-a-{uuid.uuid4().hex[:6]}"
@@ -83,8 +84,8 @@ class TestDifferentLocksDoNotConflict:
         lock_b = LifecycleLock(name=name_b, port=9000, root=lock_root)
 
         with lock_a, lock_b:
-            assert (lock_root / f"{name_a}-9000.lock").exists()
-            assert (lock_root / f"{name_b}-9000.lock").exists()
+            assert (lock_root / f"{name_a}.lock").exists()
+            assert (lock_root / f"{name_b}.lock").exists()
 
 
 def _helper_script(lock_root: Path, name: str, port: int, ready_file: Path) -> str:

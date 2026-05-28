@@ -24,7 +24,7 @@
  * identical for cross-language parity.
  */
 
-import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync, openSync, closeSync, fstatSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -120,13 +120,12 @@ export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: st
     return 0
   }
 
-  const prefix = `${serverName}-`
-  const suffix = '.lock'
+  const filename = `${serverName}.lock`
   const now = Date.now()
   const ttlMs = (ttlHours ?? DEFAULT_LOCK_TTL_HOURS) * 3600 * 1000
 
   for (const entry of entries) {
-    if (!entry.startsWith(prefix) || !entry.endsWith(suffix)) continue
+    if (entry !== filename) continue
     const full = join(dir, entry)
     let raw: string
     try {
@@ -150,7 +149,16 @@ export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: st
       }
       continue
     }
-    if (now - meta.spawnedAt.getTime() > ttlMs) {
+
+    // Check PID liveness
+    let isAlive = true
+    try {
+        process.kill(meta.pid, 0)
+    } catch {
+        isAlive = false
+    }
+
+    if (!isAlive || (now - meta.spawnedAt.getTime() > ttlMs)) {
       try {
         unlinkSync(full)
         removed += 1
@@ -163,15 +171,105 @@ export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: st
 }
 
 /**
- * Write the 4-line lock payload (pid, port, token, ISO timestamp) padded
- * to 512 bytes. Used by `runHttpServer` after the OS file lock is
- * acquired.
- *
- * Returns the absolute path to the lock file.
+ * Lifecycle lock guarding a single `serverName` HTTP server.
+ * TypeScript implementation using O_EXCL for atomic creation.
+ */
+export class LifecycleLock {
+  private _path: string
+  private _fd: number | null = null
+
+  constructor(
+    private _name: string,
+    private _port: number,
+    private _token: string,
+    root?: string
+  ) {
+    const dir = locksDir(root)
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    this._path = join(dir, `${_name}.lock`)
+  }
+
+  get path(): string {
+    return this._path
+  }
+
+  acquire(): void {
+    try {
+      // Use wx for atomic creation + exclusive access.
+      this._fd = openSync(this._path, 'wx', 0o600)
+    } catch (err: any) {
+      if (err.code === 'EEXIST') {
+        // Check if process is still alive
+        let existingRaw: string
+        try {
+            existingRaw = readFileSync(this._path, 'utf-8')
+        } catch {
+            // Raced with unlink, retry open once
+            this._fd = openSync(this._path, 'wx', 0o600)
+            return
+        }
+
+        const meta = parseLockText(existingRaw)
+        if (meta) {
+            let isAlive = true
+            try {
+                process.kill(meta.pid, 0)
+            } catch (killErr: any) {
+                if (killErr.code === 'EPERM') {
+                    throw new Error(`LifecycleLock: another process holds ${this._path} (EPERM)`)
+                }
+                isAlive = false
+            }
+
+            if (isAlive) {
+                throw new Error(`LifecycleLock: another process (PID ${meta.pid}) holds ${this._path}`)
+            } else {
+                // PID not alive, attempt to reclaim
+                try {
+                    unlinkSync(this._path)
+                } catch { /* ignore race */ }
+                this._fd = openSync(this._path, 'wx', 0o600)
+            }
+        } else {
+            // Malformed, reclaim
+            try {
+                unlinkSync(this._path)
+            } catch { /* ignore race */ }
+            this._fd = openSync(this._path, 'wx', 0o600)
+        }
+      } else {
+        throw err
+      }
+    }
+
+    const payload = `${process.pid}\n${this._port}\n${this._token}\n${new Date().toISOString()}\n`
+    writeFileSync(this._fd!, payload.padEnd(512, ' '), { encoding: 'utf-8' })
+  }
+
+  release(): void {
+    if (this._fd !== null) {
+      try {
+        const fstat = fstatSync(this._fd)
+        const dstat = statSync(this._path)
+        if (fstat.ino === dstat.ino) {
+          unlinkSync(this._path)
+        }
+      } catch {
+        /* ignore */
+      }
+      closeSync(this._fd)
+      this._fd = null
+    }
+  }
+}
+
+/**
+ * Legacy helper for runHttpServer.
+ * NOTE: Prefer using LifecycleLock class for robust holding.
  */
 export function writeLockFile(serverName: string, port: number, token: string, root?: string): string {
   const dir = locksDir(root)
-  const path = join(dir, `${serverName}-${port}.lock`)
+  const path = join(dir, `${serverName}.lock`)
   const payload = `${process.pid}\n${port}\n${token}\n${new Date().toISOString()}\n`
   writeFileSync(path, payload.padEnd(512, ' '), { encoding: 'utf-8', mode: 0o600 })
   return path

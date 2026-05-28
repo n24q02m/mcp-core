@@ -38,7 +38,7 @@ import {
   type StepCallback
 } from '../auth/local-oauth-app.js'
 import { jsonResponse } from '../auth/router.js'
-import { refreshLockTimestamp, sweepStaleLocks, writeLockFile } from '../lifecycle/lock.js'
+import { refreshLockTimestamp, sweepStaleLocks, LifecycleLock } from '../lifecycle/lock.js'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 import { tryOpenBrowser } from '../relay/browser.js'
 import { readConfig } from '../storage/config-file.js'
@@ -328,9 +328,9 @@ export async function runHttpServer(
   }
 
   const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
-  const lockDirPath = path.join(os.homedir(), '.config', 'mcp', 'locks')
-  fs.mkdirSync(lockDirPath, { recursive: true, mode: 0o700 })
-  const lockFile = writeLockFile(options.serverName, actualPort, proxyToken, lockDirPath)
+  const lock = new LifecycleLock(options.serverName, actualPort, proxyToken)
+  lock.acquire()
+  const lockFile = lock.path
 
   // Refresh the lock timestamp hourly so the 24h TTL sweep does not kill
   // long-running daemons. Cancelled in `close()`.
@@ -417,12 +417,8 @@ export async function runHttpServer(
 
       return new Promise<void>((resolve, reject) => {
         httpServer.close(async (err) => {
-          if (lockFile) {
-            try {
-              await fs.promises.unlink(lockFile)
-            } catch {
-              /* best-effort cleanup */
-            }
+          if (lock) {
+            lock.release()
           }
           if (err) {
             reject(err)
