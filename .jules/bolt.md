@@ -10,3 +10,6 @@
 ## 2025-05-04 - [Avoid fragile optimizations and micro-optimizing small loop iterations]
 **Learning:** In Python, attempting to optimize a short loop (like scanning a small JSON list `responses` in `poll_for_responses`) by keeping a `last_seen_count` state to skip previously scanned elements provides zero measurable performance gain, because the time saved (fractions of a millisecond) is dwarfed by the massive HTTP request latency and `asyncio.sleep()` in the same loop. Furthermore, assuming the server array is append-only is dangerous and could break if the server starts paginating or clearing old items.
 **Action:** Do not micro-optimize small iterations in Python when the loop contains expensive operations (like I/O or network requests), and never assume an external API's response array is strictly append-only without verification.
+## 2026-05-28 - Use generators instead of list comprehension for arity check
+**Learning:** Using list comprehensions `[x for x in ...]` to calculate the length of a filtered collection in Python allocates an intermediate list in memory. For arity checks using `inspect.signature`, a generator expression with `sum(1 for ...)` is more memory-efficient as it avoids this allocation.
+**Action:** Prefer generator expressions over list comprehensions when the resulting collection is only used to derive a count or length.

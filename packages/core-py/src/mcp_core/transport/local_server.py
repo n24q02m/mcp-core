@@ -507,8 +507,7 @@ async def run_http_server(
 
         try:
             sig = _inspect.signature(setup_complete_hook)
-            positional = [p for p in sig.parameters.values() if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
-            arity = len(positional)
+            arity = sum(1 for p in sig.parameters.values() if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD))
         except (TypeError, ValueError):
             # Builtins / C functions: assume new 2-arg signature.
             arity = 2
@@ -724,8 +723,7 @@ async def start_http_server_background(
 
         try:
             sig = _inspect.signature(setup_complete_hook)
-            positional = [p for p in sig.parameters.values() if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
-            arity = len(positional)
+            arity = sum(1 for p in sig.parameters.values() if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD))
         except (TypeError, ValueError):
             arity = 2
 
