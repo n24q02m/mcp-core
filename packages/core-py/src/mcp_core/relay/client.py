@@ -270,6 +270,7 @@ async def poll_for_responses(
     import time
 
     deadline = time.monotonic() + timeout_s
+    last_seen_count = 0
 
     async with httpx.AsyncClient() as client:
         while time.monotonic() < deadline:
@@ -279,10 +280,17 @@ async def poll_for_responses(
                 raise RuntimeError(msg)
 
             body = response.json()
-            for resp in body.get("responses", []):
+            responses = body.get("responses", [])
+
+            # Optimization: The responses array is append-only. Instead of scanning
+            # from the beginning each time, iterate backwards and stop at the
+            # last seen index to ensure O(N) complexity across all poll cycles.
+            for i in range(len(responses) - 1, last_seen_count - 1, -1):
+                resp = responses[i]
                 if resp.get("messageId") == message_id:
                     return resp["value"]
 
+            last_seen_count = len(responses)
             await asyncio.sleep(interval_s)
 
     msg = "Timed out waiting for response"
