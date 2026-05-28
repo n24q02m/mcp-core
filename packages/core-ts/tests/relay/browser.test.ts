@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 // Mock child_process and fs/promises before importing the module
 vi.mock('node:child_process', () => ({
-  execFile: vi.fn((_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
+  execFile: vi.fn((...args: any[]) => {
+    const _options = args[2]
+    const cb = args[3]
     const callback = typeof _options === 'function' ? _options : cb
     if (callback) {
       callback(new Error('no display'))
@@ -66,15 +68,15 @@ describe('tryOpenBrowser', () => {
     it('deduplicates browser opens within the window', async () => {
       vi.mocked(execFile).mockClear()
       Object.defineProperty(process, 'platform', { value: 'darwin' })
-      vi.mocked(execFile).mockImplementation(
-        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            callback(null)
-          }
-          return {} as any
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
         }
-      )
+        return {} as any
+      })
 
       const url = `https://example.com/dedupe-${Date.now()}`
       const result1 = await tryOpenBrowser(url)
@@ -90,15 +92,15 @@ describe('tryOpenBrowser', () => {
     })
 
     it('never throws even when execFile fails', async () => {
-      vi.mocked(execFile).mockImplementation(
-        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            callback(new Error('command not found'))
-          }
-          return {} as any
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(new Error('command not found'))
         }
-      )
+        return {} as any
+      })
 
       const result = await tryOpenBrowser('https://example.com/test-never-throws')
       expect(typeof result).toBe('boolean')
@@ -127,15 +129,15 @@ describe('tryOpenBrowser', () => {
   describe('WSL detection', () => {
     it('returns false when /proc/version is not found', async () => {
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'))
-      vi.mocked(execFile).mockImplementation(
-        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            callback(new Error('command not found'))
-          }
-          return {} as any
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(new Error('command not found'))
         }
-      )
+        return {} as any
+      })
 
       const result = await tryOpenBrowser('https://example.com/wsl-test')
       expect(typeof result).toBe('boolean')
@@ -146,15 +148,15 @@ describe('tryOpenBrowser', () => {
     it('returns false when powershell fails on win32', async () => {
       vi.mocked(execFile).mockClear()
       Object.defineProperty(process, 'platform', { value: 'win32' })
-      vi.mocked(execFile).mockImplementation(
-        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            callback(new Error('fail'))
-          }
-          return {} as any
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(new Error('fail'))
         }
-      )
+        return {} as any
+      })
 
       const url = `https://example.com/win32-fail-${Date.now()}`
       const result = await tryOpenBrowser(url)
@@ -162,15 +164,15 @@ describe('tryOpenBrowser', () => {
     })
     it('uses powershell.exe with EncodedCommand and embedded URL on win32', async () => {
       Object.defineProperty(process, 'platform', { value: 'win32' })
-      vi.mocked(execFile).mockImplementation(
-        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            callback(null)
-          }
-          return {} as any
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
         }
-      )
+        return {} as any
+      })
 
       const url = `https://example.com/auth-new-url-${Date.now()}`
       await tryOpenBrowser(url)
@@ -196,19 +198,20 @@ describe('tryOpenBrowser', () => {
     it('falls back to powershell on WSL when wslview fails', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockResolvedValue('linux version microsoft')
-      vi.mocked(execFile).mockImplementation(
-        (cmd: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            if (cmd === 'wslview') {
-              callback(new Error('fail'))
-            } else {
-              callback(null)
-            }
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const cmd = args[0]
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          if (cmd === 'wslview') {
+            callback(new Error('fail'))
+          } else {
+            callback(null)
           }
-          return {} as any
         }
-      )
+        return {} as any
+      })
 
       const url = `https://example.com/wsl-fallback-${Date.now()}`
       await tryOpenBrowser(url)
@@ -222,15 +225,15 @@ describe('tryOpenBrowser', () => {
     })
     it('uses open on darwin', async () => {
       Object.defineProperty(process, 'platform', { value: 'darwin' })
-      vi.mocked(execFile).mockImplementation(
-        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            callback(null)
-          }
-          return {} as any
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
         }
-      )
+        return {} as any
+      })
 
       const url = `https://example.com/darwin-${Date.now()}`
       await tryOpenBrowser(url)
@@ -241,15 +244,15 @@ describe('tryOpenBrowser', () => {
     it('uses xdg-open on linux when not WSL', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'))
-      vi.mocked(execFile).mockImplementation(
-        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            callback(null)
-          }
-          return {} as any
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
         }
-      )
+        return {} as any
+      })
 
       const url = `https://example.com/linux-${Date.now()}`
       await tryOpenBrowser(url)
@@ -260,15 +263,15 @@ describe('tryOpenBrowser', () => {
     it('uses wslview on WSL', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockResolvedValue('linux version microsoft')
-      vi.mocked(execFile).mockImplementation(
-        (_file: string, _args: readonly string[] | null | undefined, _options: any, cb?: any) => {
-          const callback = typeof _options === 'function' ? _options : cb
-          if (callback) {
-            callback(null)
-          }
-          return {} as any
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
         }
-      )
+        return {} as any
+      })
 
       const url = `https://example.com/wsl-${Date.now()}`
       await tryOpenBrowser(url)

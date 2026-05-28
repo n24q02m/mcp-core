@@ -43,7 +43,7 @@ class TestTryOpenBrowser:
     def test_rejects_malicious_urls(self):
         malicious_urls = [
             "https://example.com;rm -rf /",
-            "https://example.comjules",
+            "https://example.com$(whoami)",
             "https://example.com`whoami`",
             "https://example.com|nc localhost 4444",
             "javascript:alert(1)",
