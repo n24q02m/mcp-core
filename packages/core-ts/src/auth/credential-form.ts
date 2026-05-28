@@ -589,6 +589,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
             var submitBtn = document.getElementById("submit-btn");
             var statusBox = document.getElementById("status-box");
             var submitUrl = "${submitUrlEscaped}";
+            var inputs = form.querySelectorAll(".field-input");
 
             function showStatus(type, message) {
                 statusBox.className = "status-box " + type;
@@ -793,8 +794,6 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
             form.addEventListener("submit", function (event) {
                 event.preventDefault();
-
-                var inputs = form.querySelectorAll(".field-input");
                 var payload = {};
                 var valid = true;
                 var firstInvalid = null;
@@ -835,7 +834,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                     .then(function (response) {
                         return response.json().then(function (data) {
                             if (data.ok) {
-                                form.querySelectorAll(".field-input").forEach(function (i) {
+                                inputs.forEach(function (i) {
                                     i.disabled = true;
                                 });
                                 submitBtn.disabled = true;

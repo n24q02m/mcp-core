@@ -550,6 +550,7 @@ def render_credential_form(
             var submitBtn = document.getElementById("submit-btn");
             var statusBox = document.getElementById("status-box");
             var submitUrl = "{submit_url_escaped}";
+            var inputs = form.querySelectorAll(".field-input");
 
             function showStatus(type, message) {{
                 statusBox.className = "status-box " + type;
@@ -754,8 +755,6 @@ def render_credential_form(
 
             form.addEventListener("submit", function (event) {{
                 event.preventDefault();
-
-                var inputs = form.querySelectorAll(".field-input");
                 var payload = {{}};
                 var valid = true;
                 var firstInvalid = null;
@@ -796,7 +795,7 @@ def render_credential_form(
                     .then(function (response) {{
                         return response.json().then(function (data) {{
                             if (data.ok) {{
-                                form.querySelectorAll(".field-input").forEach(function (i) {{
+                                inputs.forEach(function (i) {{
                                     i.disabled = true;
                                 }});
                                 submitBtn.disabled = true;
