@@ -5,6 +5,7 @@ from mcp_core.relay.session import (
     release_session,
     is_session_active,
     validate_session_token,
+    get_active_session,
 )
 
 
@@ -61,3 +62,31 @@ def test_validate_token_mismatch():
 
 def test_validate_token_no_session():
     assert validate_session_token("any") is False
+
+
+def test_validate_token_expired(monkeypatch):
+    info = claim_session(client_id="bridge-1")
+    monkeypatch.setattr(
+        "mcp_core.relay.session._now",
+        lambda: info.expires_at + timedelta(seconds=1),
+    )
+    assert validate_session_token(info.token) is False
+
+
+def test_get_active_session_none():
+    assert get_active_session() is None
+
+
+def test_get_active_session_expired(monkeypatch):
+    info = claim_session(client_id="bridge-1")
+    monkeypatch.setattr(
+        "mcp_core.relay.session._now",
+        lambda: info.expires_at + timedelta(seconds=1),
+    )
+    assert get_active_session() is None
+
+
+def test_get_active_session_valid():
+    info = claim_session(client_id="bridge-1")
+    active = get_active_session()
+    assert active == info
