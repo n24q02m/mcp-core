@@ -742,13 +742,11 @@ def create_delegated_oauth_app(
         try:
             yield
         finally:
-            for task in list(_poll_tasks):
+            tasks = list(_poll_tasks)
+            for task in tasks:
                 task.cancel()
-            for task in list(_poll_tasks):
-                try:
-                    await task
-                except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                    pass
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
 
     app = Starlette(routes=routes, lifespan=_lifespan)
     app.state.mark_setup_complete = mark_setup_complete  # type: ignore[attr-defined]
