@@ -7,14 +7,15 @@
  * failure crashed the bridge).
  */
 
-import { mkdtempSync, rmSync } from 'node:fs'
+import * as fs from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as cacheModule from '../../src/transport/cache.js'
-import { cacheFilename, loadToolsCache, persistToolsCache } from '../../src/transport/cache.js'
+import { atomicWrite, cacheFilename, loadToolsCache, persistToolsCache } from '../../src/transport/cache.js'
 
 let dir: string
 
@@ -62,4 +63,38 @@ describe('tools cache', () => {
     expect(() => persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [])).not.toThrow()
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
   })
+})
+
+describe('atomicWrite', () => {
+  it('writes content and creates parent directory', () => {
+    const filePath = join(dir, 'nested', 'file.txt')
+    atomicWrite(filePath, 'hello world')
+    expect(readFileSync(filePath, 'utf-8')).toBe('hello world')
+  })
+
+  it('overwrites existing file', () => {
+    const filePath = join(dir, 'file.txt')
+    atomicWrite(filePath, 'first')
+    atomicWrite(filePath, 'second')
+    expect(readFileSync(filePath, 'utf-8')).toBe('second')
+  })
+
+  if (process.platform !== 'win32') {
+    it('sets file permissions to 0o600', () => {
+      const filePath = join(dir, 'secret.txt')
+      atomicWrite(filePath, 'secret')
+      const stats = statSync(filePath)
+      expect(stats.mode & 0o777).toBe(0o600)
+    })
+
+    it('handles chmodSync failure gracefully', () => {
+      vi.spyOn(fs, 'chmodSync').mockImplementation(() => {
+        throw new Error('chmod failed')
+      })
+      const filePath = join(dir, 'fail-chmod.txt')
+      // Should not throw
+      expect(() => atomicWrite(filePath, 'content')).not.toThrow()
+      expect(readFileSync(filePath, 'utf-8')).toBe('content')
+    })
+  }
 })
