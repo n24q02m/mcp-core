@@ -6,11 +6,15 @@ either side invalidates the cache. Persist must not raise on filesystem errors
 bridge).
 """
 
+import json
 import logging
+from pathlib import Path
+
 from mcp_core.transport.cache import (
+    _cache_dir,
     cache_filename,
-    persist_tools_cache,
     load_tools_cache,
+    persist_tools_cache,
 )
 
 
@@ -63,3 +67,53 @@ def test_persist_silent_on_oserror(tmp_path, monkeypatch, caplog):
     assert "Failed to persist capabilities cache for wet-mcp: Windows access denied" in caplog.text
     # And cache stays absent (load returns None)
     assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
+
+
+def test_cache_dir_resolution():
+    expected = Path.home() / ".config" / "mcp" / "cache"
+    assert _cache_dir() == expected
+
+
+def test_load_returns_none_on_corrupted_json(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+    name = cache_filename("wet-mcp", 55317, "2.28.4", "1.11.0")
+    path = tmp_path / name
+    path.write_text("invalid json", encoding="utf-8")
+
+    assert load_tools_cache("wet-mcp", 55317, "2.28.4", "1.11.0") is None
+
+
+def test_load_returns_none_on_oserror_during_read(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+    name = cache_filename("wet-mcp", 55317, "2.28.4", "1.11.0")
+    path = tmp_path / name
+    path.write_text("{}", encoding="utf-8")
+
+    def fake_read_text(self, encoding=None):
+        raise OSError("Read failure")
+
+    monkeypatch.setattr("pathlib.Path.read_text", fake_read_text)
+
+    assert load_tools_cache("wet-mcp", 55317, "2.28.4", "1.11.0") is None
+
+
+def test_load_returns_none_on_payload_version_mismatch(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+    # Filename matches but payload doesn't
+    name = cache_filename("wet-mcp", 55317, "2.28.4", "1.11.0")
+    path = tmp_path / name
+    path.write_text(json.dumps({"tools": [], "srv_version": "wrong", "core_version": "1.11.0"}), encoding="utf-8")
+
+    assert load_tools_cache("wet-mcp", 55317, "2.28.4", "1.11.0") is None
+
+
+def test_load_returns_none_on_invalid_tools_type(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+    name = cache_filename("wet-mcp", 55317, "2.28.4", "1.11.0")
+    path = tmp_path / name
+    path.write_text(
+        json.dumps({"tools": "not a list", "srv_version": "2.28.4", "core_version": "1.11.0"}),
+        encoding="utf-8",
+    )
+
+    assert load_tools_cache("wet-mcp", 55317, "2.28.4", "1.11.0") is None
