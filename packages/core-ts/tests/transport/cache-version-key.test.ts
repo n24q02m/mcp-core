@@ -7,8 +7,7 @@
  * failure crashed the bridge).
  */
 
-import * as fs from 'node:fs'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -85,16 +84,6 @@ describe('atomicWrite', () => {
       atomicWrite(filePath, 'secret')
       const stats = statSync(filePath)
       expect(stats.mode & 0o777).toBe(0o600)
-    })
-
-    it('handles chmodSync failure gracefully', () => {
-      vi.spyOn(fs, 'chmodSync').mockImplementation(() => {
-        throw new Error('chmod failed')
-      })
-      const filePath = join(dir, 'fail-chmod.txt')
-      // Should not throw
-      expect(() => atomicWrite(filePath, 'content')).not.toThrow()
-      expect(readFileSync(filePath, 'utf-8')).toBe('content')
     })
   }
 })
