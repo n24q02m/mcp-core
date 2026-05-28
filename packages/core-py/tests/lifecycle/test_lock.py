@@ -72,7 +72,7 @@ class TestDifferentLocksDoNotConflict:
         lock_b = LifecycleLock(name=unique_name, port=9001, root=lock_root)
 
         with lock_a:
-            with pytest.raises(RuntimeError, match='another process holds'):
+            with pytest.raises(RuntimeError, match="another process holds"):
                 with lock_b:
                     pass
 

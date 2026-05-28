@@ -15,22 +15,15 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import * as fs from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import * as os from 'node:os'
-import * as path from 'node:path'
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { JWTPayload } from 'jose'
 import type { RelayConfigSchema } from '../auth/credential-form.js'
 import { isSchemaComplete } from '../auth/credential-form.js'
-import {
-  createDelegatedOAuthApp,
-  type DelegatedOAuthAppOptions,
-  type DelegatedOAuthAppResult
-} from '../auth/delegated-oauth-app.js'
+import { createDelegatedOAuthApp, type DelegatedOAuthAppResult, type FlowType } from '../auth/delegated-oauth-app.js'
 import {
   type CredentialsCallback,
   createLocalOAuthApp,
@@ -38,7 +31,7 @@ import {
   type StepCallback
 } from '../auth/local-oauth-app.js'
 import { jsonResponse } from '../auth/router.js'
-import { refreshLockTimestamp, sweepStaleLocks, LifecycleLock } from '../lifecycle/lock.js'
+import { LifecycleLock, refreshLockTimestamp, sweepStaleLocks } from '../lifecycle/lock.js'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 import { tryOpenBrowser } from '../relay/browser.js'
 import { readConfig } from '../storage/config-file.js'
@@ -51,114 +44,61 @@ export interface RunHttpServerOptions {
   serverName: string
   /** If undefined, server has NO auth (e.g., godot). */
   relaySchema?: RelayConfigSchema
-  /**
-   * Mutually exclusive with `relaySchema`. When set, the OAuth app is the
-   * delegated provider (upstream redirect or device_code) instead of the local
-   * credential form. The `serverName` and `jwtIssuer` are supplied by this
-   * function; callers provide only `flow`, `upstream`, and `onTokenReceived`.
-   */
-  delegatedOAuth?: Omit<DelegatedOAuthAppOptions, 'serverName' | 'jwtIssuer'>
-  /** 0 = auto-find a free port. Default: 0. */
+  /** MCP server instance factory. */
+  serverFactory: () => McpServer
+  /** Initial port to attempt. 0 means auto-find. */
   port?: number
-  /** Host to bind. Default '127.0.0.1'. */
+  /** Host to bind. Defaults to 127.0.0.1. */
   host?: string
-  /** Optional callback invoked with credentials after POST /authorize. */
+  /** Callback invoked when the user submits creds via form. */
   onCredentialsSaved?: CredentialsCallback
-  /** Optional callback invoked with step data after POST /otp. */
+  /** Callback for multi-step credential input (OTP / 2FA). */
   onStepSubmitted?: StepCallback
-  /**
-   * Called after server ready so callers can wire background tasks (e.g.
-   * GDrive device code poll) to the form's ``/setup-status`` endpoint.
-   *
-   * Accepts either arity for backward compatibility:
-   *  - Legacy 1-arg: ``hook(markComplete)`` -- success-only (older consumers).
-   *  - New 2-arg:    ``hook(markComplete, markFailed)`` -- surfaces upstream
-   *    errors (``invalid_grant`` / ``expired_token`` / ``access_denied``)
-   *    to the browser form so it stops polling and shows the error.
-   *
-   * Prefer the 2-arg form for new code. Arity is detected via
-   * ``Function.prototype.length``.
-   */
-  setupCompleteHook?:
-    | ((markComplete: (key?: string) => void) => void)
-    | ((markComplete: (key?: string) => void, markFailed: (key?: string, error?: string) => void) => void)
-  /**
-   * Optional renderer used in place of the default credential form on GET
-   * /authorize. Passed through to ``createLocalOAuthApp``.
-   */
+  /** Optional setup hook. */
+  setupCompleteHook?: (markComplete: (key?: string) => void, markFailed: (key?: string, error?: string) => void) => void
+  /** Optional form renderer override. */
   customCredentialFormHtml?: (
     schema: RelayConfigSchema,
-    options: { submitUrl: string; prefill?: Record<string, string> }
+    options: {
+      submitUrl: string
+      prefill?: Record<string, string>
+    }
   ) => string
-  /**
-   * Optional middleware invoked after JWT verification and before the MCP
-   * transport handles the request. Called with verified claims and a ``next``
-   * function that invokes the MCP transport. Consumers use this to wrap the
-   * request in AsyncLocalStorage (e.g., for per-user token lookup).
-   */
-  authScope?: (claims: JWTClaims, next: () => Promise<void>) => Promise<void>
-  /**
-   * When `true`, skip Bearer token validation on the MCP endpoint and treat
-   * the caller as anonymous. Intended for deployments behind an external
-   * auth boundary (reverse proxy, API gateway like agentgateway/Zitadel) that
-   * already enforces authentication. The deployer is responsible for ensuring
-   * the network in front of this server is locked down — anyone who can
-   * reach `/mcp` directly will get tool access.
-   *
-   * Wire via env var: `authDisabled: process.env.MCP_AUTH_DISABLE === '1'`.
-   *
-   * When set, `authScope` (if provided) receives anonymous claims
-   * `{ sub: 'anonymous', anonymous: true }`.
-   */
+  /** Optional delegated OAuth config. */
+  delegatedOAuth?: {
+    flow: FlowType
+    upstream: {
+      tokenUrl: string
+      clientId: string
+      clientSecret?: string
+      scopes?: string[]
+      authorizeUrl?: string
+      callbackPath?: string
+      deviceAuthUrl?: string
+      pollIntervalMs?: number
+    }
+    onTokenReceived: (tokens: Record<string, unknown>) => string | undefined | Promise<string | undefined>
+  }
+  /** Bearer auth bypass for external auth boundary. */
   authDisabled?: boolean
+  /** Optional middleware after JWT verification. */
+  authScope?: (claims: JWTClaims, next: () => Promise<void>) => Promise<void>
 }
 
 export interface HttpServerHandle {
-  /** Actual TCP port bound. Non-zero even when ``options.port`` was 0. */
   port: number
-  /** Host bound. */
   host: string
-  /** Cleanly close transport + http server. */
   close: () => Promise<void>
 }
 
 /**
- * Start an HTTP server with optional local OAuth AS + MCP Streamable HTTP transport.
- *
- * Behavior:
- *  - If ``relaySchema`` is provided, serves OAuth routes (/authorize, /token,
- *    /otp, /setup-status, /.well-known/*) AND /mcp with Bearer auth.
- *  - If ``relaySchema`` is undefined (e.g., godot), serves ONLY /mcp without
- *    auth (plus /health).
- *  - Binds to ``host:port``. Port 0 auto-assigns via the OS.
- *  - Returns a handle for lifecycle management; the server runs in the
- *    background until ``close()`` is called.
+ * Start a local OAuth + MCP server and return a handle.
  */
-export async function runHttpServer(
-  serverFactory: () => McpServer,
-  options: RunHttpServerOptions
-): Promise<HttpServerHandle> {
-  const host = options.host ?? '127.0.0.1'
-  const wantedPort = options.port ?? 0
+export async function runHttpServer(options: RunHttpServerOptions): Promise<HttpServerHandle> {
+  const { serverFactory, port: wantedPort = 0, host = '127.0.0.1' } = options
 
-  // Edge auth deployment warning (per spec 2026-05-01-stdio-pure-http-multiuser
-  // §4.2.1). When ``PUBLIC_URL`` points to a non-localhost host but
-  // ``MCP_RELAY_PASSWORD`` is empty, the relay form is reachable from the
-  // public Internet without authentication — that's the wedge this gate
-  // closes. Operators running single-user dev on localhost intentionally
-  // skip the password; everyone else gets a startup warning so the misconfig
-  // doesn't pass silently.
-  const publicUrl = process.env.PUBLIC_URL ?? ''
-  const relayPassword = process.env.MCP_RELAY_PASSWORD ?? ''
-  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(publicUrl)
-  if (publicUrl && !isLocalhost && !relayPassword) {
-    console.warn(
-      '[mcp-core] WARNING: HTTP mode public deployment without MCP_RELAY_PASSWORD — relay form is open to Internet'
-    )
-  }
-
-  let oauthApp: LocalOAuthAppResult | DelegatedOAuthAppResult | null = null
-  let jwtIssuer: JWTIssuer | null = null
+  let oauthApp: LocalOAuthAppResult | DelegatedOAuthAppResult | undefined
+  let jwtIssuer: JWTIssuer | undefined
 
   if (options.relaySchema && options.delegatedOAuth) {
     throw new Error('`relaySchema` and `delegatedOAuth` are mutually exclusive')
@@ -183,22 +123,6 @@ export async function runHttpServer(
     jwtIssuer = oauthApp.jwtIssuer
   }
 
-  // MCP per-session pattern (mirrors Python's StreamableHTTPSessionManager):
-  //
-  //  - Each MCP client gets its own ``StreamableHTTPServerTransport`` keyed by
-  //    Mcp-Session-Id, plus its own ``McpServer`` instance.
-  //  - The first POST (initialize) has no session header; we mint a UUID via
-  //    ``sessionIdGenerator`` and register the transport in ``onsessioninitialized``.
-  //  - Subsequent POSTs (notifications/initialized, tools/list, tools/call)
-  //    carry Mcp-Session-Id and are routed to the same transport, so the SDK's
-  //    ``_initialized`` flag is in the right state for ``validateSession`` /
-  //    ``validateProtocolVersion`` to accept the request.
-  //
-  // Stateless mode (sessionIdGenerator: undefined) was an earlier attempt; it
-  // returned HTTP 500 on the SDK-mandatory ``notifications/initialized`` POST
-  // because each request landed on a fresh transport with ``_initialized=false``
-  // and the SDK had no session manager to bridge them. Per-session routing is
-  // the same architecture the SDK examples + Python core-py use.
   const transports = new Map<string, StreamableHTTPServerTransport>()
   const servers = new Map<string, McpServer>()
 
@@ -213,7 +137,7 @@ export async function runHttpServer(
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sessionId) => {
-          transports.set(sessionId, transport!)
+          if (transport) transports.set(sessionId, transport)
           servers.set(sessionId, server)
         },
         onsessionclosed: (sessionId) => {
@@ -231,8 +155,6 @@ export async function runHttpServer(
   }
 
   async function mcpHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    // Bearer auth bypass for deployments behind an external auth boundary.
-    // Caller (reverse proxy, API gateway) is trusted to enforce auth upstream.
     if (jwtIssuer && options.authDisabled) {
       const anonymousClaims = { sub: 'anonymous', anonymous: true } as unknown as JWTClaims
       if (options.authScope) {
@@ -244,7 +166,6 @@ export async function runHttpServer(
       await handleSessionRequest(req, res)
       return
     }
-    // Bearer auth if configured.
     if (jwtIssuer) {
       const authHeader = req.headers.authorization
       const match = authHeader?.match(/^Bearer\s+(\S.*)$/i)
@@ -269,7 +190,6 @@ export async function runHttpServer(
         return
       }
     }
-    // Delegate to per-session MCP transport.
     await handleSessionRequest(req, res)
   }
 
@@ -277,25 +197,21 @@ export async function runHttpServer(
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     const pathname = url.pathname
 
-    // Route /mcp to MCP transport (with optional Bearer auth).
     if (pathname === '/mcp') {
       await mcpHandler(req, res)
       return
     }
 
-    // Liveness probe. Always available.
     if (pathname === '/health') {
       jsonResponse(res, 200, { status: 'ok', server: options.serverName })
       return
     }
 
-    // Route everything else to OAuth app if present.
     if (oauthApp) {
       await oauthApp.handler(req, res)
       return
     }
 
-    // No OAuth app and no match -- 404.
     jsonResponse(res, 404, { error: 'not_found' })
   }
 
@@ -319,9 +235,6 @@ export async function runHttpServer(
   const addr = httpServer.address() as AddressInfo
   const actualPort = addr.port
 
-  // Sweep stale locks for our server name BEFORE writing our own. Without
-  // this, abnormal-exit residue (Windows OOM, taskkill, signal) can pile up
-  // dozens of `<server>-<port>.lock` files — see 2026-04-28 wet-mcp 11-stale-lock incident.
   const swept = sweepStaleLocks(options.serverName)
   if (swept > 0) {
     console.error(`[runHttpServer] cleaned ${swept} stale lock(s) for ${options.serverName}`)
@@ -332,25 +245,14 @@ export async function runHttpServer(
   lock.acquire()
   const lockFile = lock.path
 
-  // Refresh the lock timestamp hourly so the 24h TTL sweep does not kill
-  // long-running daemons. Cancelled in `close()`.
   const lockRefreshInterval = setInterval(() => refreshLockTimestamp(lockFile), 3600 * 1000)
   if (typeof lockRefreshInterval.unref === 'function') {
     lockRefreshInterval.unref()
   }
 
-  // Auto-open the credential form in the user's browser when no creds exist
-  // yet. We open the root URL ("/") which auto-bootstraps PKCE and redirects
-  // to /authorize with valid params; opening /authorize directly returns
-  // invalid_request because it requires client_id/redirect_uri/state/
-  // code_challenge. See `local-oauth-app.ts` root handler docstring.
-  // Best-effort: any failure surfaces via tryOpenBrowser's ASCII fallback banner.
   if (oauthApp) {
     try {
       const existingConfig = await readConfig(options.serverName)
-      // Use schema completeness instead of "config === null" so peer-share
-      // paths writing partial entries (e.g. wet inheriting CRG cloud keys)
-      // do not suppress the relay form when required fields are missing.
       const configComplete = options.relaySchema
         ? isSchemaComplete(existingConfig, options.relaySchema)
         : existingConfig !== null
@@ -364,10 +266,6 @@ export async function runHttpServer(
     }
   }
 
-  // Invoke setup hook. Supports legacy 1-arg (success-only) and new 2-arg
-  // (success + failure) signatures via Function.prototype.length so upstream
-  // errors (invalid_grant / expired_token / access_denied) propagate to the
-  // browser form instead of leaving the spinner waiting forever.
   if (options.setupCompleteHook && oauthApp) {
     const markSetupFailed =
       'markSetupFailed' in oauthApp && typeof oauthApp.markSetupFailed === 'function'
@@ -391,9 +289,6 @@ export async function runHttpServer(
         await oauthApp.shutdown()
       }
 
-      // Drain per-session transports + servers so their open SSE streams
-      // and tool-call timers don't keep the event loop alive after the
-      // HTTP server closes.
       for (const transport of transports.values()) {
         try {
           await transport.close()

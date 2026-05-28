@@ -24,7 +24,18 @@
  * identical for cross-language parity.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync, openSync, closeSync, fstatSync } from 'node:fs'
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -153,12 +164,12 @@ export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: st
     // Check PID liveness
     let isAlive = true
     try {
-        process.kill(meta.pid, 0)
+      process.kill(meta.pid, 0)
     } catch {
-        isAlive = false
+      isAlive = false
     }
 
-    if (!isAlive || (now - meta.spawnedAt.getTime() > ttlMs)) {
+    if (!isAlive || now - meta.spawnedAt.getTime() > ttlMs) {
       try {
         unlinkSync(full)
         removed += 1
@@ -179,7 +190,7 @@ export class LifecycleLock {
   private _fd: number | null = null
 
   constructor(
-    private _name: string,
+    _name: string,
     private _port: number,
     private _token: string,
     root?: string
@@ -197,53 +208,61 @@ export class LifecycleLock {
     try {
       // Use wx for atomic creation + exclusive access.
       this._fd = openSync(this._path, 'wx', 0o600)
-    } catch (err: any) {
-      if (err.code === 'EEXIST') {
+    } catch (err: unknown) {
+      const error = err as { code?: string }
+      if (error.code === 'EEXIST') {
         // Check if process is still alive
         let existingRaw: string
         try {
-            existingRaw = readFileSync(this._path, 'utf-8')
+          existingRaw = readFileSync(this._path, 'utf-8')
         } catch {
-            // Raced with unlink, retry open once
-            this._fd = openSync(this._path, 'wx', 0o600)
-            return
+          // Raced with unlink, retry open once
+          this._fd = openSync(this._path, 'wx', 0o600)
+          return
         }
 
         const meta = parseLockText(existingRaw)
         if (meta) {
-            let isAlive = true
-            try {
-                process.kill(meta.pid, 0)
-            } catch (killErr: any) {
-                if (killErr.code === 'EPERM') {
-                    throw new Error(`LifecycleLock: another process holds ${this._path} (EPERM)`)
-                }
-                isAlive = false
+          let isAlive = true
+          try {
+            process.kill(meta.pid, 0)
+          } catch (killErr: unknown) {
+            const kError = killErr as { code?: string }
+            if (kError.code === 'EPERM') {
+              throw new Error(`LifecycleLock: another process holds ${this._path} (EPERM)`)
             }
+            isAlive = false
+          }
 
-            if (isAlive) {
-                throw new Error(`LifecycleLock: another process (PID ${meta.pid}) holds ${this._path}`)
-            } else {
-                // PID not alive, attempt to reclaim
-                try {
-                    unlinkSync(this._path)
-                } catch { /* ignore race */ }
-                this._fd = openSync(this._path, 'wx', 0o600)
-            }
-        } else {
-            // Malformed, reclaim
+          if (isAlive) {
+            throw new Error(`LifecycleLock: another process (PID ${meta.pid}) holds ${this._path}`)
+          } else {
+            // PID not alive, attempt to reclaim
             try {
-                unlinkSync(this._path)
-            } catch { /* ignore race */ }
+              unlinkSync(this._path)
+            } catch {
+              /* ignore race */
+            }
             this._fd = openSync(this._path, 'wx', 0o600)
+          }
+        } else {
+          // Malformed, reclaim
+          try {
+            unlinkSync(this._path)
+          } catch {
+            /* ignore race */
+          }
+          this._fd = openSync(this._path, 'wx', 0o600)
         }
       } else {
         throw err
       }
     }
 
-    const payload = `${process.pid}\n${this._port}\n${this._token}\n${new Date().toISOString()}\n`
-    writeFileSync(this._fd!, payload.padEnd(512, ' '), { encoding: 'utf-8' })
+    if (this._fd !== null) {
+      const payload = `${process.pid}\n${this._port}\n${this._token}\n${new Date().toISOString()}\n`
+      writeFileSync(this._fd, payload.padEnd(512, ' '), { encoding: 'utf-8' })
+    }
   }
 
   release(): void {

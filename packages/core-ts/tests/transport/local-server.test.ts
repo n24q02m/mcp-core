@@ -51,7 +51,8 @@ afterEach(() => {
 
 describe('runHttpServer with relaySchema (OAuth enabled)', () => {
   it('serves /authorize form and requires Bearer on /mcp', async () => {
-    const handle: HttpServerHandle = await runHttpServer(makeMcpServer, {
+    const handle: HttpServerHandle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-oauth-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -85,7 +86,8 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
   })
 
   it('returns 401 with invalid_token for malformed Bearer', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-invalid-token-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -108,7 +110,8 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
 
   it('invokes setupCompleteHook with a markComplete function', async () => {
     let receivedMark: ((key?: string) => void) | null = null
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-hook-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -141,7 +144,8 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
     // in /setup-status so the browser poll stops spinning.
     let receivedComplete: ((key?: string) => void) | null = null
     let receivedFailed: ((key?: string, error?: string) => void) | null = null
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-hook-2arg-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -166,7 +170,8 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
 
 describe('runHttpServer — root bootstrap UX', () => {
   it('GET / redirects to /authorize with valid PKCE params', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-root-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -187,7 +192,8 @@ describe('runHttpServer — root bootstrap UX', () => {
   })
 
   it('GET / followed produces credential form', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-root-follow-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -203,7 +209,8 @@ describe('runHttpServer — root bootstrap UX', () => {
   })
 
   it('GET /callback-done returns terminal success page', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-callback-done-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -221,7 +228,8 @@ describe('runHttpServer — root bootstrap UX', () => {
 
 describe('runHttpServer without relaySchema (godot-style)', () => {
   it('serves /mcp without auth and returns 404 for /authorize', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-no-auth-${Date.now()}`,
       port: 0
     })
@@ -245,7 +253,8 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
 
   it('does not invoke setupCompleteHook when relaySchema absent', async () => {
     let called = false
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-no-hook-${Date.now()}`,
       port: 0,
       setupCompleteHook: () => {
@@ -268,7 +277,8 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
     //  - V3 (current): per-session map keyed by Mcp-Session-Id, sessionId
     //    minted on initialize, reused on subsequent POSTs. Mirrors Python
     //    StreamableHTTPSessionManager + the SDK's stateful-mode example.
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-sequential-${Date.now()}`,
       port: 0
     })
@@ -298,7 +308,7 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
       expect(sessionId).toBeTruthy()
       const sessionHeaders = {
         ...commonHeaders,
-        'mcp-session-id': sessionId!,
+        'mcp-session-id': sessionId ?? '',
         'mcp-protocol-version': '2025-03-26'
       }
 
@@ -335,7 +345,8 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
 describe('runHttpServer — delegated mode', () => {
   it('serves /authorize via delegated redirect flow when delegatedOAuth set', async () => {
     const tokens: Array<Record<string, unknown>> = []
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: 'test-notion',
       delegatedOAuth: {
         flow: 'redirect',
@@ -361,7 +372,8 @@ describe('runHttpServer — delegated mode', () => {
 
   it('rejects when both relaySchema and delegatedOAuth are set', async () => {
     await expect(
-      runHttpServer(makeMcpServer, {
+      runHttpServer({
+        serverFactory: makeMcpServer,
         serverName: 'test-conflict',
         relaySchema: SCHEMA,
         delegatedOAuth: {
@@ -377,7 +389,8 @@ describe('runHttpServer — delegated mode', () => {
 describe('runHttpServer — authScope middleware', () => {
   it('invokes authScope middleware with JWT claims on authenticated /mcp request', async () => {
     const seen: Array<unknown> = []
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-scope-${Date.now()}`,
       relaySchema: SCHEMA,
       authScope: async (claims, next) => {
@@ -402,7 +415,8 @@ describe('runHttpServer — authScope middleware', () => {
 
 describe('runHttpServer lifecycle', () => {
   it('port 0 auto-assigns a non-zero port', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-autoport-${Date.now()}`,
       port: 0
     })
@@ -415,7 +429,8 @@ describe('runHttpServer lifecycle', () => {
   })
 
   it('/health responds with ok status regardless of auth config', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-health-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -434,7 +449,8 @@ describe('runHttpServer lifecycle', () => {
     const customRenderer = (_schema: RelayConfigSchema, opts: { submitUrl: string }): string =>
       `<!DOCTYPE html><html><body><h1>Custom Forwarded</h1><a href="${opts.submitUrl}">x</a></body></html>`
 
-    const handle: HttpServerHandle = await runHttpServer(makeMcpServer, {
+    const handle: HttpServerHandle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-custom-form-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -460,7 +476,8 @@ describe('runHttpServer lifecycle', () => {
   })
 
   it('close() cleanly shuts down the HTTP server', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runHttpServer({
+      serverFactory: makeMcpServer,
       serverName: `test-close-${Date.now()}`,
       port: 0
     })

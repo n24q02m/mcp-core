@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   DEFAULT_LOCK_TTL_HOURS,
+  LifecycleLock,
   refreshLockTimestamp,
   sweepStaleLocks,
-  LifecycleLock,
   writeLockFile
 } from '../../src/lifecycle/lock.js'
 
@@ -101,11 +101,11 @@ describe('sweepStaleLocks', () => {
   it('clears 11-stale-lock pile-up (regression for 2026-04-28 wet-mcp)', () => {
     // Test multiple DIFFERENT servers for the regression test
     for (let i = 0; i < 11; i++) {
-        writeLockWithAge(join(tmp, `wet-mcp-${i}.lock`), 999990 + i, 50000 + i, 25)
+      writeLockWithAge(join(tmp, `wet-mcp-${i}.lock`), 999990 + i, 50000 + i, 25)
     }
     let removed = 0
     for (let i = 0; i < 11; i++) {
-        removed += sweepStaleLocks(`wet-mcp-${i}`, DEFAULT_LOCK_TTL_HOURS, tmp)
+      removed += sweepStaleLocks(`wet-mcp-${i}`, DEFAULT_LOCK_TTL_HOURS, tmp)
     }
     expect(removed).toBe(11)
   })

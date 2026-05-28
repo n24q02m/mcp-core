@@ -55,7 +55,7 @@ async function openInWsl(url: string): Promise<boolean> {
   }
 
   // Fallback to powershell.exe -EncodedCommand
-  return openInPowerShell(url, { WSLENV: (process.env.WSLENV ? `${process.env.WSLENV}:` : '') + 'MCP_BROWSER_URL/u' })
+  return openInPowerShell(url, { WSLENV: `${process.env.WSLENV ? `${process.env.WSLENV}:` : ''}MCP_BROWSER_URL/u` })
 }
 
 /**

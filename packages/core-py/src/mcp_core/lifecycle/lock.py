@@ -144,6 +144,7 @@ def sweep_stale_locks(
                 # Try to acquire lock. If it fails, another process owns it.
                 if sys.platform == "win32":
                     import msvcrt
+
                     try:
                         fh.seek(_WIN_LOCK_OFFSET)
                         msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
@@ -151,6 +152,7 @@ def sweep_stale_locks(
                         continue
                 else:
                     import fcntl
+
                     try:
                         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                     except BlockingIOError:
@@ -177,6 +179,7 @@ def sweep_stale_locks(
                 # Unlock
                 if sys.platform == "win32":
                     import msvcrt
+
                     try:
                         fh.seek(_WIN_LOCK_OFFSET)
                         msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
@@ -184,6 +187,7 @@ def sweep_stale_locks(
                         pass
                 else:
                     import fcntl
+
                     fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
         except OSError:
             continue
@@ -224,7 +228,7 @@ class LifecycleLock:
     def __enter__(self) -> "LifecycleLock":
         # Robust "lock + verify" pattern to handle race with unlink.
         attempts = 0
-        while attempts < 3:
+        while True:
             attempts += 1
             try:
                 # Open in read+write without truncation.
@@ -232,6 +236,7 @@ class LifecycleLock:
 
                 if sys.platform == "win32":
                     import msvcrt
+
                     try:
                         self._fh.seek(_WIN_LOCK_OFFSET)
                         msvcrt.locking(self._fh.fileno(), msvcrt.LK_NBLCK, 1)
@@ -241,6 +246,7 @@ class LifecycleLock:
                         raise RuntimeError(f"LifecycleLock: another process holds {self._lock_file}") from e
                 else:
                     import fcntl
+
                     try:
                         fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                     except BlockingIOError as e:
@@ -256,10 +262,14 @@ class LifecycleLock:
                     if fstat.st_ino != dstat.st_ino:
                         # Raced with unlink + recreate. Try again.
                         self._exit_lock()
+                        if attempts >= 3:
+                            raise RuntimeError("Failed to verify lock file after 3 attempts (inode mismatch)")
                         continue
                 except OSError:
                     # Raced with unlink. Try again.
                     self._exit_lock()
+                    if attempts >= 3:
+                        raise RuntimeError("Failed to verify lock file after 3 attempts (file unlinked)")
                     continue
 
                 # Success.
@@ -285,6 +295,7 @@ class LifecycleLock:
         if self._fh is not None:
             if sys.platform == "win32":
                 import msvcrt
+
                 try:
                     self._fh.seek(_WIN_LOCK_OFFSET)
                     msvcrt.locking(self._fh.fileno(), msvcrt.LK_UNLCK, 1)
@@ -292,6 +303,7 @@ class LifecycleLock:
                     pass
             else:
                 import fcntl
+
                 try:
                     fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)
                 except OSError:

@@ -1,6 +1,5 @@
 """Tests for error paths in cross-process lifecycle lock."""
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -76,8 +75,11 @@ def test_windows_release_ignores_oserror(lock_root: Path) -> None:
             # Mock os.fstat and os.stat to avoid inode mismatch continue
             mock_stat = MagicMock(st_ino=123)
 
-            with patch("builtins.open", return_value=mock_fh),                  patch("os.fstat", return_value=mock_stat),                  patch("os.stat", return_value=mock_stat):
-
+            with (
+                patch("builtins.open", return_value=mock_fh),
+                patch("os.fstat", return_value=mock_stat),
+                patch("os.stat", return_value=mock_stat),
+            ):
                 lock.__enter__()
 
                 # Now set locking to fail for release
