@@ -6,17 +6,32 @@ either side invalidates the cache. Persist must not raise on filesystem errors
 bridge).
 """
 
+import json
 import logging
+from pathlib import Path
 from mcp_core.transport.cache import (
+    _cache_dir,
     cache_filename,
     persist_tools_cache,
     load_tools_cache,
 )
 
 
+def test_cache_dir_is_path():
+    path = _cache_dir()
+    assert isinstance(path, Path)
+    # Basic smoke check on default paths
+    assert ".config" in str(path) or ".cache" in str(path) or "mcp" in str(path)
+
+
 def test_cache_filename_includes_versions():
     name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
     assert name == "wet-mcp-55317-2.28.4-1.11.0.tools.json"
+
+
+def test_cache_filename_with_special_chars():
+    name = cache_filename("server@name", 80, srv_version="v1", core_version="v2")
+    assert name == "server@name-80-v1-v2.tools.json"
 
 
 def test_persist_then_load_match_versions(tmp_path, monkeypatch):
@@ -32,10 +47,58 @@ def test_load_returns_none_on_version_mismatch(tmp_path, monkeypatch):
     monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
 
     persist_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0", tools=[{"name": "search"}])
-    # Mismatch srv_version
+    # Mismatch srv_version (file won't exist because filename contains version)
     assert load_tools_cache("wet-mcp", 55317, srv_version="2.29.0", core_version="1.11.0") is None
     # Mismatch core_version
     assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.12.0") is None
+
+
+def test_load_tools_cache_internal_version_mismatch(tmp_path, monkeypatch):
+    """Line 76 coverage: file exists but internal payload mismatch."""
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+
+    payload = {"tools": [], "srv_version": "mismatch", "core_version": "1.11.0"}
+    name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    (tmp_path / name).write_text(json.dumps(payload), encoding="utf-8")
+
+    assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
+
+
+def test_load_tools_cache_corrupt_json(tmp_path, monkeypatch):
+    """Line 73-74 coverage: corrupt JSON."""
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+    name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    (tmp_path / name).write_text("{corrupt", encoding="utf-8")
+
+    assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
+
+
+def test_load_tools_cache_os_error(tmp_path, monkeypatch):
+    """Line 73-74 coverage: OSError during read."""
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+    name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    path = tmp_path / name
+    path.write_text("{}", encoding="utf-8")
+
+    original_read_text = Path.read_text
+
+    def fake_read_text(self, *args, **kwargs):
+        if str(self).endswith(".tools.json"):
+            raise OSError("Read failure")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
+
+
+def test_load_tools_cache_invalid_format(tmp_path, monkeypatch):
+    """Line 79 coverage: tools is not a list."""
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+    payload = {"tools": "not-a-list", "srv_version": "2.28.4", "core_version": "1.11.0"}
+    name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    (tmp_path / name).write_text(json.dumps(payload), encoding="utf-8")
+
+    assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
 
 
 def test_persist_atomic_replace_on_existing(tmp_path, monkeypatch):
