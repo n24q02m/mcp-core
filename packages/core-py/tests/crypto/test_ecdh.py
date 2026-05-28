@@ -7,8 +7,10 @@ from cryptography.hazmat.primitives.asymmetric.ec import (
 
 from mcp_core.crypto.ecdh import (
     derive_shared_secret,
+    export_private_key,
     export_public_key,
     generate_key_pair,
+    import_private_key,
     import_public_key,
 )
 
@@ -58,3 +60,20 @@ class TestDeriveSharedSecret:
         secret_ac = derive_shared_secret(alice_priv, charlie_pub)
 
         assert secret_ab.hex() != secret_ac.hex()
+
+class TestExportImportPrivateKey:
+    def test_exports_and_imports_private_key_as_base64url(self):
+        private_key, _ = generate_key_pair()
+        exported = export_private_key(private_key)
+        assert isinstance(exported, str)
+        assert len(exported) > 0
+
+        imported = import_private_key(exported)
+        assert isinstance(imported, EllipticCurvePrivateKey)
+
+    def test_roundtrip_preserves_private_key(self):
+        private_key, _ = generate_key_pair()
+        exported = export_private_key(private_key)
+        imported = import_private_key(exported)
+        re_exported = export_private_key(imported)
+        assert exported == re_exported
