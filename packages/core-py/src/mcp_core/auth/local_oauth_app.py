@@ -313,7 +313,7 @@ def create_local_oauth_app(
         if on_credentials_saved is not None:
             try:
                 result = on_credentials_saved(credentials, context)
-                if inspect.iscoroutine(result):
+                if inspect.isawaitable(result):
                     result = await result
                 if isinstance(result, dict):
                     next_step = cast("dict[str, Any]", result)
@@ -569,7 +569,7 @@ def create_local_oauth_app(
         if on_step_submitted is not None:
             try:
                 result = on_step_submitted(step_data, step_context)
-                if inspect.iscoroutine(result):
+                if inspect.isawaitable(result):
                     result = await result
                 if isinstance(result, dict):
                     next_step = cast("dict[str, Any]", result)
