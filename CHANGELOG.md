@@ -2,6 +2,41 @@
 
 <!-- version list -->
 
+## v1.17.0-beta.1 (2026-05-29)
+
+### Bug Fixes
+
+- Avoid env-var URL passing in WSL PowerShell browser open
+  ([#288](https://github.com/n24q02m/mcp-core/pull/288),
+  [`45274ae`](https://github.com/n24q02m/mcp-core/commit/45274ae47d83d2726eceb1bdd7e9ffaf6d4c98e0))
+
+- Await Future-returning OAuth callbacks via isawaitable
+  ([#283](https://github.com/n24q02m/mcp-core/pull/283),
+  [`8c1bd4c`](https://github.com/n24q02m/mcp-core/commit/8c1bd4c50328582a59ecb42489be7a753abf1467))
+
+- Harden open-redirect validation in relay login
+  ([#293](https://github.com/n24q02m/mcp-core/pull/293),
+  [`282dcb6`](https://github.com/n24q02m/mcp-core/commit/282dcb673f4be52d11ba5555f2082ae95c376818))
+
+- Refactor OAuthProvider into cache/pkce modules
+  ([#277](https://github.com/n24q02m/mcp-core/pull/277),
+  [`3c4e32c`](https://github.com/n24q02m/mcp-core/commit/3c4e32c458602ddb19193208b0872913a4499d64))
+
+- Secure browser opening via PowerShell in WSL/win32
+  ([#288](https://github.com/n24q02m/mcp-core/pull/288),
+  [`45274ae`](https://github.com/n24q02m/mcp-core/commit/45274ae47d83d2726eceb1bdd7e9ffaf6d4c98e0))
+
+- Use per-file random salt for config encryption
+  ([#291](https://github.com/n24q02m/mcp-core/pull/291),
+  [`8cb514d`](https://github.com/n24q02m/mcp-core/commit/8cb514d4d8b265a2b4a98a8e4566857aeba599ff))
+
+### Features
+
+- Add OAuth refresh_token grant and offline_access scope (#261)
+  ([#294](https://github.com/n24q02m/mcp-core/pull/294),
+  [`f685feb`](https://github.com/n24q02m/mcp-core/commit/f685feb4ab7d60281bc4136cd73678589f9ec5d2))
+
+
 ## v1.16.0 (2026-05-28)
 
 
