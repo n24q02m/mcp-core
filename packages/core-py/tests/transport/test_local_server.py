@@ -168,6 +168,9 @@ class TestBearerMCPApp:
         assert response.status_code == 401
         www_auth = response.headers.get("www-authenticate", "")
         assert "Bearer" in www_auth
+        # RFC 9728: the challenge MUST advertise the protected-resource-metadata
+        # URL so MCP clients can discover the authorization server (#260).
+        assert "resource_metadata=" in www_auth
 
     def test_rejects_invalid_token(self, tmp_path: Path) -> None:
         from mcp_core.oauth.jwt_issuer import JWTIssuer
@@ -189,6 +192,9 @@ class TestBearerMCPApp:
             headers={"Authorization": "Bearer fake.jwt.token"},
         )
         assert response.status_code == 401
+        www_auth = response.headers.get("www-authenticate", "")
+        assert "resource_metadata=" in www_auth
+        assert 'error="invalid_token"' in www_auth
 
     def test_forwards_valid_token(self, tmp_path: Path) -> None:
         from mcp_core.oauth.jwt_issuer import JWTIssuer
@@ -215,6 +221,86 @@ class TestBearerMCPApp:
         )
         assert response.status_code == 200
         assert response.json() == {"ok": True}
+
+
+class TestBearerMCPAppResourceMetadata:
+    """The 401 ``WWW-Authenticate`` challenge must carry the RFC 9728
+    ``resource_metadata`` URL so MCP clients can discover the authorization
+    server. Regression coverage for #260 (deployed servers emitted a bare
+    ``Bearer`` challenge from ``BearerMCPApp``, not ``OAuthMiddleware``).
+    """
+
+    @staticmethod
+    def _make_app(tmp_path: Path):
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+
+        from mcp_core.oauth.jwt_issuer import JWTIssuer
+
+        jwt_issuer = JWTIssuer(server_name="test", keys_dir=tmp_path / "jwt-keys")
+
+        async def dummy_app(scope, receive, send):
+            pass
+
+        bearer_app = BearerMCPApp(inner=dummy_app, jwt_issuer=jwt_issuer)
+        return Starlette(routes=[Route("/mcp", endpoint=bearer_app)])
+
+    def test_missing_token_uses_public_url_when_set(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("PUBLIC_URL", "https://wet-mcp.n24q02m.com")
+        app = self._make_app(tmp_path)
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/mcp")
+        assert response.status_code == 401
+        www_auth = response.headers.get("www-authenticate", "")
+        assert www_auth == (
+            'Bearer resource_metadata="https://wet-mcp.n24q02m.com/.well-known/oauth-protected-resource"'
+        )
+
+    def test_invalid_token_uses_public_url_when_set(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("PUBLIC_URL", "https://wet-mcp.n24q02m.com")
+        app = self._make_app(tmp_path)
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/mcp", headers={"Authorization": "Bearer fake.jwt.token"})
+        assert response.status_code == 401
+        www_auth = response.headers.get("www-authenticate", "")
+        assert www_auth == (
+            'Bearer resource_metadata="https://wet-mcp.n24q02m.com/.well-known/oauth-protected-resource", '
+            'error="invalid_token"'
+        )
+
+    def test_public_url_trailing_slash_normalized(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("PUBLIC_URL", "https://wet-mcp.n24q02m.com/")
+        app = self._make_app(tmp_path)
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/mcp")
+        www_auth = response.headers.get("www-authenticate", "")
+        assert "https://wet-mcp.n24q02m.com/.well-known/oauth-protected-resource" in www_auth
+        assert ".com//.well-known" not in www_auth
+
+    def test_missing_token_derives_from_host_when_public_url_unset(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("PUBLIC_URL", raising=False)
+        app = self._make_app(tmp_path)
+        client = TestClient(app, base_url="http://example.test", raise_server_exceptions=False)
+        response = client.post("/mcp")
+        assert response.status_code == 401
+        www_auth = response.headers.get("www-authenticate", "")
+        assert www_auth == (
+            'Bearer resource_metadata="http://example.test/.well-known/oauth-protected-resource"'
+        )
+
+    def test_derives_scheme_from_x_forwarded_proto_when_public_url_unset(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("PUBLIC_URL", raising=False)
+        app = self._make_app(tmp_path)
+        client = TestClient(app, base_url="http://proxied.test", raise_server_exceptions=False)
+        response = client.post("/mcp", headers={"X-Forwarded-Proto": "https"})
+        www_auth = response.headers.get("www-authenticate", "")
+        assert www_auth == (
+            'Bearer resource_metadata="https://proxied.test/.well-known/oauth-protected-resource"'
+        )
 
 
 class TestBearerMCPAppAuthDisabled:

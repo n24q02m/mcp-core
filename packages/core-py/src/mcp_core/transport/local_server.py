@@ -10,6 +10,7 @@ Entry point for credential servers running in local mode (single-user,
 
 from __future__ import annotations
 
+import os
 import socket
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -90,6 +91,25 @@ class BearerMCPApp:
                 "(e.g. reverse proxy, API gateway)."
             )
 
+    def _resource_metadata_url(self, scope: Scope) -> str:
+        """Derive the RFC 9728 protected-resource-metadata URL from the request.
+
+        Mirrors ``well_known.derive_base_url``'s PUBLIC_URL-first convention:
+        the deployed servers (oci-vm-prod behind CF Tunnel -> Caddy) set
+        ``PUBLIC_URL`` so the advertised metadata URL is the public HTTPS host
+        rather than the internal HTTP socket address. When unset, fall back to
+        the request Host + ``X-Forwarded-Proto`` (or the raw socket scheme).
+        """
+        public_url = os.environ.get("PUBLIC_URL")
+        if public_url:
+            base = public_url.rstrip("/")
+        else:
+            headers = dict(scope.get("headers", []))
+            host = headers.get(b"host", b"").decode("latin-1") or "localhost"
+            proto = headers.get(b"x-forwarded-proto", b"").decode("latin-1") or scope.get("scheme", "http")
+            base = f"{proto}://{host}"
+        return f"{base}/.well-known/oauth-protected-resource"
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self._inner(scope, receive, send)
@@ -123,7 +143,7 @@ class BearerMCPApp:
 
             resp = Response(
                 status_code=401,
-                headers={"WWW-Authenticate": "Bearer"},
+                headers={"WWW-Authenticate": f'Bearer resource_metadata="{self._resource_metadata_url(scope)}"'},
             )
             await resp(scope, receive, send)
             return
@@ -135,7 +155,11 @@ class BearerMCPApp:
 
             resp = Response(
                 status_code=401,
-                headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
+                headers={
+                    "WWW-Authenticate": (
+                        f'Bearer resource_metadata="{self._resource_metadata_url(scope)}", error="invalid_token"'
+                    )
+                },
             )
             await resp(scope, receive, send)
             return
