@@ -162,23 +162,14 @@ function getSafeNext(input: unknown): string {
   return next
 }
 
-export async function loginGetHandler(
-  req: Pick<RelayLoginRequest, 'query'>,
-  res: Pick<RelayLoginResponse, 'send' | 'set'>
-): Promise<void> {
-  const next = getSafeNext(req.query?.next)
-  res.set?.('Content-Type', 'text/html')
-  // ``next`` flows from the query string but every interpolation is run
-  // through ``escapeHtml`` (defined above) which replaces &, <, >, ", and
-  // ' with their HTML entity equivalents — the same character set the
-  // raw-html-format rule expects sanitisers to handle. Semgrep can't see
-  // the custom helper so we suppress the warning here.
+export function renderRelayLogin(next: string, error?: string): string {
   const safeNext = escapeHtml(String(next))
-  // Visual parity with the relay credential form: same dark-theme card,
-  // typography, ``.field-group`` / ``.field-label`` / ``.field-input``
-  // classes, and primary submit button styling. Pure POST (no JavaScript)
-  // so the gate works under strict CSP that blocks inline scripts.
-  const bodyHtml = `    <div class="container">
+  const ariaInvalid = error ? ' aria-invalid="true" aria-errormessage="status-box"' : ''
+  const errorBox = error
+    ? `\n                <div class="status-box error" style="display: block;" role="alert" id="status-box">${escapeHtml(error)}</div>`
+    : ''
+
+  return `    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">Relay login</h1>
@@ -207,15 +198,28 @@ export async function loginGetHandler(
                         autocapitalize="off"
                         spellcheck="false"
                         required
-                        autofocus
+                        autofocus${ariaInvalid}
                     />
                 </div>
 
-                <button type="submit" class="submit-btn">Continue</button>
+                <button type="submit" class="submit-btn">Continue</button>${errorBox}
             </form>
         </div>
-    </div>` // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-  res.send(renderFormShell('Relay login', bodyHtml))
+    </div>`
+}
+
+export async function loginGetHandler(
+  req: Pick<RelayLoginRequest, 'query'>,
+  res: Pick<RelayLoginResponse, 'send' | 'set'>
+): Promise<void> {
+  const next = getSafeNext(req.query?.next)
+  res.set?.('Content-Type', 'text/html')
+  // Visual parity with the relay credential form: same dark-theme card,
+  // typography, ``.field-group`` / ``.field-label`` / ``.field-input``
+  // classes, and primary submit button styling. Pure POST (no JavaScript)
+  // so the gate works under strict CSP that blocks inline scripts.
+  const bodyHtml = renderRelayLogin(next)
+  res.send(renderFormShell('Relay login', bodyHtml)) // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
 }
 
 export async function loginPostHandler(
@@ -224,17 +228,19 @@ export async function loginPostHandler(
 ): Promise<void> {
   const ip = req.ip ?? 'unknown'
   const now = Date.now()
+  const next = getSafeNext(req.body?.next)
   const failEntry = fails.get(ip)
   if (failEntry && now - failEntry.firstAt < FAIL_WINDOW_MS && failEntry.count >= FAIL_LIMIT) {
     res.header?.('Retry-After', String(Math.ceil((FAIL_WINDOW_MS - (now - failEntry.firstAt)) / 1000)))
-    res.status(429).send('Too many login attempts. Try again later.')
+    res
+      .status(429)
+      .send(renderFormShell('Relay login', renderRelayLogin(next, 'Too many login attempts. Try again later.'))) // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
     return
   }
   const password = String(req.body?.password ?? '')
-  const next = getSafeNext(req.body?.next)
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
     bumpFail(ip)
-    res.status(401).send('Invalid password.')
+    res.status(401).send(renderFormShell('Relay login', renderRelayLogin(next, 'Invalid password.'))) // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
     return
   }
   clearFail(ip)
