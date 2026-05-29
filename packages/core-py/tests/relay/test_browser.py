@@ -1,5 +1,6 @@
 """Tests for cross-platform browser opening."""
 
+import base64
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -142,8 +143,8 @@ class TestOpenInWsl:
             # Second call should be powershell
             args = mock_sp.run.call_args
             assert args[0][0][0] == "powershell.exe"
-            assert "MCP_BROWSER_URL/u" in args[1]["env"]["WSLENV"]
-            assert args[1]["env"]["MCP_BROWSER_URL"] == "https://example.com"
+            # WSLENV should NOT be present now
+            assert "env" not in args[1]
 
     def test_returns_false_when_all_methods_fail(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
@@ -156,7 +157,7 @@ class TestOpenInWsl:
 
 
 class TestOpenInPowerShell:
-    def test_uses_env_var_and_noprofile(self):
+    def test_uses_embedded_base64_url_and_noprofile(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.SubprocessError = Exception
             from mcp_core.relay.browser import _open_in_powershell
@@ -173,5 +174,14 @@ class TestOpenInPowerShell:
             assert "-NoProfile" in cmd_list
             assert "-EncodedCommand" in cmd_list
 
-            env = kwargs["env"]
-            assert env["MCP_BROWSER_URL"] == url
+            encoded_command = cmd_list[cmd_list.index("-EncodedCommand") + 1]
+            decoded = base64.b64decode(encoded_command).decode("utf-16le")
+
+            base64_url = base64.b64encode(url.encode("utf-8")).decode("ascii")
+            assert base64_url in decoded
+            assert "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String" in decoded
+            assert "Start-Process $url" in decoded
+
+            # MCP_BROWSER_URL should NOT be in env if env is passed (kwargs might be empty or not contain it)
+            if "env" in kwargs:
+                assert "MCP_BROWSER_URL" not in kwargs["env"]

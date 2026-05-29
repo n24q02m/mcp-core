@@ -28,17 +28,12 @@ function encodePowerShellCommand(command: string): string {
   return Buffer.from(command, 'utf16le').toString('base64')
 }
 
-async function openInPowerShell(url: string, extraEnv?: Record<string, string>): Promise<boolean> {
+async function openInPowerShell(url: string): Promise<boolean> {
   try {
-    const command = 'Start-Process $env:MCP_BROWSER_URL'
+    const base64Url = Buffer.from(url, 'utf8').toString('base64')
+    const command = `$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64Url}')); Start-Process $url`
     const encodedCommand = encodePowerShellCommand(command)
-    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encodedCommand], {
-      env: {
-        ...process.env,
-        ...extraEnv,
-        MCP_BROWSER_URL: url
-      }
-    })
+    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encodedCommand])
     return true
   } catch {
     return false
@@ -55,7 +50,7 @@ async function openInWsl(url: string): Promise<boolean> {
   }
 
   // Fallback to powershell.exe -EncodedCommand
-  return openInPowerShell(url, { WSLENV: (process.env.WSLENV ? `${process.env.WSLENV}:` : '') + 'MCP_BROWSER_URL/u' })
+  return openInPowerShell(url)
 }
 
 /**
