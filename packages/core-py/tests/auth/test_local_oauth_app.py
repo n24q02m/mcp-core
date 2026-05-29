@@ -1188,3 +1188,60 @@ def test_prefill_does_not_affect_oauth_params():
     params["prefill_X"] = "v"
     resp = client.get("/authorize", params=params)
     assert resp.status_code == 200
+
+
+def test_otp_endpoint_with_future_callbacks():
+    """Callbacks returning a Future (e.g. Telethon) should be awaited properly."""
+    import asyncio
+
+    # Setup a Future that resolves to an otp_required step
+    loop = asyncio.new_event_loop()
+    f1 = loop.create_future()
+    f1.set_result(
+        {
+            "type": "otp_required",
+            "text": "Enter OTP",
+            "field": "otp_code",
+            "input_type": "text",
+        }
+    )
+
+    # Setup a Future that resolves to None (complete)
+    f2 = loop.create_future()
+    f2.set_result(None)
+
+    def on_save(creds: dict[str, str], _context: dict[str, str]):
+        return f1
+
+    def on_step(_data: dict[str, str], _context: dict[str, str]):
+        return f2
+
+    app, _issuer = create_local_oauth_app(
+        server_name="test",
+        relay_schema={
+            "server": "test",
+            "displayName": "Test",
+            "fields": [
+                {
+                    "key": "TELEGRAM_PHONE",
+                    "label": "Phone",
+                    "type": "tel",
+                    "required": True,
+                }
+            ],
+        },
+        on_credentials_saved=on_save,
+        on_step_submitted=on_step,
+    )
+    client = TestClient(app)
+
+    nonce = _extract_nonce(client)
+    resp = client.post(f"/authorize?nonce={nonce}", json={"TELEGRAM_PHONE": "+1234567890"})
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["next_step"]["type"] == "otp_required"
+
+    resp = client.post("/otp", json={"otp_code": "12345"})
+    data = resp.json()
+    assert data["ok"] is True
+    assert "next_step" not in data
