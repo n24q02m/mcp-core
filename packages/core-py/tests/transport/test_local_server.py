@@ -286,9 +286,7 @@ class TestBearerMCPAppResourceMetadata:
         response = client.post("/mcp")
         assert response.status_code == 401
         www_auth = response.headers.get("www-authenticate", "")
-        assert www_auth == (
-            'Bearer resource_metadata="http://example.test/.well-known/oauth-protected-resource"'
-        )
+        assert www_auth == ('Bearer resource_metadata="http://example.test/.well-known/oauth-protected-resource"')
 
     def test_derives_scheme_from_x_forwarded_proto_when_public_url_unset(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -298,9 +296,7 @@ class TestBearerMCPAppResourceMetadata:
         client = TestClient(app, base_url="http://proxied.test", raise_server_exceptions=False)
         response = client.post("/mcp", headers={"X-Forwarded-Proto": "https"})
         www_auth = response.headers.get("www-authenticate", "")
-        assert www_auth == (
-            'Bearer resource_metadata="https://proxied.test/.well-known/oauth-protected-resource"'
-        )
+        assert www_auth == ('Bearer resource_metadata="https://proxied.test/.well-known/oauth-protected-resource"')
 
 
 class TestBearerMCPAppAuthDisabled:
