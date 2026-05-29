@@ -64,10 +64,10 @@ export class JWTIssuer {
     return { keys: [jwk] }
   }
 
-  /** Issue an RS256 JWT access token. */
+  /** Issue an RS256 JWT access token (``typ="access"``). */
   async issueAccessToken(sub: string, expiresInSeconds = 3600): Promise<string> {
     if (!this.privateKey) throw new Error('JWTIssuer not initialized')
-    return new jose.SignJWT({ sub })
+    return new jose.SignJWT({ sub, typ: 'access' })
       .setProtectedHeader({ alg: 'RS256', kid: this.kid })
       .setIssuer(this.serverName)
       .setAudience(this.serverName)
@@ -76,13 +76,66 @@ export class JWTIssuer {
       .sign(this.privateKey)
   }
 
-  /** Verify JWT and return payload. Throws on failure. */
+  /**
+   * Issue an RS256 JWT refresh token (``typ="refresh"``).
+   *
+   * Defaults to a 30-day (2592000s) lifetime so long-running MCP clients can
+   * mint fresh access tokens without forcing the user back through the
+   * browser PKCE flow every hour. Same key / iss / aud as access tokens; the
+   * ``typ`` claim is the only thing distinguishing them, and
+   * ``verifyAccessToken`` rejects ``typ="refresh"`` so a refresh token can
+   * never be used as an access token at the ``/mcp`` resource.
+   */
+  async issueRefreshToken(sub: string, expiresInSeconds = 2592000): Promise<string> {
+    if (!this.privateKey) throw new Error('JWTIssuer not initialized')
+    return new jose.SignJWT({ sub, typ: 'refresh' })
+      .setProtectedHeader({ alg: 'RS256', kid: this.kid })
+      .setIssuer(this.serverName)
+      .setAudience(this.serverName)
+      .setIssuedAt()
+      .setExpirationTime(`${expiresInSeconds}s`)
+      .sign(this.privateKey)
+  }
+
+  /**
+   * Verify a JWT access token and return its payload. Throws on failure
+   * (bad signature, wrong issuer/audience, expired) — the same jose errors
+   * existing callers already catch. Additionally rejects tokens whose
+   * ``typ`` claim is ``"refresh"`` (throwing ``jose.errors.JWTClaimValidationFailed``)
+   * so a refresh token cannot be replayed as an access token. Tokens with
+   * ``typ="access"`` OR a missing ``typ`` claim are accepted (the latter
+   * keeps already-issued pre-refresh-support tokens valid).
+   */
   async verifyAccessToken(token: string): Promise<jose.JWTPayload> {
     if (!this.publicKey) throw new Error('JWTIssuer not initialized')
     const { payload } = await jose.jwtVerify(token, this.publicKey, {
       issuer: this.serverName,
       audience: this.serverName
     })
+    if (payload.typ === 'refresh') {
+      throw new jose.errors.JWTClaimValidationFailed('Refresh token cannot be used as an access token', payload, 'typ')
+    }
+    return payload
+  }
+
+  /**
+   * Verify a JWT refresh token and return its payload. Same key / audience /
+   * issuer checks as ``verifyAccessToken`` and throws the same jose errors on
+   * failure. Additionally asserts ``typ=="refresh"`` (throwing
+   * ``jose.errors.JWTClaimValidationFailed`` otherwise) so an access token
+   * can never be exchanged at the refresh grant. ``JWTClaimValidationFailed``
+   * extends ``jose.errors.JOSEError``, so callers' existing ``catch`` clauses
+   * around ``verifyAccessToken`` already catch it.
+   */
+  async verifyRefreshToken(token: string): Promise<jose.JWTPayload> {
+    if (!this.publicKey) throw new Error('JWTIssuer not initialized')
+    const { payload } = await jose.jwtVerify(token, this.publicKey, {
+      issuer: this.serverName,
+      audience: this.serverName
+    })
+    if (payload.typ !== 'refresh') {
+      throw new jose.errors.JWTClaimValidationFailed('Token is not a refresh token', payload, 'typ')
+    }
     return payload
   }
 }

@@ -342,6 +342,10 @@ class TestTokenExchange:
         assert "access_token" in token_data
         assert token_data["token_type"] == "Bearer"
         assert token_data["expires_in"] > 0
+        # Issue #261: authorization_code grant now also returns a refresh token
+        # + offline_access scope so long-running clients can renew.
+        assert "refresh_token" in token_data
+        assert token_data["scope"] == "offline_access"
 
         # Verify the JWT is valid. Subject is now a per-authorize-request UUID
         # (not the legacy static "local-user") so remote-relay mode can isolate
@@ -350,6 +354,9 @@ class TestTokenExchange:
         assert isinstance(claims["sub"], str)
         assert len(claims["sub"]) >= 20
         assert claims["sub"] != "local-user"
+        # The refresh token verifies as a refresh token and shares the subject.
+        refresh_claims = issuer.verify_refresh_token(token_data["refresh_token"])
+        assert refresh_claims["sub"] == claims["sub"]
 
     def test_token_invalid_code(self, client):
         """POST /token with a wrong/missing auth code returns 400."""
@@ -480,6 +487,101 @@ class TestTokenExchange:
         )
         assert resp2.status_code == 400
         assert resp2.json()["error"] == "invalid_grant"
+
+
+class TestRefreshTokenGrant:
+    """``grant_type=refresh_token`` flow (issue #261)."""
+
+    @staticmethod
+    def _complete_auth_code_flow(client: TestClient) -> dict:
+        """Run the full authorization_code flow and return the /token JSON."""
+        import re
+        from urllib.parse import parse_qs, urlparse
+
+        verifier, challenge = _pkce_pair()
+        resp = client.get(
+            "/authorize",
+            params={
+                "client_id": "test-client",
+                "redirect_uri": "http://localhost/callback",
+                "state": "rt-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        )
+        nonce = re.search(r'nonce=([^"&]+)', resp.text).group(1)
+        post = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "sk-rt"})
+        code = parse_qs(urlparse(post.json()["redirect_url"]).query)["code"][0]
+        tok = client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "code_verifier": verifier,
+            },
+        )
+        assert tok.status_code == 200
+        return tok.json()
+
+    def test_refresh_grant_returns_new_access_and_refresh(self, app_and_issuer):
+        """A valid refresh_token grant returns a NEW access + refresh token."""
+        app, issuer, _saved = app_and_issuer
+        client = TestClient(app, base_url="http://localhost")
+
+        original = self._complete_auth_code_flow(client)
+        original_sub = str(issuer.verify_refresh_token(original["refresh_token"])["sub"])
+
+        resp = client.post(
+            "/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": original["refresh_token"],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["token_type"] == "Bearer"
+        assert data["expires_in"] == 3600
+        assert data["scope"] == "offline_access"
+        assert "access_token" in data
+        assert "refresh_token" in data
+
+        # New tokens verify and preserve the subject (stateless rotation).
+        new_access = issuer.verify_access_token(data["access_token"])
+        new_refresh = issuer.verify_refresh_token(data["refresh_token"])
+        assert new_access["sub"] == original_sub
+        assert new_refresh["sub"] == original_sub
+
+    def test_refresh_grant_missing_token_is_invalid_request(self, client):
+        """``grant_type=refresh_token`` without a refresh_token -> 400 invalid_request."""
+        resp = client.post("/token", data={"grant_type": "refresh_token"})
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "invalid_request"
+
+    def test_refresh_grant_invalid_token_is_invalid_grant(self, client):
+        """A bogus refresh_token -> 400 invalid_grant."""
+        resp = client.post(
+            "/token",
+            data={"grant_type": "refresh_token", "refresh_token": "not-a-jwt"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "invalid_grant"
+
+    def test_refresh_grant_rejects_access_token_as_refresh(self, app_and_issuer):
+        """Presenting an access token at the refresh grant -> 400 invalid_grant."""
+        app, _issuer, _saved = app_and_issuer
+        client = TestClient(app, base_url="http://localhost")
+        original = self._complete_auth_code_flow(client)
+
+        resp = client.post(
+            "/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": original["access_token"],
+            },
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "invalid_grant"
 
 
 # ---------------------------------------------------------------------------

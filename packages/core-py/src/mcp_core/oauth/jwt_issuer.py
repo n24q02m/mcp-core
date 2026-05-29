@@ -101,7 +101,7 @@ class JWTIssuer:
         }
 
     def issue_access_token(self, sub: str, expires_in_seconds: int = 3600) -> str:
-        """Issue an RS256 JWT access token."""
+        """Issue an RS256 JWT access token (``typ="access"``)."""
         now = datetime.datetime.now(datetime.UTC)
         payload = {
             "iss": self.server_name,
@@ -109,15 +109,72 @@ class JWTIssuer:
             "sub": sub,
             "iat": now,
             "exp": now + datetime.timedelta(seconds=expires_in_seconds),
+            "typ": "access",
+        }
+        return jwt.encode(payload, self.private_key, algorithm="RS256", headers={"kid": self._kid})
+
+    def issue_refresh_token(self, sub: str, expires_in_seconds: int = 2592000) -> str:
+        """Issue an RS256 JWT refresh token (``typ="refresh"``).
+
+        Defaults to a 30-day (2592000s) lifetime so long-running MCP clients
+        can mint fresh access tokens without forcing the user back through the
+        browser PKCE flow every hour. Same key / iss / aud as access tokens;
+        the ``typ`` claim is the only thing that distinguishes them, and
+        ``verify_access_token`` rejects ``typ="refresh"`` so a refresh token
+        can never be used as an access token at the ``/mcp`` resource.
+        """
+        now = datetime.datetime.now(datetime.UTC)
+        payload = {
+            "iss": self.server_name,
+            "aud": self.server_name,
+            "sub": sub,
+            "iat": now,
+            "exp": now + datetime.timedelta(seconds=expires_in_seconds),
+            "typ": "refresh",
         }
         return jwt.encode(payload, self.private_key, algorithm="RS256", headers={"kid": self._kid})
 
     def verify_access_token(self, token: str) -> dict:
-        """Verify JWT and return payload. Raises standard PyJWT exceptions on failure."""
-        return jwt.decode(
+        """Verify a JWT access token and return its payload.
+
+        Raises standard PyJWT exceptions on failure (bad signature, wrong
+        issuer/audience, expired). Additionally rejects tokens whose ``typ``
+        claim is ``"refresh"`` with ``jwt.InvalidTokenError`` so a refresh
+        token cannot be replayed as an access token. Tokens with
+        ``typ="access"`` OR a missing ``typ`` claim are accepted (the latter
+        keeps already-issued pre-refresh-support tokens valid).
+        """
+        payload = jwt.decode(
             token,
             self.public_key,
             algorithms=["RS256"],
             audience=self.server_name,
             issuer=self.server_name,
         )
+        if payload.get("typ") == "refresh":
+            msg = "Refresh token cannot be used as an access token"
+            raise jwt.InvalidTokenError(msg)
+        return payload
+
+    def verify_refresh_token(self, token: str) -> dict:
+        """Verify a JWT refresh token and return its payload.
+
+        Same key / audience / issuer checks as ``verify_access_token`` and
+        raises the same standard PyJWT exceptions on failure. Additionally
+        asserts ``typ=="refresh"`` (raising ``jwt.InvalidTokenError``
+        otherwise) so an access token can never be exchanged at the refresh
+        grant. ``jwt.InvalidTokenError`` is the base class for the library's
+        decode errors, so existing ``except jwt.InvalidTokenError`` / ``except
+        jwt.PyJWTError`` clauses already catch it.
+        """
+        payload = jwt.decode(
+            token,
+            self.public_key,
+            algorithms=["RS256"],
+            audience=self.server_name,
+            issuer=self.server_name,
+        )
+        if payload.get("typ") != "refresh":
+            msg = "Token is not a refresh token"
+            raise jwt.InvalidTokenError(msg)
+        return payload

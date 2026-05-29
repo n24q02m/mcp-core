@@ -221,8 +221,13 @@ def test_redirect_callback_exchanges_code_and_calls_on_token_received(monkeypatc
     assert tok.status_code == 200
     token_body = tok.json()
     assert token_body["token_type"] == "Bearer"
+    # Issue #261: authorization_code grant now also returns refresh_token + scope.
+    assert "refresh_token" in token_body
+    assert token_body["scope"] == "offline_access"
     claims = issuer.verify_access_token(token_body["access_token"])
     assert claims["sub"] == "local-user"
+    refresh_claims = issuer.verify_refresh_token(token_body["refresh_token"])
+    assert refresh_claims["sub"] == "local-user"
 
 
 def test_redirect_callback_rejects_invalid_state():
@@ -451,3 +456,66 @@ def test_invalid_flow_config_raises():
             upstream=UpstreamOAuthConfig(token_url="https://example.test/token", client_id="x"),
             on_token_received=lambda t: None,
         )
+
+
+# ---------------------------------------------------------------------------
+# refresh_token grant (issue #261)
+# ---------------------------------------------------------------------------
+
+
+def _refresh_app():
+    """Build a redirect-flow delegated app + client for refresh-grant tests."""
+    cfg = UpstreamOAuthConfig(
+        token_url="https://example.test/token",
+        client_id="upstream-client",
+        authorize_url="https://example.test/authorize",
+    )
+    app, issuer = create_delegated_oauth_app(
+        server_name="test",
+        flow="redirect",
+        upstream=cfg,
+        on_token_received=lambda t: "provider-user-1",
+    )
+    return TestClient(app, base_url="http://localhost"), issuer
+
+
+def test_delegated_refresh_grant_returns_new_access_and_refresh():
+    """A valid refresh_token grant returns NEW access + refresh tokens (rotation)."""
+    client, issuer = _refresh_app()
+    seed_refresh = issuer.issue_refresh_token(sub="provider-user-1")
+
+    resp = client.post(
+        "/token",
+        data={"grant_type": "refresh_token", "refresh_token": seed_refresh},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["token_type"] == "Bearer"
+    assert data["expires_in"] == 3600
+    assert data["scope"] == "offline_access"
+    assert issuer.verify_access_token(data["access_token"])["sub"] == "provider-user-1"
+    assert issuer.verify_refresh_token(data["refresh_token"])["sub"] == "provider-user-1"
+
+
+def test_delegated_refresh_grant_missing_token_invalid_request():
+    client, _issuer = _refresh_app()
+    resp = client.post("/token", data={"grant_type": "refresh_token"})
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+
+
+def test_delegated_refresh_grant_invalid_token_invalid_grant():
+    client, _issuer = _refresh_app()
+    resp = client.post(
+        "/token",
+        data={"grant_type": "refresh_token", "refresh_token": "garbage"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_grant"
+
+
+def test_delegated_unknown_grant_type_unsupported():
+    client, _issuer = _refresh_app()
+    resp = client.post("/token", data={"grant_type": "client_credentials"})
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "unsupported_grant_type"

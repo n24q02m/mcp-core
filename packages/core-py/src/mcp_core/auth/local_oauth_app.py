@@ -436,14 +436,36 @@ def create_local_oauth_app(
         _prune_expired(pending_prefills, _PREFILL_TTL_S)
         return JSONResponse({}, status_code=204)
 
+    def _issue_token_response(sub: str) -> JSONResponse:
+        """Build the standard /token success body for *sub*.
+
+        Issues a fresh access token AND a fresh refresh token. The refresh
+        token lets long-running MCP clients renew the 1h access token without
+        re-running the browser PKCE flow (issue #261). ``scope`` advertises
+        ``offline_access`` so clients know a refresh token was granted.
+        """
+        access_token = jwt_issuer.issue_access_token(sub=sub)
+        refresh_token = jwt_issuer.issue_refresh_token(sub=sub)
+        return JSONResponse(
+            {
+                "access_token": access_token,
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "refresh_token": refresh_token,
+                "scope": "offline_access",
+            }
+        )
+
     async def token(request: Request) -> JSONResponse:
-        """POST /token -- exchange auth code + PKCE code_verifier for JWT."""
+        """POST /token -- authorization_code exchange or refresh_token rotation."""
         try:
             form = await request.form()
         except Exception:
             return JSONResponse({"error": "invalid_request"}, status_code=400)
 
         grant_type = form.get("grant_type")
+        if grant_type == "refresh_token":
+            return _handle_refresh_token(form)
         if grant_type != "authorization_code":
             return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
 
@@ -485,15 +507,29 @@ def create_local_oauth_app(
         # attempted by remote-relay consumers. The new flow mints a fresh sub in
         # authorize_get, carries it through on_credentials_saved via
         # SubjectContext, and stamps it onto the JWT here.
-        access_token = jwt_issuer.issue_access_token(sub=entry["sub"])
+        return _issue_token_response(entry["sub"])
 
-        return JSONResponse(
-            {
-                "access_token": access_token,
-                "token_type": "Bearer",
-                "expires_in": 3600,
-            }
-        )
+    def _handle_refresh_token(form: Any) -> JSONResponse:
+        """Handle ``grant_type=refresh_token`` (RFC 6749 §6) statelessly.
+
+        Verifies the presented refresh token's signature / iss / aud / exp /
+        ``typ`` via the JWT issuer (no server-side store), extracts ``sub``,
+        and issues a NEW access token AND a NEW refresh token (rotation). The
+        refresh token is self-contained, so rotation here is stateless: the
+        old refresh token simply expires on its own 30-day clock; clients are
+        expected to replace it with the rotated one returned below.
+        """
+        refresh_token = form.get("refresh_token")
+        if not refresh_token:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Missing refresh_token"},
+                status_code=400,
+            )
+        try:
+            claims = jwt_issuer.verify_refresh_token(str(refresh_token))
+        except Exception:
+            return JSONResponse({"error": "invalid_grant"}, status_code=400)
+        return _issue_token_response(str(claims["sub"]))
 
     async def otp_handler(request: Request) -> JSONResponse:
         """POST /otp -- receive multi-step auth input (OTP code or 2FA password).

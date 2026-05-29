@@ -8,9 +8,10 @@ describe('authorizationServerMetadata', () => {
     expect(meta.authorization_endpoint).toBe('http://127.0.0.1:9876/authorize')
     expect(meta.token_endpoint).toBe('http://127.0.0.1:9876/token')
     expect(meta.response_types_supported).toEqual(['code'])
-    expect(meta.grant_types_supported).toEqual(['authorization_code'])
+    expect(meta.grant_types_supported).toEqual(['authorization_code', 'refresh_token'])
     expect(meta.code_challenge_methods_supported).toEqual(['S256'])
     expect(meta.token_endpoint_auth_methods_supported).toEqual(['none'])
+    expect(meta.scopes_supported).toEqual(['offline_access'])
   })
 
   it('trims trailing slashes correctly', () => {

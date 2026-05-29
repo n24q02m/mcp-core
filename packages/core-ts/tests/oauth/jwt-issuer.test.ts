@@ -81,6 +81,7 @@ describe('JWTIssuer', () => {
     expect(payload.sub).toBe('user-1')
     expect(payload.iss).toBe(serverName)
     expect(payload.aud).toBe(serverName)
+    expect(payload.typ).toBe('access')
     expect(protectedHeader.alg).toBe('RS256')
     expect(protectedHeader.kid).toBe('key-1')
   })
@@ -105,5 +106,89 @@ describe('JWTIssuer', () => {
   it('verifyAccessToken() throws if not initialized', async () => {
     const issuer = new JWTIssuer(serverName, tempDir)
     await expect(issuer.verifyAccessToken('some-token')).rejects.toThrow('JWTIssuer not initialized')
+  })
+})
+
+describe('JWTIssuer refresh tokens (issue #261)', () => {
+  const serverName = 'test-server'
+
+  it('issueRefreshToken() + verifyRefreshToken() roundtrip with typ=refresh', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+
+    const token = await issuer.issueRefreshToken('user-9')
+    const payload = await issuer.verifyRefreshToken(token)
+    expect(payload.sub).toBe('user-9')
+    expect(payload.iss).toBe(serverName)
+    expect(payload.aud).toBe(serverName)
+    expect(payload.typ).toBe('refresh')
+  })
+
+  it('issueRefreshToken() throws if not initialized', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await expect(issuer.issueRefreshToken('user-9')).rejects.toThrow('JWTIssuer not initialized')
+  })
+
+  it('verifyRefreshToken() throws if not initialized', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await expect(issuer.verifyRefreshToken('some-token')).rejects.toThrow('JWTIssuer not initialized')
+  })
+
+  it('refresh token has a longer lifetime than the access token', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+    const access = await issuer.verifyAccessToken(await issuer.issueAccessToken('u'))
+    const refresh = await issuer.verifyRefreshToken(await issuer.issueRefreshToken('u'))
+    const accessLifetime = (access.exp as number) - (access.iat as number)
+    const refreshLifetime = (refresh.exp as number) - (refresh.iat as number)
+    expect(refreshLifetime).toBeGreaterThan(accessLifetime)
+    expect(refreshLifetime).toBeGreaterThanOrEqual(2592000 - 5)
+  })
+
+  it('verifyAccessToken() rejects a refresh token', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+    const refresh = await issuer.issueRefreshToken('user-9')
+    await expect(issuer.verifyAccessToken(refresh)).rejects.toThrow()
+  })
+
+  it('verifyRefreshToken() rejects an access token', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+    const access = await issuer.issueAccessToken('user-9')
+    await expect(issuer.verifyRefreshToken(access)).rejects.toThrow()
+  })
+
+  it('verifyRefreshToken() rejects an expired refresh token', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+    // Negative lifetime → already expired.
+    const token = await issuer.issueRefreshToken('user-9', -10)
+    await expect(issuer.verifyRefreshToken(token)).rejects.toThrow()
+  })
+
+  it('verifyAccessToken() accepts a legacy token with no typ claim (backward-compat)', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+    // Build a token via the JWKS private key path: re-sign a payload without typ.
+    const jwks = await issuer.getJwks()
+    // Sign with the issuer's own access-token then strip typ by re-signing is not
+    // possible without the private key, so instead verify the public contract:
+    // a token issued by issueAccessToken carries typ=access and still verifies,
+    // and a separately-signed no-typ token verifies too. Use a sibling issuer
+    // sharing the same key dir to sign a no-typ token.
+    const sibling = new JWTIssuer(serverName, tempDir)
+    await sibling.init()
+    const noTypToken = await new jose.SignJWT({ sub: 'legacy-user' })
+      .setProtectedHeader({ alg: 'RS256', kid: jwks.keys[0].kid as string })
+      .setIssuer(serverName)
+      .setAudience(serverName)
+      .setIssuedAt()
+      .setExpirationTime('3600s')
+      // biome-ignore lint/suspicious/noExplicitAny: access private key for legacy-token test
+      .sign((sibling as any).privateKey)
+    const payload = await issuer.verifyAccessToken(noTypToken)
+    expect(payload.sub).toBe('legacy-user')
+    expect(payload.typ).toBeUndefined()
   })
 })
