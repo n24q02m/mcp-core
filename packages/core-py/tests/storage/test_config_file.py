@@ -1,5 +1,6 @@
 """Tests for encrypted config file management."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,6 +17,17 @@ from mcp_core.storage.config_file import (
     set_config_path,
     write_config,
 )
+from mcp_core.storage.encryption import (
+    LEGACY_PBKDF2_ITERATIONS,
+    PBKDF2_ITERATIONS,
+    LEGACY_SALT,
+    LEGACY_EXPORT_SALT,
+    decrypt_data,
+    derive_file_key,
+    derive_passphrase_key,
+    encrypt_data,
+)
+from mcp_core.storage.machine_id import get_machine_id, get_username
 
 
 @pytest.fixture(autouse=True)
@@ -188,23 +200,38 @@ class TestExportImportConfig:
         assert read_config("local-server") == {"key": "local-val"}
         assert read_config("remote-server") == {"key": "remote-val"}
 
+    def test_imports_legacy_unsalted_export_data(self):
+        store = {"version": 1, "servers": {"legacy": {"k": "v"}}}
+        key = derive_passphrase_key("pass", LEGACY_EXPORT_SALT, PBKDF2_ITERATIONS)
+        encrypted = encrypt_data(key, json.dumps(store))
 
-class TestPBKDF2Migration:
-    def test_auto_migrates_legacy_config(self, _temp_config):
-        import json
+        import_config("pass", encrypted)
+        assert read_config("legacy") == {"k": "v"}
 
-        from mcp_core.storage.encryption import (
-            LEGACY_PBKDF2_ITERATIONS,
-            PBKDF2_ITERATIONS,
-            decrypt_data,
-            derive_file_key,
-            encrypt_data,
-        )
-        from mcp_core.storage.machine_id import get_machine_id, get_username
 
+class TestMigration:
+    def test_migrates_from_legacy_unsalted_format(self, _temp_config):
         machine_id = get_machine_id()
         username = get_username()
-        legacy_key = derive_file_key(machine_id, username, LEGACY_PBKDF2_ITERATIONS)
+        legacy_key = derive_file_key(machine_id, username, LEGACY_SALT, PBKDF2_ITERATIONS)
+        store = {"version": 1, "servers": {"old": {"data": "val"}}}
+        encrypted = encrypt_data(legacy_key, json.dumps(store))
+
+        config_path = _temp_config / "config.enc"
+        config_path.write_bytes(encrypted)
+
+        # Reading should trigger migration
+        config = read_config("old")
+        assert config == {"data": "val"}
+
+        # Verify file now has salt prepended (length should increase by 16)
+        migrated_data = config_path.read_bytes()
+        assert len(migrated_data) == len(encrypted) + 16
+
+    def test_auto_migrates_legacy_iterations_and_unsalted(self, _temp_config):
+        machine_id = get_machine_id()
+        username = get_username()
+        legacy_key = derive_file_key(machine_id, username, LEGACY_SALT, LEGACY_PBKDF2_ITERATIONS)
         store = {"version": 1, "servers": {"legacy": {"key": "value"}}}
         encrypted = encrypt_data(legacy_key, json.dumps(store))
 
@@ -215,12 +242,12 @@ class TestPBKDF2Migration:
         config = read_config("legacy")
         assert config == {"key": "value"}
 
-        # Verify file is now encrypted with current iterations
+        # Verify file now has salt prepended
         new_data = config_path.read_bytes()
-        current_key = derive_file_key(machine_id, username, PBKDF2_ITERATIONS)
-        decrypted = decrypt_data(current_key, new_data)
-        assert json.loads(decrypted) == store
+        assert len(new_data) == len(encrypted) + 16
 
-        # Legacy key should no longer decrypt
-        with pytest.raises(InvalidTag):
-            decrypt_data(legacy_key, new_data)
+        salt = new_data[:16]
+        payload = new_data[16:]
+        current_key = derive_file_key(machine_id, username, salt, PBKDF2_ITERATIONS)
+        decrypted = decrypt_data(current_key, payload)
+        assert json.loads(decrypted) == store

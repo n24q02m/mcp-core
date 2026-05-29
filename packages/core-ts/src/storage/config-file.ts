@@ -7,13 +7,16 @@ import {
   deriveFileKey,
   derivePassphraseKey,
   encryptData,
+  LEGACY_EXPORT_SALT,
   LEGACY_PBKDF2_ITERATIONS,
+  LEGACY_SALT,
   PBKDF2_ITERATIONS
 } from './encryption.js'
 import { getMachineId, getUsername } from './machine-id.js'
 
 const paths = envPaths('mcp', { suffix: '' })
 const DEFAULT_CONFIG_PATH = join(paths.config, 'config.enc')
+const SALT_SIZE = 16
 
 interface ConfigStore {
   version: 1
@@ -75,15 +78,18 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 // Cache the derived file key to avoid expensive PBKDF2 iterations on every config read/write.
 // This significantly speeds up successive configuration accesses within the same process.
 let cachedKey: CryptoKey | null = null
+let cachedSalt: Uint8Array | null = null
 
 export function clearKeyCacheForTesting(): void {
   cachedKey = null
+  cachedSalt = null
 }
 
-async function getKey(): Promise<CryptoKey> {
-  if (cachedKey) return cachedKey
+async function getKey(salt: Uint8Array): Promise<CryptoKey> {
+  if (cachedKey && cachedSalt && Buffer.from(cachedSalt).equals(salt)) return cachedKey
   const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
-  cachedKey = await deriveFileKey(machineId, username)
+  cachedKey = await deriveFileKey(machineId, username, salt)
+  cachedSalt = new Uint8Array(salt)
   return cachedKey
 }
 
@@ -96,23 +102,43 @@ async function loadStore(): Promise<ConfigStore> {
   const [machineId, username] = await Promise.all([getMachineId(), getUsername()])
   const data = await readFile(configPath)
 
+  // Try new format: [16-byte salt][iv][ciphertext]
+  if (data.length >= SALT_SIZE + 12) {
+    const salt = data.subarray(0, SALT_SIZE)
+    const payload = data.subarray(SALT_SIZE)
+    try {
+      const key = await getKey(salt)
+      const json = await decryptData(key, payload)
+      const store = JSON.parse(json)
+      if (!validateSchema(store)) {
+        throw new Error('Invalid config schema')
+      }
+      return store
+    } catch (_err) {
+      // Fall through to legacy check
+    }
+  }
+
+  // Try legacy format: [iv][ciphertext] using LEGACY_SALT
   try {
-    const key = await getKey()
-    const json = await decryptData(key, data)
+    const legacyKey = await deriveFileKey(machineId, username, LEGACY_SALT, PBKDF2_ITERATIONS)
+    const json = await decryptData(legacyKey, data)
     const store = JSON.parse(json)
     if (!validateSchema(store)) {
       throw new Error('Invalid config schema')
     }
+    // Auto-migrate to current iterations AND new salted format
+    await saveStore(store)
     return store
   } catch (err) {
     try {
-      const legacyKey = await deriveFileKey(machineId, username, LEGACY_PBKDF2_ITERATIONS)
+      const legacyKey = await deriveFileKey(machineId, username, LEGACY_SALT, LEGACY_PBKDF2_ITERATIONS)
       const json = await decryptData(legacyKey, data)
       const store = JSON.parse(json)
       if (!validateSchema(store)) {
         throw new Error('Invalid config schema')
       }
-      // Auto-migrate to current iterations
+      // Auto-migrate
       await saveStore(store)
       return store
     } catch {
@@ -127,9 +153,16 @@ async function saveStore(store: ConfigStore): Promise<void> {
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true, mode: 0o700 })
   }
-  const key = await getKey()
+
+  let salt = cachedSalt
+  if (!salt) {
+    salt = crypto.getRandomValues(new Uint8Array(SALT_SIZE))
+  }
+
+  const key = await getKey(salt)
   const encrypted = await encryptData(key, JSON.stringify(store))
-  await withRetry(() => writeFile(configPath, encrypted, { mode: 0o600 }))
+  const finalData = Buffer.concat([Buffer.from(salt), encrypted])
+  await withRetry(() => writeFile(configPath, finalData, { mode: 0o600 }))
 }
 
 /**
@@ -201,23 +234,46 @@ export async function listConfigs(): Promise<string[]> {
 
 export async function exportConfig(passphrase: string): Promise<Buffer> {
   const store = await loadStore()
-  const key = await derivePassphraseKey(passphrase)
-  return encryptData(key, JSON.stringify(store))
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_SIZE))
+  const key = await derivePassphraseKey(passphrase, salt)
+  const encrypted = await encryptData(key, JSON.stringify(store))
+  return Buffer.concat([Buffer.from(salt), encrypted])
 }
 
 export async function importConfig(passphrase: string, data: Buffer): Promise<void> {
-  let json: string
-  try {
-    const key = await derivePassphraseKey(passphrase, PBKDF2_ITERATIONS)
-    json = await decryptData(key, data)
-  } catch (err) {
+  let json: string | undefined
+  // Try new format: [16-byte salt][iv][ciphertext]
+  if (data.length >= SALT_SIZE + 12) {
+    const salt = data.subarray(0, SALT_SIZE)
+    const payload = data.subarray(SALT_SIZE)
     try {
-      const legacyKey = await derivePassphraseKey(passphrase, LEGACY_PBKDF2_ITERATIONS)
-      json = await decryptData(legacyKey, data)
-    } catch {
-      throw err
+      const key = await derivePassphraseKey(passphrase, salt, PBKDF2_ITERATIONS)
+      json = await decryptData(key, payload)
+    } catch (_err) {
+      try {
+        const legacyKey = await derivePassphraseKey(passphrase, salt, LEGACY_PBKDF2_ITERATIONS)
+        json = await decryptData(legacyKey, payload)
+      } catch {
+        // Fall through to legacy format check
+      }
     }
   }
+
+  if (!json) {
+    // Try legacy format: [iv][ciphertext] using LEGACY_EXPORT_SALT
+    try {
+      const key = await derivePassphraseKey(passphrase, LEGACY_EXPORT_SALT, PBKDF2_ITERATIONS)
+      json = await decryptData(key, data)
+    } catch (err) {
+      try {
+        const legacyKey = await derivePassphraseKey(passphrase, LEGACY_EXPORT_SALT, LEGACY_PBKDF2_ITERATIONS)
+        json = await decryptData(legacyKey, data)
+      } catch {
+        throw err
+      }
+    }
+  }
+
   const imported = JSON.parse(json)
   if (!validateSchema(imported)) {
     throw new Error('Invalid config schema in imported data')

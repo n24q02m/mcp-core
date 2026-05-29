@@ -15,6 +15,8 @@ from platformdirs import user_config_dir
 from mcp_core.storage.encryption import (
     LEGACY_PBKDF2_ITERATIONS,
     PBKDF2_ITERATIONS,
+    LEGACY_SALT,
+    LEGACY_EXPORT_SALT,
     decrypt_data,
     derive_file_key,
     derive_passphrase_key,
@@ -25,9 +27,10 @@ from mcp_core.storage.machine_id import get_machine_id, get_username
 _DEFAULT_CONFIG_PATH = Path(user_config_dir("mcp", appauthor=False)) / "config.enc"
 _MAX_RETRIES = 3
 _BASE_DELAY_S = 0.1
+_SALT_SIZE = 16
 
-# Metadata flag set by ``mark_setup_complete`` after a successful
-# ``POST /authorize`` in the relay flow. ``runLocalServer``/``is_schema_complete``
+# Metadata flag set by `mark_setup_complete` after a successful
+# `POST /authorize` in the relay flow. `runLocalServer`/`is_schema_complete`
 # read this to distinguish "user submitted the form" from "config.enc has values
 # from a peer-share or partial bootstrap path". Lives alongside the user's
 # normal credential keys in the same per-server config dict.
@@ -39,12 +42,14 @@ _config_path_override: str | None = None
 # Cache the derived file key to avoid expensive PBKDF2 iterations on every config read/write.
 # This significantly speeds up successive configuration accesses within the same process.
 _cached_key: bytes | None = None
+_cached_salt: bytes | None = None
 
 
 def clear_key_cache_for_testing() -> None:
     """Clear the cached key for testing."""
-    global _cached_key
+    global _cached_key, _cached_salt
     _cached_key = None
+    _cached_salt = None
 
 
 def set_config_path(path: str | None) -> None:
@@ -59,14 +64,15 @@ def _get_config_path() -> Path:
     return _DEFAULT_CONFIG_PATH
 
 
-def _get_key() -> bytes:
-    global _cached_key
-    if _cached_key is not None:
+def _get_key(salt: bytes) -> bytes:
+    global _cached_key, _cached_salt
+    if _cached_key is not None and _cached_salt == salt:
         return _cached_key
 
     machine_id = get_machine_id()
     username = get_username()
-    _cached_key = derive_file_key(machine_id, username)
+    _cached_key = derive_file_key(machine_id, username, salt)
+    _cached_salt = salt
     return _cached_key
 
 
@@ -91,15 +97,28 @@ def _load_store() -> dict[str, Any]:
 
     data = config_path.read_bytes()
 
+    # Try new format: [16-byte salt][iv][ciphertext]
+    if len(data) >= _SALT_SIZE + 12:
+        salt = data[:_SALT_SIZE]
+        payload = data[_SALT_SIZE:]
+        try:
+            key = _get_key(salt)
+            json_str = decrypt_data(key, payload)
+            return json.loads(json_str)
+        except Exception:
+            pass
+
+    # Try legacy format: [iv][ciphertext] using LEGACY_SALT
     try:
-        key = _get_key()
-        json_str = decrypt_data(key, data)
-        return json.loads(json_str)
+        legacy_key = derive_file_key(get_machine_id(), get_username(), LEGACY_SALT, PBKDF2_ITERATIONS)
+        json_str = decrypt_data(legacy_key, data)
+        store = json.loads(json_str)
+        # Auto-migrate
+        _save_store(store)
+        return store
     except Exception as err:
         try:
-            machine_id = get_machine_id()
-            username = get_username()
-            legacy_key = derive_file_key(machine_id, username, LEGACY_PBKDF2_ITERATIONS)
+            legacy_key = derive_file_key(get_machine_id(), get_username(), LEGACY_SALT, LEGACY_PBKDF2_ITERATIONS)
             json_str = decrypt_data(legacy_key, data)
             store = json.loads(json_str)
             # Auto-migrate to current iterations
@@ -114,11 +133,17 @@ def _save_store(store: dict[str, Any]) -> None:
     config_path.parent.mkdir(parents=True, exist_ok=True)
     if config_path.parent.exists() and os.name != "nt":
         config_path.parent.chmod(0o700)
-    key = _get_key()
+
+    salt = _cached_salt
+    if salt is None:
+        salt = os.urandom(_SALT_SIZE)
+
+    key = _get_key(salt)
     encrypted = encrypt_data(key, json.dumps(store))
+    final_data = salt + encrypted
 
     def _write() -> None:
-        config_path.write_bytes(encrypted)
+        config_path.write_bytes(final_data)
         if os.name != "nt":
             os.chmod(config_path, 0o600)
 
@@ -188,12 +213,12 @@ def delete_config(server_name: str) -> None:
 
 
 def mark_setup_complete(server_name: str) -> None:
-    """Set the ``_setup_complete`` metadata flag in ``server_name``'s config.
+    """Set the `_setup_complete` metadata flag in `server_name`'s config.
 
-    Called by ``local_oauth_app.authorize_post`` after a successful credential
-    save. Lets ``runLocalServer`` distinguish "user has submitted the form"
+    Called by `local_oauth_app.authorize_post` after a successful credential
+    save. Lets `runLocalServer` distinguish "user has submitted the form"
     from "config.enc has values written by a peer / bootstrap path" — see
-    ``mcp_core.auth.credential_form.is_schema_complete`` for the consumer.
+    `mcp_core.auth.credential_form.is_schema_complete` for the consumer.
 
     Idempotent: calling twice produces the same end state. Creates a new entry
     with just the flag if no prior config exists (useful for all-optional
@@ -224,8 +249,10 @@ def export_config(passphrase: str) -> bytes:
         Encrypted bytes.
     """
     store = _load_store()
-    key = derive_passphrase_key(passphrase)
-    return encrypt_data(key, json.dumps(store))
+    salt = os.urandom(_SALT_SIZE)
+    key = derive_passphrase_key(passphrase, salt)
+    encrypted = encrypt_data(key, json.dumps(store))
+    return salt + encrypted
 
 
 def import_config(passphrase: str, data: bytes) -> None:
@@ -238,15 +265,33 @@ def import_config(passphrase: str, data: bytes) -> None:
     Raises:
         cryptography.exceptions.InvalidTag: If passphrase is wrong.
     """
-    try:
-        key = derive_passphrase_key(passphrase, PBKDF2_ITERATIONS)
-        json_str = decrypt_data(key, data)
-    except Exception as err:
+    json_str = None
+    # Try new format: [16-byte salt][iv][ciphertext]
+    if len(data) >= _SALT_SIZE + 12:
+        salt = data[:_SALT_SIZE]
+        payload = data[_SALT_SIZE:]
         try:
-            legacy_key = derive_passphrase_key(passphrase, LEGACY_PBKDF2_ITERATIONS)
-            json_str = decrypt_data(legacy_key, data)
+            key = derive_passphrase_key(passphrase, salt, PBKDF2_ITERATIONS)
+            json_str = decrypt_data(key, payload)
         except Exception:
-            raise err from None
+            try:
+                legacy_key = derive_passphrase_key(passphrase, salt, LEGACY_PBKDF2_ITERATIONS)
+                json_str = decrypt_data(legacy_key, payload)
+            except Exception:
+                pass
+
+    if json_str is None:
+        # Try legacy format: [iv][ciphertext] using LEGACY_EXPORT_SALT
+        try:
+            key = derive_passphrase_key(passphrase, LEGACY_EXPORT_SALT, PBKDF2_ITERATIONS)
+            json_str = decrypt_data(key, data)
+        except Exception as err:
+            try:
+                legacy_key = derive_passphrase_key(passphrase, LEGACY_EXPORT_SALT, LEGACY_PBKDF2_ITERATIONS)
+                json_str = decrypt_data(legacy_key, data)
+            except Exception:
+                raise err from None
+
     imported = json.loads(json_str)
 
     store = _load_store()
