@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.17.1 (2026-05-29)
+
+### Bug Fixes
+
+- Apply ruff format to BearerMCPApp resource_metadata tests
+  ([#295](https://github.com/n24q02m/mcp-core/pull/295),
+  [`f7af00e`](https://github.com/n24q02m/mcp-core/commit/f7af00e82d970150cd9d56a853e1715f05991b4b))
+
+- Emit RFC9728 resource_metadata in BearerMCPApp 401 challenge
+  ([#295](https://github.com/n24q02m/mcp-core/pull/295),
+  [`f7af00e`](https://github.com/n24q02m/mcp-core/commit/f7af00e82d970150cd9d56a853e1715f05991b4b))
+
+- Emit RFC9728 resource_metadata in BearerMCPApp 401 challenge (#260)
+  ([#295](https://github.com/n24q02m/mcp-core/pull/295),
+  [`f7af00e`](https://github.com/n24q02m/mcp-core/commit/f7af00e82d970150cd9d56a853e1715f05991b4b))
+
+
 ## v1.17.0 (2026-05-29)
 
 
