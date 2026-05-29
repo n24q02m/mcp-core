@@ -230,6 +230,32 @@ export async function runHttpServer(
     await transport.handleRequest(req, res)
   }
 
+  // Derive the RFC 9728 protected-resource-metadata URL for the Bearer
+  // challenge. Mirrors ``local-oauth-app.ts``'s ``getBaseUrl`` PUBLIC_URL-first
+  // convention: the deployed servers (oci-vm-prod behind CF Tunnel -> Caddy)
+  // set ``PUBLIC_URL`` so the advertised metadata URL is the public HTTPS host
+  // rather than the internal HTTP socket address. When unset, fall back to the
+  // request Host + ``X-Forwarded-Proto`` (or the socket ``encrypted`` flag).
+  function resourceMetadataUrl(req: IncomingMessage): string {
+    const envPublicUrl = process.env.PUBLIC_URL
+    let base: string
+    if (envPublicUrl !== undefined && envPublicUrl.length > 0) {
+      base = envPublicUrl.replace(/\/+$/, '')
+    } else {
+      const reqHost = req.headers.host ?? 'localhost'
+      const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true
+      const forwardedProto = req.headers['x-forwarded-proto']
+      const protocol =
+        typeof forwardedProto === 'string' && forwardedProto.length > 0
+          ? forwardedProto.split(',')[0].trim()
+          : encrypted
+            ? 'https'
+            : 'http'
+      base = `${protocol}://${reqHost}`
+    }
+    return `${base}/.well-known/oauth-protected-resource`
+  }
+
   async function mcpHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // Bearer auth bypass for deployments behind an external auth boundary.
     // Caller (reverse proxy, API gateway) is trusted to enforce auth upstream.
@@ -250,7 +276,9 @@ export async function runHttpServer(
       const match = authHeader?.match(/^Bearer\s+(\S.*)$/i)
       const token = match?.[1]?.trim()
       if (!token) {
-        res.writeHead(401, { 'WWW-Authenticate': 'Bearer' })
+        res.writeHead(401, {
+          'WWW-Authenticate': `Bearer resource_metadata="${resourceMetadataUrl(req)}"`
+        })
         res.end()
         return
       }
@@ -258,7 +286,9 @@ export async function runHttpServer(
       try {
         claims = await jwtIssuer.verifyAccessToken(token)
       } catch {
-        res.writeHead(401, { 'WWW-Authenticate': 'Bearer error="invalid_token"' })
+        res.writeHead(401, {
+          'WWW-Authenticate': `Bearer resource_metadata="${resourceMetadataUrl(req)}", error="invalid_token"`
+        })
         res.end()
         return
       }

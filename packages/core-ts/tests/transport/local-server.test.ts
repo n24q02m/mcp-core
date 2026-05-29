@@ -78,7 +78,12 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 })
       })
       expect(mcpResp.status).toBe(401)
-      expect(mcpResp.headers.get('www-authenticate')).toContain('Bearer')
+      const wwwAuth = mcpResp.headers.get('www-authenticate')
+      expect(wwwAuth).toContain('Bearer')
+      // RFC 9728: the challenge MUST advertise the protected-resource-metadata
+      // URL so MCP clients can discover the authorization server (#260).
+      expect(wwwAuth).toContain('resource_metadata=')
+      expect(wwwAuth).toContain('/.well-known/oauth-protected-resource')
     } finally {
       await handle.close()
     }
@@ -100,7 +105,9 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
         body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 })
       })
       expect(resp.status).toBe(401)
-      expect(resp.headers.get('www-authenticate')).toContain('invalid_token')
+      const wwwAuth = resp.headers.get('www-authenticate')
+      expect(wwwAuth).toContain('error="invalid_token"')
+      expect(wwwAuth).toContain('resource_metadata=')
     } finally {
       await handle.close()
     }
@@ -158,6 +165,131 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
       const resp = await fetch(`http://${handle.host}:${handle.port}/setup-status`)
       const body = (await resp.json()) as Record<string, string>
       expect(body.gdrive).toBe('error:invalid_grant')
+    } finally {
+      await handle.close()
+    }
+  })
+})
+
+describe('runHttpServer — RFC 9728 resource_metadata in 401 challenge (#260)', () => {
+  // The /mcp Bearer guard (the TS counterpart of core-py's BearerMCPApp, NOT
+  // OAuthMiddleware) must advertise the protected-resource-metadata URL.
+  let savedPublicUrl: string | undefined
+
+  beforeEach(() => {
+    savedPublicUrl = process.env.PUBLIC_URL
+  })
+
+  afterEach(() => {
+    if (savedPublicUrl === undefined) delete process.env.PUBLIC_URL
+    else process.env.PUBLIC_URL = savedPublicUrl
+  })
+
+  it('uses PUBLIC_URL when set (missing token)', async () => {
+    process.env.PUBLIC_URL = 'https://wet-mcp.n24q02m.com'
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName: `test-rm-publicurl-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const resp = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 })
+      })
+      expect(resp.status).toBe(401)
+      expect(resp.headers.get('www-authenticate')).toBe(
+        'Bearer resource_metadata="https://wet-mcp.n24q02m.com/.well-known/oauth-protected-resource"'
+      )
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('uses PUBLIC_URL when set (invalid token)', async () => {
+    process.env.PUBLIC_URL = 'https://wet-mcp.n24q02m.com'
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName: `test-rm-publicurl-invalid-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const resp = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer not-a-real-jwt' },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 })
+      })
+      expect(resp.status).toBe(401)
+      expect(resp.headers.get('www-authenticate')).toBe(
+        'Bearer resource_metadata="https://wet-mcp.n24q02m.com/.well-known/oauth-protected-resource", ' +
+          'error="invalid_token"'
+      )
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('normalizes a trailing slash on PUBLIC_URL', async () => {
+    process.env.PUBLIC_URL = 'https://wet-mcp.n24q02m.com/'
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName: `test-rm-trailing-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const resp = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+      const wwwAuth = resp.headers.get('www-authenticate') ?? ''
+      expect(wwwAuth).toContain('https://wet-mcp.n24q02m.com/.well-known/oauth-protected-resource')
+      expect(wwwAuth).not.toContain('.com//.well-known')
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('derives from request Host when PUBLIC_URL is unset', async () => {
+    delete process.env.PUBLIC_URL
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName: `test-rm-host-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const resp = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      })
+      expect(resp.status).toBe(401)
+      expect(resp.headers.get('www-authenticate')).toBe(
+        `Bearer resource_metadata="http://${handle.host}:${handle.port}/.well-known/oauth-protected-resource"`
+      )
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('uses X-Forwarded-Proto for the scheme when PUBLIC_URL is unset', async () => {
+    delete process.env.PUBLIC_URL
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName: `test-rm-xfp-${Date.now()}`,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const resp = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https' },
+        body: '{}'
+      })
+      expect(resp.status).toBe(401)
+      expect(resp.headers.get('www-authenticate')).toBe(
+        `Bearer resource_metadata="https://${handle.host}:${handle.port}/.well-known/oauth-protected-resource"`
+      )
     } finally {
       await handle.close()
     }
