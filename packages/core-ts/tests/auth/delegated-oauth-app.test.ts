@@ -283,8 +283,13 @@ describe('redirect flow', () => {
         expect(tok.status).toBe(200)
         const body = (await tok.json()) as Record<string, unknown>
         expect(body.token_type).toBe('Bearer')
+        // Issue #261: authorization_code grant now also returns refresh_token + scope.
+        expect(typeof body.refresh_token).toBe('string')
+        expect(body.scope).toBe('offline_access')
         const payload = await srv.app.jwtIssuer.verifyAccessToken(body.access_token as string)
         expect(payload.sub).toBe('local-user')
+        const refreshPayload = await srv.app.jwtIssuer.verifyRefreshToken(body.refresh_token as string)
+        expect(refreshPayload.sub).toBe('local-user')
       } finally {
         await srv.close()
       }
@@ -318,6 +323,94 @@ describe('redirect flow', () => {
       }
     } finally {
       await upstream.close()
+    }
+  })
+})
+
+describe('refresh_token grant (issue #261)', () => {
+  async function startRefreshApp(): Promise<TestServer> {
+    const upstream = await startUpstream(() => {})
+    const srv = await startApp({
+      flow: 'redirect',
+      upstream: {
+        tokenUrl: `${upstream.url}/token`,
+        clientId: 'up-client',
+        authorizeUrl: `${upstream.url}/authorize`
+      },
+      onTokenReceived: () => 'provider-user-1',
+      keysDir: tempKeysDir
+    })
+    const origClose = srv.close
+    srv.close = async () => {
+      await origClose()
+      await upstream.close()
+    }
+    return srv
+  }
+
+  it('returns NEW access + refresh tokens for a valid refresh_token grant', async () => {
+    const srv = await startRefreshApp()
+    try {
+      const seedRefresh = await srv.app.jwtIssuer.issueRefreshToken('provider-user-1')
+      const resp = await fetch(`${srv.url}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: seedRefresh }).toString()
+      })
+      expect(resp.status).toBe(200)
+      const body = (await resp.json()) as Record<string, unknown>
+      expect(body.token_type).toBe('Bearer')
+      expect(body.expires_in).toBe(3600)
+      expect(body.scope).toBe('offline_access')
+      expect((await srv.app.jwtIssuer.verifyAccessToken(body.access_token as string)).sub).toBe('provider-user-1')
+      expect((await srv.app.jwtIssuer.verifyRefreshToken(body.refresh_token as string)).sub).toBe('provider-user-1')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('rejects refresh_token grant with no refresh_token (invalid_request)', async () => {
+    const srv = await startRefreshApp()
+    try {
+      const resp = await fetch(`${srv.url}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token' }).toString()
+      })
+      expect(resp.status).toBe(400)
+      expect(((await resp.json()) as Record<string, string>).error).toBe('invalid_request')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('rejects a bogus refresh_token (invalid_grant)', async () => {
+    const srv = await startRefreshApp()
+    try {
+      const resp = await fetch(`${srv.url}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: 'garbage' }).toString()
+      })
+      expect(resp.status).toBe(400)
+      expect(((await resp.json()) as Record<string, string>).error).toBe('invalid_grant')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('rejects unknown grant_type with unsupported_grant_type', async () => {
+    const srv = await startRefreshApp()
+    try {
+      const resp = await fetch(`${srv.url}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'client_credentials' }).toString()
+      })
+      expect(resp.status).toBe(400)
+      expect(((await resp.json()) as Record<string, string>).error).toBe('unsupported_grant_type')
+    } finally {
+      await srv.close()
     }
   })
 })

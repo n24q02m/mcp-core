@@ -146,6 +146,7 @@ class TestTokenOperations:
         assert payload["sub"] == sub
         assert payload["iss"] == "test-server"
         assert payload["aud"] == "test-server"
+        assert payload["typ"] == "access"
         assert "iat" in payload
         assert "exp" in payload
 
@@ -182,3 +183,83 @@ class TestTokenOperations:
 
         with pytest.raises(jwt.InvalidSignatureError):
             issuer.verify_access_token(tampered_token)
+
+
+class TestRefreshTokenOperations:
+    """Refresh token issuance + verification (issue #261)."""
+
+    def test_issue_and_verify_refresh_roundtrip(self, issuer):
+        sub = "user-456"
+        token = issuer.issue_refresh_token(sub=sub)
+
+        payload = issuer.verify_refresh_token(token)
+        assert payload["sub"] == sub
+        assert payload["iss"] == "test-server"
+        assert payload["aud"] == "test-server"
+        assert payload["typ"] == "refresh"
+        assert "iat" in payload
+        assert "exp" in payload
+
+    def test_refresh_token_has_long_default_lifetime(self, issuer):
+        """Refresh token default exp ~30 days >> access token 1h."""
+        access = issuer.verify_access_token(issuer.issue_access_token(sub="u"))
+        refresh = issuer.verify_refresh_token(issuer.issue_refresh_token(sub="u"))
+        # exp - iat for refresh (~2592000s) must exceed access (~3600s).
+        assert (refresh["exp"] - refresh["iat"]) > (access["exp"] - access["iat"])
+        assert (refresh["exp"] - refresh["iat"]) >= 2592000 - 5
+
+    def test_verify_access_token_rejects_refresh_token(self, issuer):
+        """A refresh token MUST NOT be usable as an access token."""
+        refresh = issuer.issue_refresh_token(sub="user")
+        with pytest.raises(jwt.InvalidTokenError):
+            issuer.verify_access_token(refresh)
+
+    def test_verify_refresh_token_rejects_access_token(self, issuer):
+        """An access token MUST NOT be usable as a refresh token."""
+        access = issuer.issue_access_token(sub="user")
+        with pytest.raises(jwt.InvalidTokenError):
+            issuer.verify_refresh_token(access)
+
+    def test_verify_refresh_token_rejects_expired(self, issuer):
+        """An expired refresh token is rejected with the standard PyJWT error."""
+        token = issuer.issue_refresh_token(sub="user", expires_in_seconds=-10)
+        with pytest.raises(jwt.ExpiredSignatureError):
+            issuer.verify_refresh_token(token)
+
+    def test_verify_refresh_token_fails_with_wrong_issuer(self, keys_dir):
+        issuer1 = JWTIssuer(server_name="issuer-1", keys_dir=keys_dir)
+        issuer2 = JWTIssuer(server_name="issuer-2", keys_dir=keys_dir)
+        issuer2.public_key = issuer1.public_key
+
+        token = issuer1.issue_refresh_token(sub="user")
+        with pytest.raises(jwt.InvalidIssuerError):
+            issuer2.verify_refresh_token(token)
+
+    def test_verify_access_token_accepts_missing_typ(self, issuer):
+        """Backward-compat: tokens issued before refresh support (no ``typ``) still verify.
+
+        Re-encode a payload identical to ``issue_access_token`` but WITHOUT the
+        ``typ`` claim, signed with the same private key, and assert
+        ``verify_access_token`` accepts it.
+        """
+        import datetime
+
+        import jwt as _jwt
+
+        now = datetime.datetime.now(datetime.UTC)
+        legacy_payload = {
+            "iss": issuer.server_name,
+            "aud": issuer.server_name,
+            "sub": "legacy-user",
+            "iat": now,
+            "exp": now + datetime.timedelta(seconds=3600),
+        }
+        legacy_token = _jwt.encode(
+            legacy_payload,
+            issuer.private_key,
+            algorithm="RS256",
+            headers={"kid": "key-1"},
+        )
+        payload = issuer.verify_access_token(legacy_token)
+        assert payload["sub"] == "legacy-user"
+        assert "typ" not in payload

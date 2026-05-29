@@ -528,6 +528,54 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     jsonResponse(res, 204, {})
   }
 
+  /**
+   * Build and write the standard /token success body for ``sub``.
+   *
+   * Issues a fresh access token AND a fresh refresh token. The refresh token
+   * lets long-running MCP clients renew the 1h access token without re-running
+   * the browser PKCE flow (issue #261). ``scope`` advertises ``offline_access``
+   * so clients know a refresh token was granted.
+   */
+  async function issueTokenResponse(res: ServerResponse, sub: string): Promise<void> {
+    const accessToken = await jwtIssuer.issueAccessToken(sub)
+    const refreshToken = await jwtIssuer.issueRefreshToken(sub)
+    jsonResponse(res, 200, {
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      refresh_token: refreshToken,
+      scope: 'offline_access'
+    })
+  }
+
+  /**
+   * Handle ``grant_type=refresh_token`` (RFC 6749 §6) statelessly. Verifies the
+   * presented refresh token's signature / iss / aud / exp / ``typ`` via the JWT
+   * issuer (no server-side store), extracts ``sub``, and issues a NEW access
+   * token AND a NEW refresh token (rotation). The refresh token is
+   * self-contained, so rotation here is stateless: the old refresh token simply
+   * expires on its own 30-day clock; clients replace it with the rotated one.
+   */
+  async function handleRefreshToken(res: ServerResponse, form: Record<string, string>): Promise<void> {
+    const refreshToken = form.refresh_token
+    if (!refreshToken) {
+      jsonResponse(res, 400, {
+        error: 'invalid_request',
+        error_description: 'Missing refresh_token'
+      })
+      return
+    }
+    let sub: string
+    try {
+      const claims = await jwtIssuer.verifyRefreshToken(refreshToken)
+      sub = claims.sub as string
+    } catch {
+      jsonResponse(res, 400, { error: 'invalid_grant' })
+      return
+    }
+    await issueTokenResponse(res, sub)
+  }
+
   async function token(req: IncomingMessage, res: ServerResponse): Promise<void> {
     let form: Record<string, string>
     try {
@@ -538,6 +586,10 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     }
 
     const grantType = form.grant_type
+    if (grantType === 'refresh_token') {
+      await handleRefreshToken(res, form)
+      return
+    }
     if (grantType !== 'authorization_code') {
       jsonResponse(res, 400, { error: 'unsupported_grant_type' })
       return
@@ -584,12 +636,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     // new flow mints a fresh UUID in authorizeGet (PendingSession.sub), carries
     // it through onCredentialsSaved, and issues it here so the Bearer returned
     // to the client scopes future /mcp calls to this user's credentials.
-    const accessToken = await jwtIssuer.issueAccessToken(entry.sub)
-    jsonResponse(res, 200, {
-      access_token: accessToken,
-      token_type: 'Bearer',
-      expires_in: 3600
-    })
+    await issueTokenResponse(res, entry.sub)
   }
 
   async function otpHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {

@@ -260,6 +260,10 @@ describe('POST /token', () => {
       expect(body.token_type).toBe('Bearer')
       expect(body.expires_in).toBe(3600)
       expect(typeof body.access_token).toBe('string')
+      // Issue #261: authorization_code grant now also returns a refresh token
+      // + offline_access scope so long-running clients can renew.
+      expect(typeof body.refresh_token).toBe('string')
+      expect(body.scope).toBe('offline_access')
       const payload = await srv.app.jwtIssuer.verifyAccessToken(body.access_token as string)
       // Subject is a per-authorize-request UUID (22 base64url chars for 16 random bytes),
       // NOT the legacy static 'local-user'. This enables multi-user credential
@@ -267,6 +271,8 @@ describe('POST /token', () => {
       expect(typeof payload.sub).toBe('string')
       expect((payload.sub as string).length).toBeGreaterThanOrEqual(20)
       expect(payload.sub).not.toBe('local-user')
+      const refreshPayload = await srv.app.jwtIssuer.verifyRefreshToken(body.refresh_token as string)
+      expect(refreshPayload.sub).toBe(payload.sub)
     } finally {
       await srv.close()
     }
@@ -319,6 +325,114 @@ describe('POST /token', () => {
       })
       expect(tokenResp.status).toBe(400)
       expect(((await tokenResp.json()) as Record<string, string>).error).toBe('invalid_grant')
+    } finally {
+      await srv.close()
+    }
+  })
+})
+
+describe('POST /token refresh_token grant (issue #261)', () => {
+  async function completeAuthCodeFlow(srv: TestServer): Promise<Record<string, unknown>> {
+    const { verifier, challenge } = pkce()
+    const params = new URLSearchParams({
+      client_id: 'c',
+      redirect_uri: 'http://localhost:5555/cb',
+      state: 's',
+      code_challenge: challenge
+    })
+    const getResp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+    const nonce = extractNonce(await getResp.text())
+    const postResp = await fetch(`${srv.url}/authorize?nonce=${nonce}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: 'k' })
+    })
+    const code = new URL(((await postResp.json()) as { redirect_url: string }).redirect_url).searchParams.get(
+      'code'
+    ) as string
+    const tokenResp = await fetch(`${srv.url}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: verifier }).toString()
+    })
+    return (await tokenResp.json()) as Record<string, unknown>
+  }
+
+  it('returns a NEW access + refresh token for a valid refresh_token grant', async () => {
+    const srv = await startApp()
+    try {
+      const original = await completeAuthCodeFlow(srv)
+      const originalSub = (await srv.app.jwtIssuer.verifyRefreshToken(original.refresh_token as string)).sub
+
+      const resp = await fetch(`${srv.url}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: original.refresh_token as string
+        }).toString()
+      })
+      expect(resp.status).toBe(200)
+      const body = (await resp.json()) as Record<string, unknown>
+      expect(body.token_type).toBe('Bearer')
+      expect(body.expires_in).toBe(3600)
+      expect(body.scope).toBe('offline_access')
+      expect(typeof body.access_token).toBe('string')
+      expect(typeof body.refresh_token).toBe('string')
+
+      const newAccess = await srv.app.jwtIssuer.verifyAccessToken(body.access_token as string)
+      const newRefresh = await srv.app.jwtIssuer.verifyRefreshToken(body.refresh_token as string)
+      expect(newAccess.sub).toBe(originalSub)
+      expect(newRefresh.sub).toBe(originalSub)
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('rejects a refresh_token grant with no refresh_token (invalid_request)', async () => {
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token' }).toString()
+      })
+      expect(resp.status).toBe(400)
+      expect(((await resp.json()) as Record<string, string>).error).toBe('invalid_request')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('rejects a bogus refresh_token (invalid_grant)', async () => {
+    const srv = await startApp()
+    try {
+      const resp = await fetch(`${srv.url}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: 'not-a-jwt' }).toString()
+      })
+      expect(resp.status).toBe(400)
+      expect(((await resp.json()) as Record<string, string>).error).toBe('invalid_grant')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('rejects an access token presented at the refresh grant (invalid_grant)', async () => {
+    const srv = await startApp()
+    try {
+      const original = await completeAuthCodeFlow(srv)
+      const resp = await fetch(`${srv.url}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: original.access_token as string
+        }).toString()
+      })
+      expect(resp.status).toBe(400)
+      expect(((await resp.json()) as Record<string, string>).error).toBe('invalid_grant')
     } finally {
       await srv.close()
     }
