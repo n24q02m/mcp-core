@@ -171,7 +171,9 @@ function renderLoginForm(next: string, errorMsg?: string): string {
   const safeNext = escapeHtml(String(next))
 
   const ariaInvalid = errorMsg ? ' aria-invalid="true"' : ''
-  const errorBox = errorMsg ? `\n                <div class="status-box error" role="alert" style="display: block; margin-top: 1rem;">${escapeHtml(errorMsg)}</div>` : ''
+  const errorBox = errorMsg
+    ? `\n                <div class="status-box error" role="alert" style="display: block; margin-top: 1rem;">${escapeHtml(errorMsg)}</div>`
+    : ''
 
   // Visual parity with the relay credential form: same dark-theme card,
   // typography, ``.field-group`` / ``.field-label`` / ``.field-input``
