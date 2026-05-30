@@ -36,17 +36,22 @@ function makeResponseStub(): {
   cookie: () => CookieRecord | null
   redirect: () => string | null
   retryAfter: () => string | null
+  body: () => string | null
 } {
   let statusCode = 0
   let cookieRecord: CookieRecord | null = null
   let redirectUrl: string | null = null
   let retryAfter: string | null = null
+  let resBody: string | null = null
   const res: RelayLoginResponse = {
     status: (code) => {
       statusCode = code
       return res
     },
-    send: () => res,
+    send: (body?: unknown) => {
+      resBody = String(body ?? '')
+      return res
+    },
     cookie: (name, value, options) => {
       cookieRecord = { name, value, options }
       return res
@@ -66,7 +71,8 @@ function makeResponseStub(): {
     status: () => statusCode,
     cookie: () => cookieRecord,
     redirect: () => redirectUrl,
-    retryAfter: () => retryAfter
+    retryAfter: () => retryAfter,
+    body: () => resBody
   }
 }
 
@@ -135,6 +141,9 @@ describe('relay-login', () => {
     const stub = makeResponseStub()
     await loginPostHandler(req, stub.res)
     expect(stub.status()).toBe(401)
+    const body = stub.body() || ''
+    expect(body).toContain('aria-invalid="true"')
+    expect(body).toContain('Invalid password.')
   })
 
   it('login GET reuses shared form shell (visual parity with credential form)', async () => {
@@ -196,5 +205,8 @@ describe('relay-login', () => {
     await loginPostHandler(req6, stub6.res)
     expect(stub6.status()).toBe(429)
     expect(stub6.retryAfter()).not.toBeNull()
+    const body = stub6.body() || ''
+    expect(body).toContain('aria-invalid="true"')
+    expect(body).toContain('Too many login attempts. Try again later.')
   })
 })
