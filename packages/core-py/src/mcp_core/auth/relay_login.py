@@ -106,7 +106,11 @@ def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
     safe_next = html.escape(str(next_url))
 
     aria_invalid = ' aria-invalid="true"' if error_msg else ""
-    error_box = f'\n                <div class="status-box error" role="alert" style="display: block; margin-top: 1rem;">{html.escape(error_msg)}</div>' if error_msg else ""
+    error_box = (
+        f'\n                <div class="status-box error" role="alert" style="display: block; margin-top: 1rem;">{html.escape(error_msg)}</div>'
+        if error_msg
+        else ""
+    )
 
     body_html = f"""    <div class="container">
         <div class="card">
@@ -145,6 +149,7 @@ def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
         </div>
     </div>"""
     return render_form_shell("Relay login", body_html)
+
 
 async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
     """Render the password form using the shared relay form shell.
