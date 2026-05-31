@@ -90,6 +90,12 @@ async def test_wrong_password_401() -> None:
     configure_relay_login("secret123")
     result = await login_post_handler({"password": "wrong", "next": "/authorize"}, ip="1.1.1.1")
     assert result.status_code == 401
+    html = result.body.decode("utf-8")
+    assert "Invalid password." in html
+    assert 'class="status-box error"' in html
+    assert 'role="alert"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'aria-errormessage="login-error"' in html
 
 
 async def test_correct_password_sets_cookie_and_redirects() -> None:
@@ -107,3 +113,9 @@ async def test_brute_force_6th_attempt_429() -> None:
     result = await login_post_handler({"password": "wrong", "next": "/"}, ip="3.3.3.3")
     assert result.status_code == 429
     assert "retry-after" in {k.lower() for k in result.headers.keys()}
+    html = result.body.decode("utf-8")
+    assert "Too many login attempts. Try again later." in html
+    assert 'class="status-box error"' in html
+    assert 'role="alert"' in html
+    assert 'aria-invalid="true"' in html
+    assert 'aria-errormessage="login-error"' in html

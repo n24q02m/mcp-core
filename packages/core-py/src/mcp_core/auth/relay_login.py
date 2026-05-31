@@ -101,18 +101,16 @@ async def require_relay_session(
     return RedirectResponse(url=f"/login?next={next_}", status_code=302)
 
 
-async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
-    """Render the password form using the shared relay form shell.
+def _render_login_body(next_: str, error: str | None = None) -> str:
+    safe_next = html.escape(str(next_))
+    error_html = (
+        f'\n                <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1rem;">{html.escape(error)}</div>'
+        if error
+        else ""
+    )
+    aria_invalid = ' aria-invalid="true" aria-errormessage="login-error"' if error else ""
 
-    The visible card mirrors the relay credential form: dark theme, Inter
-    fall-back font stack, ``.field-group`` / ``.field-label`` / ``.field-input``
-    classes for the password input, and a primary submit button matching the
-    "Connect" styling. The form keeps a plain HTML POST (no JavaScript) so the
-    gate works even with a strict CSP that blocks inline scripts.
-    """
-    next = _get_safe_next(next)
-    safe_next = html.escape(str(next))
-    body_html = f"""    <div class="container">
+    return f"""    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">Relay login</h1>
@@ -122,7 +120,7 @@ async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
 
             <p class="form-title">Authenticate</p>
 
-            <form method="POST" action="/login" novalidate>
+            <form method="POST" action="/login" novalidate>{error_html}
                 <input type="hidden" name="next" value="{safe_next}">
                 <div class="field-group">
                     <label for="field-password" class="field-label">
@@ -138,7 +136,7 @@ async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
                         autocomplete="current-password"
                         autocorrect="off"
                         autocapitalize="off"
-                        spellcheck="false"
+                        spellcheck="false"{aria_invalid}
                         required
                         autofocus
                     />
@@ -148,25 +146,39 @@ async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
             </form>
         </div>
     </div>"""
-    return HTMLResponse(render_form_shell("Relay login", body_html))
+
+
+async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
+    """Render the password form using the shared relay form shell.
+
+    The visible card mirrors the relay credential form: dark theme, Inter
+    fall-back font stack, ``.field-group`` / ``.field-label`` / ``.field-input``
+    classes for the password input, and a primary submit button matching the
+    "Connect" styling. The form keeps a plain HTML POST (no JavaScript) so the
+    gate works even with a strict CSP that blocks inline scripts.
+    """
+    next = _get_safe_next(next)
+    return HTMLResponse(render_form_shell("Relay login", _render_login_body(next)))
 
 
 async def login_post_handler(form: dict, ip: str) -> Response:
     """Verify the password and (on success) issue a session cookie."""
     now = time.time()
+    next_ = _get_safe_next(form.get("next"))
     fail = _fails.get(ip)
     if fail and now - fail[1] < FAIL_WINDOW_S and fail[0] >= FAIL_LIMIT:
         retry_after = int(FAIL_WINDOW_S - (now - fail[1]))
-        return Response(
-            "Too many login attempts. Try again later.",
+        return HTMLResponse(
+            render_form_shell("Relay login", _render_login_body(next_, "Too many login attempts. Try again later.")),
             status_code=429,
             headers={"Retry-After": str(retry_after)},
         )
     password = str(form.get("password", ""))
-    next_ = _get_safe_next(form.get("next"))
     if not _configured_password or not hmac.compare_digest(password.encode(), _configured_password.encode()):
         _bump_fail(ip)
-        return Response("Invalid password.", status_code=401)
+        return HTMLResponse(
+            render_form_shell("Relay login", _render_login_body(next_, "Invalid password.")), status_code=401
+        )
     _clear_fail(ip)
     sid = secrets.token_hex(32)
     _sessions[sid] = time.time() + SESSION_TTL_S
