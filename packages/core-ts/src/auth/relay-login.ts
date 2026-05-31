@@ -237,7 +237,9 @@ export async function loginPostHandler(
 
   if (failEntry && now - failEntry.firstAt < FAIL_WINDOW_MS && failEntry.count >= FAIL_LIMIT) {
     res.header?.('Retry-After', String(Math.ceil((FAIL_WINDOW_MS - (now - failEntry.firstAt)) / 1000)))
-    res.status(429).send(renderFormShell('Relay login', renderLoginBody(next, 'Too many login attempts. Try again later.')))
+    res
+      .status(429)
+      .send(renderFormShell('Relay login', renderLoginBody(next, 'Too many login attempts. Try again later.')))
     return
   }
 
