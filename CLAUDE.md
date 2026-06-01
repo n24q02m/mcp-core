@@ -2,7 +2,7 @@
 
 Unified MCP Streamable HTTP 2025-11-25 transport, OAuth 2.1 Authorization Server, lifecycle management, install automation, và shared embedding daemon cho toàn bộ hệ sinh thái MCP n24q02m.
 
-Supersedes (kế thừa) repo archived `mcp-relay-core`. Module mapping documented in `docs/migration-from-mcp-relay-core.md`.
+Supersedes (kế thừa) repo archived `mcp-relay-core`. Module mapping documented at https://mcp.n24q02m.com/servers/mcp-core/migration/.
 
 ## Monorepo
 
@@ -51,7 +51,7 @@ mise run setup                 # Install tools + deps + pre-commit hooks
 - Pipeline: PSR v10 -> npm publish (core-ts) + PyPI publish (core-py, embedding-daemon)
 - Tất cả packages share cùng version. PSR bumps `packages/core-py/pyproject.toml`, `packages/embedding-daemon/pyproject.toml` (version_toml). CD injects version vào `packages/core-ts/package.json` trước khi npm publish.
 - Publishing: PyPI trusted publishers (pending publisher đã config cho 2 packages) + npm trusted publisher (sau lần publish đầu với NPM OIDC).
-- Docker: chưa có (v0.1.0 library-only). Sẽ thêm sau khi embedding-daemon production-ready.
+- Docker: `Dockerfile` multi-target (`:stdio` + `:http`) build core-ts CLI; chưa có bước publish image trong CD.
 
 ## Secrets (skret + AWS SSM)
 

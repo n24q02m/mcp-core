@@ -44,8 +44,8 @@ daemon for the n24q02m MCP ecosystem.
 [`mcp-relay-core`](https://github.com/n24q02m/mcp-relay-core). All crypto,
 storage, OAuth, relay, and schema modules from `mcp-relay-core` ship under
 the same paths in `mcp-core` (1:1 superset), so downstream MCP servers can
-migrate with a pure import + dependency rename. See
-[`docs/migration-from-mcp-relay-core.md`](docs/migration-from-mcp-relay-core.md)
+migrate with a pure import + dependency rename. See the
+[Migration guide](https://mcp.n24q02m.com/servers/mcp-core/migration/)
 for the rename table.
 
 ## Packages
