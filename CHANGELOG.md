@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.17.2-beta.1 (2026-06-01)
+
+### Bug Fixes
+
+- Correct mcp-core Dockerfile header ([#302](https://github.com/n24q02m/mcp-core/pull/302),
+  [`954af42`](https://github.com/n24q02m/mcp-core/commit/954af42865c681a39806ab7add7bb4b380fa310b))
+
+- Sync mcp-core docs with current code ([#301](https://github.com/n24q02m/mcp-core/pull/301),
+  [`adea6aa`](https://github.com/n24q02m/mcp-core/commit/adea6aa8c7d43fb82b744cee7e1d94d452eaea63))
+
+- Update non-major dependencies (starlette/platformdirs/ruff)
+  ([`65d3181`](https://github.com/n24q02m/mcp-core/commit/65d318102453d17fa5028e8bb8c20207bad6dc55))
+
+
 ## v1.17.1 (2026-05-29)
 
 ### Bug Fixes
