@@ -26,7 +26,7 @@ dependencies = [
     "httpx>=0.28.1",
     "cryptography>=48.0.0",
     "authlib>=1.7.2",
-    "starlette>=1.1.0",
+    "starlette>=1.2.1",
     # Pydantic kept open >=2.12.5,<3 so downstream plugins (telegram/imagine/
     # wet/mnemo) can resolve to whatever pydantic version Renovate bumped them
     # to. mcp-core itself only uses stable 2.9+ surface — no 2.13 lock-in.
@@ -34,7 +34,7 @@ dependencies = [
     # is downstream-only and should not block plugins that don't use cohere.
     "pydantic>=2.12.5,<3",
     "loguru>=0.7.3",
-    "platformdirs>=4.9.6",
+    "platformdirs>=4.10.0",
     "tomli-w>=1.2.0",
     "filelock>=3.29.0",
 ]
@@ -53,7 +53,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.15.14",
+    "ruff>=0.15.15",
     "ty>=0.0.40",
 ]
 
