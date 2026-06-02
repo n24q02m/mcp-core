@@ -68,7 +68,9 @@ export type OAuthTokens = Record<string, unknown>
  * token issued to the MCP client. Returning `void` / `undefined` falls
  * back to `'local-user'` (single-user mode).
  */
-export type TokenCallback = (tokens: OAuthTokens) => string | undefined | void | Promise<string | undefined | void>
+export type TokenCallback = (
+  tokens: OAuthTokens
+) => string | undefined | undefined | Promise<string | undefined | undefined>
 
 export interface DelegatedOAuthAppOptions {
   serverName: string
@@ -165,12 +167,11 @@ function getBaseUrl(req: IncomingMessage): string {
   const host = req.headers.host ?? 'localhost'
   const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true
   const forwardedProto = req.headers['x-forwarded-proto']
-  const protocol =
-    typeof forwardedProto === 'string' && forwardedProto.length > 0
-      ? forwardedProto.split(',')[0].trim()
-      : encrypted
-        ? 'https'
-        : 'http'
+  let protocol = encrypted ? 'https' : 'http'
+  if (typeof forwardedProto === 'string' && forwardedProto.length > 0) {
+    const idx = forwardedProto.indexOf(',')
+    protocol = idx >= 0 ? forwardedProto.slice(0, idx).trim() : forwardedProto.trim()
+  }
   return `${protocol}://${host}`
 }
 
@@ -860,12 +861,17 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     const header = req.headers.cookie
     if (!header) return {}
     const out: Record<string, string> = {}
-    for (const part of header.split(';')) {
-      const idx = part.indexOf('=')
-      if (idx < 0) continue
-      const k = part.slice(0, idx).trim()
-      const v = part.slice(idx + 1).trim()
-      if (k.length > 0) out[k] = decodeURIComponent(v)
+    let start = 0
+    while (start < header.length) {
+      let end = header.indexOf(';', start)
+      if (end === -1) end = header.length
+      const idx = header.indexOf('=', start)
+      if (idx !== -1 && idx < end) {
+        const k = header.slice(start, idx).trim()
+        const v = header.slice(idx + 1, end).trim()
+        if (k.length > 0) out[k] = decodeURIComponent(v)
+      }
+      start = end + 1
     }
     return out
   }
@@ -873,7 +879,8 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
   function clientIp(req: IncomingMessage): string {
     const fwd = req.headers['x-forwarded-for']
     if (typeof fwd === 'string' && fwd.length > 0) {
-      return fwd.split(',')[0].trim()
+      const idx = fwd.indexOf(',')
+      return idx >= 0 ? fwd.slice(0, idx).trim() : fwd.trim()
     }
     return req.socket.remoteAddress ?? 'unknown'
   }

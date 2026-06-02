@@ -245,12 +245,11 @@ export async function runHttpServer(
       const reqHost = req.headers.host ?? 'localhost'
       const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true
       const forwardedProto = req.headers['x-forwarded-proto']
-      const protocol =
-        typeof forwardedProto === 'string' && forwardedProto.length > 0
-          ? forwardedProto.split(',')[0].trim()
-          : encrypted
-            ? 'https'
-            : 'http'
+      let protocol = encrypted ? 'https' : 'http'
+      if (typeof forwardedProto === 'string' && forwardedProto.length > 0) {
+        const idx = forwardedProto.indexOf(',')
+        protocol = idx >= 0 ? forwardedProto.slice(0, idx).trim() : forwardedProto.trim()
+      }
       base = `${protocol}://${reqHost}`
     }
     return `${base}/.well-known/oauth-protected-resource`
