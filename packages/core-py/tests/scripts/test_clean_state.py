@@ -92,14 +92,18 @@ def test_kill_daemons_multiple_locks(mock_env):
         assert not lock2.exists()
         assert mock_terminate.call_count == 2
 
+
 def test_clean_one_lock_reaping_delay(mock_env):
     lock_dir = mock_env["lock_dir"]
     cache_dir = mock_env["cache_dir"]
     lock_file = lock_dir / "delay.lock"
     lock_file.write_text("5555\n")
 
-    with patch("mcp_core.scripts.clean_state._is_pid_alive") as mock_is_alive,          patch("mcp_core.scripts.clean_state._terminate_daemon"),          patch("time.sleep") as mock_sleep:
-
+    with (
+        patch("mcp_core.scripts.clean_state._is_pid_alive") as mock_is_alive,
+        patch("mcp_core.scripts.clean_state._terminate_daemon"),
+        patch("time.sleep") as mock_sleep,
+    ):
         # Initial check (True), then 3 loop checks (True, True, False)
         mock_is_alive.side_effect = [True, True, True, False]
 
