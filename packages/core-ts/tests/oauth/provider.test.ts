@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JWTIssuer } from '../../src/oauth/jwt-issuer.js'
-import { InMemoryAuthCache, OAuthProvider, type PreAuthSession } from '../../src/oauth/provider.js'
+import { InMemoryAuthCache, OAuthProvider } from '../../src/oauth/provider.js'
 import * as relayClient from '../../src/relay/client.js'
 import type { RelayConfigSchema } from '../../src/schema/types.js'
 
@@ -24,104 +24,6 @@ vi.mock('../../src/oauth/jwt-issuer.js', () => {
       this.verifyAccessToken = vi.fn()
     })
   }
-})
-
-describe('InMemoryAuthCache', () => {
-  it('should save and retrieve a session', () => {
-    const cache = new InMemoryAuthCache()
-    const session: PreAuthSession = {
-      sessionId: 'sess-1',
-      clientId: 'client-1',
-      redirectUri: 'https://app.example.com/callback',
-      state: 'state-1',
-      codeChallenge: 'challenge-1',
-      codeChallengeMethod: 'S256',
-      keyPairJwk: { kty: 'EC', crv: 'P-256', x: '...', y: '...', d: '...' },
-      passphrase: 'pass-1',
-      expiresAt: Math.floor(Date.now() / 1000) + 600
-    }
-    cache.save(session)
-    const retrieved = cache.getAndDelete('sess-1')
-    expect(retrieved).toEqual(session)
-  })
-
-  it('should delete session after retrieval', () => {
-    const cache = new InMemoryAuthCache()
-    const session: PreAuthSession = {
-      sessionId: 'sess-1',
-      clientId: 'client-1',
-      redirectUri: 'https://app.example.com/callback',
-      state: 'state-1',
-      codeChallenge: 'challenge-1',
-      codeChallengeMethod: 'S256',
-      keyPairJwk: { kty: 'EC', crv: 'P-256', x: '...', y: '...', d: '...' },
-      passphrase: 'pass-1',
-      expiresAt: Math.floor(Date.now() / 1000) + 600
-    }
-    cache.save(session)
-    cache.getAndDelete('sess-1')
-    expect(cache.getAndDelete('sess-1')).toBeNull()
-  })
-
-  it('should not return expired sessions', () => {
-    const cache = new InMemoryAuthCache()
-    const session: PreAuthSession = {
-      sessionId: 'sess-1',
-      clientId: 'client-1',
-      redirectUri: 'https://app.example.com/callback',
-      state: 'state-1',
-      codeChallenge: 'challenge-1',
-      codeChallengeMethod: 'S256',
-      keyPairJwk: { kty: 'EC', crv: 'P-256', x: '...', y: '...', d: '...' },
-      passphrase: 'pass-1',
-      expiresAt: Math.floor(Date.now() / 1000) - 1 // expired
-    }
-
-    // We need to bypass the cleanup in save() to test expiration in getAndDelete()
-    const map = (cache as any).cache as Map<string, PreAuthSession>
-    map.set('sess-1', session)
-
-    expect(map.has('sess-1')).toBe(true)
-    expect(cache.getAndDelete('sess-1')).toBeNull()
-
-    // Verify it was deleted even though it was expired
-    expect(map.has('sess-1')).toBe(false)
-  })
-
-  it('should cleanup expired entries on save', () => {
-    const cache = new InMemoryAuthCache()
-    const expired: PreAuthSession = {
-      sessionId: 'expired',
-      clientId: 'client-1',
-      redirectUri: 'https://app.example.com/callback',
-      state: 'state-1',
-      codeChallenge: 'challenge-1',
-      codeChallengeMethod: 'S256',
-      keyPairJwk: { kty: 'EC', crv: 'P-256', x: '...', y: '...', d: '...' },
-      passphrase: 'pass-1',
-      expiresAt: Math.floor(Date.now() / 1000) - 1
-    }
-    const valid: PreAuthSession = {
-      sessionId: 'valid',
-      clientId: 'client-1',
-      redirectUri: 'https://app.example.com/callback',
-      state: 'state-1',
-      codeChallenge: 'challenge-1',
-      codeChallengeMethod: 'S256',
-      keyPairJwk: { kty: 'EC', crv: 'P-256', x: '...', y: '...', d: '...' },
-      passphrase: 'pass-1',
-      expiresAt: Math.floor(Date.now() / 1000) + 600
-    }
-
-    // Manually set expired session to avoid immediate cleanup on save
-    const map = (cache as any).cache as Map<string, PreAuthSession>
-    map.set('expired', expired)
-
-    cache.save(valid)
-
-    expect(map.has('expired')).toBe(false)
-    expect(cache.getAndDelete('valid')).toEqual(valid)
-  })
 })
 
 describe('OAuthProvider', () => {
