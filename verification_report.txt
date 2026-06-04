@@ -1,0 +1,1 @@
+The issue 'Unused import in __init__.py' in 'packages/core-py/src/mcp_core/transport/__init__.py' was already resolved in the codebase. I have verified this by inspecting the file, running ruff, and running the test suite.
