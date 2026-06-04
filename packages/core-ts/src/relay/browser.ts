@@ -24,16 +24,14 @@ async function isWsl(): Promise<boolean> {
   }
 }
 
-function encodePowerShellCommand(command: string): string {
-  return Buffer.from(command, 'utf16le').toString('base64')
-}
-
 async function openInPowerShell(url: string): Promise<boolean> {
   try {
     const base64Url = Buffer.from(url, 'utf8').toString('base64')
-    const command = `$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64Url}')); Start-Process $url`
-    const encodedCommand = encodePowerShellCommand(command)
-    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encodedCommand])
+    // Use a script block that decodes the first argument ($args[0]) to avoid injection.
+    // We pass the URL as a separate argument to the PowerShell process.
+    const script =
+      '& { $url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0])); Start-Process $url }'
+    await execFileAsync('powershell.exe', ['-NoProfile', '-Command', script, base64Url])
     return true
   } catch {
     return false
@@ -49,7 +47,7 @@ async function openInWsl(url: string): Promise<boolean> {
     /* fall through */
   }
 
-  // Fallback to powershell.exe -EncodedCommand
+  // Fallback to powershell.exe -Command
   return openInPowerShell(url)
 }
 
@@ -57,7 +55,7 @@ async function openInWsl(url: string): Promise<boolean> {
  * Try to open URL in default browser. Returns true if likely succeeded.
  *
  * Detection order:
- * 1. win32: powershell.exe -EncodedCommand
+ * 1. win32: powershell.exe -Command
  * 2. darwin: `open` command
  * 3. linux: check WSL then `xdg-open`
  *

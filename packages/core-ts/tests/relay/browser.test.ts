@@ -162,7 +162,7 @@ describe('tryOpenBrowser', () => {
       const result = await tryOpenBrowser(url)
       expect(result).toBe(false)
     })
-    it('uses powershell.exe with EncodedCommand and embedded URL on win32', async () => {
+    it('uses powershell.exe with parameterized Command and URL as argument on win32', async () => {
       Object.defineProperty(process, 'platform', { value: 'win32' })
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
@@ -179,18 +179,19 @@ describe('tryOpenBrowser', () => {
 
       expect(execFile).toHaveBeenCalledWith(
         'powershell.exe',
-        expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
+        expect.arrayContaining(['-NoProfile', '-Command']),
         expect.any(Function)
       )
 
       const lastCall = vi.mocked(execFile).mock.calls[vi.mocked(execFile).mock.calls.length - 1]
       const args = lastCall[1] as string[]
-      const encodedCommand = args[args.indexOf('-EncodedCommand') + 1]
-      const decoded = Buffer.from(encodedCommand, 'base64').toString('utf16le')
+      const script = args[args.indexOf('-Command') + 1]
+      const base64UrlArg = args[args.indexOf('-Command') + 2]
+
       const base64Url = Buffer.from(url, 'utf8').toString('base64')
-      expect(decoded).toContain(base64Url)
-      expect(decoded).toContain('[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String')
-      expect(decoded).toContain('Start-Process $url')
+      expect(base64UrlArg).toBe(base64Url)
+      expect(script).toContain('[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0]))')
+      expect(script).toContain('Start-Process $url')
     })
   })
 
@@ -219,7 +220,7 @@ describe('tryOpenBrowser', () => {
       expect(execFile).toHaveBeenCalledWith('wslview', [url], expect.any(Function))
       expect(execFile).toHaveBeenCalledWith(
         'powershell.exe',
-        expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
+        expect.arrayContaining(['-NoProfile', '-Command']),
         expect.any(Function)
       )
     })

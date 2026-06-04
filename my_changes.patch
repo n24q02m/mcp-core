@@ -1,0 +1,204 @@
+diff --git a/changes.patch b/changes.patch
+new file mode 100644
+index 0000000..e69de29
+diff --git a/packages/core-py/src/mcp_core/relay/browser.py b/packages/core-py/src/mcp_core/relay/browser.py
+index 4b31c6b..2ecdb13 100644
+--- a/packages/core-py/src/mcp_core/relay/browser.py
++++ b/packages/core-py/src/mcp_core/relay/browser.py
+@@ -28,13 +28,14 @@ def _is_wsl() -> bool:
+
+
+ def _open_in_powershell(url: str) -> bool:
+-    """Open URL using powershell.exe -EncodedCommand."""
++    """Open URL using powershell.exe -Command with parameterized argument."""
+     try:
+         base64_url = base64.b64encode(url.encode("utf-8")).decode("ascii")
+-        command = f"$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('{base64_url}')); Start-Process $url"
+-        encoded_command = base64.b64encode(command.encode("utf-16le")).decode("ascii")
++        # Use a script block that decodes the first argument ($args[0]) to avoid injection.
++        # We pass the URL as a separate argument to the PowerShell process.
++        script = "& { $url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0])); Start-Process $url }"
+         subprocess.run(
+-            ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_command],
++            ["powershell.exe", "-NoProfile", "-Command", script, base64_url],
+             check=True,
+             capture_output=True,
+             timeout=10,
+@@ -58,7 +59,7 @@ def _open_in_wsl(url: str) -> bool:
+     except (FileNotFoundError, subprocess.SubprocessError):
+         pass
+
+-    # Fallback to powershell.exe -EncodedCommand
++    # Fallback to powershell.exe -Command
+     return _open_in_powershell(url)
+
+
+diff --git a/packages/core-py/tests/relay/test_browser.py b/packages/core-py/tests/relay/test_browser.py
+index 0d827a2..89ec414 100644
+--- a/packages/core-py/tests/relay/test_browser.py
++++ b/packages/core-py/tests/relay/test_browser.py
+@@ -157,7 +157,7 @@ class TestOpenInWsl:
+
+
+ class TestOpenInPowerShell:
+-    def test_uses_embedded_base64_url_and_noprofile(self):
++    def test_uses_parameterized_command_and_noprofile(self):
+         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
+             mock_sp.SubprocessError = Exception
+             from mcp_core.relay.browser import _open_in_powershell
+@@ -172,16 +172,13 @@ class TestOpenInPowerShell:
+             cmd_list = args[0]
+             assert cmd_list[0] == "powershell.exe"
+             assert "-NoProfile" in cmd_list
+-            assert "-EncodedCommand" in cmd_list
++            assert "-Command" in cmd_list
++            assert "-EncodedCommand" not in cmd_list
+
+-            encoded_command = cmd_list[cmd_list.index("-EncodedCommand") + 1]
+-            decoded = base64.b64decode(encoded_command).decode("utf-16le")
++            script = cmd_list[cmd_list.index("-Command") + 1]
++            base64_url_arg = cmd_list[cmd_list.index("-Command") + 2]
+
+             base64_url = base64.b64encode(url.encode("utf-8")).decode("ascii")
+-            assert base64_url in decoded
+-            assert "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String" in decoded
+-            assert "Start-Process $url" in decoded
+-
+-            # MCP_BROWSER_URL should NOT be in env if env is passed (kwargs might be empty or not contain it)
+-            if "env" in kwargs:
+-                assert "MCP_BROWSER_URL" not in kwargs["env"]
++            assert base64_url_arg == base64_url
++            assert "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0]))" in script
++            assert "Start-Process $url" in script
+diff --git a/packages/core-py/uv.lock b/packages/core-py/uv.lock
+index 85020a7..63deb18 100644
+--- a/packages/core-py/uv.lock
++++ b/packages/core-py/uv.lock
+@@ -608,7 +608,7 @@ wheels = [
+
+ [[package]]
+ name = "n24q02m-mcp-core"
+-version = "1.17.1"
++version = "1.17.2"
+ source = { editable = "." }
+ dependencies = [
+     { name = "authlib" },
+diff --git a/packages/core-ts/src/relay/browser.ts b/packages/core-ts/src/relay/browser.ts
+index 0ff4f74..770f1d6 100644
+--- a/packages/core-ts/src/relay/browser.ts
++++ b/packages/core-ts/src/relay/browser.ts
+@@ -24,16 +24,14 @@ async function isWsl(): Promise<boolean> {
+   }
+ }
+
+-function encodePowerShellCommand(command: string): string {
+-  return Buffer.from(command, 'utf16le').toString('base64')
+-}
+-
+ async function openInPowerShell(url: string): Promise<boolean> {
+   try {
+     const base64Url = Buffer.from(url, 'utf8').toString('base64')
+-    const command = `$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64Url}')); Start-Process $url`
+-    const encodedCommand = encodePowerShellCommand(command)
+-    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encodedCommand])
++    // Use a script block that decodes the first argument ($args[0]) to avoid injection.
++    // We pass the URL as a separate argument to the PowerShell process.
++    const script =
++      '& { $url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0])); Start-Process $url }'
++    await execFileAsync('powershell.exe', ['-NoProfile', '-Command', script, base64Url])
+     return true
+   } catch {
+     return false
+@@ -49,7 +47,7 @@ async function openInWsl(url: string): Promise<boolean> {
+     /* fall through */
+   }
+
+-  // Fallback to powershell.exe -EncodedCommand
++  // Fallback to powershell.exe -Command
+   return openInPowerShell(url)
+ }
+
+@@ -57,7 +55,7 @@ async function openInWsl(url: string): Promise<boolean> {
+  * Try to open URL in default browser. Returns true if likely succeeded.
+  *
+  * Detection order:
+- * 1. win32: powershell.exe -EncodedCommand
++ * 1. win32: powershell.exe -Command
+  * 2. darwin: `open` command
+  * 3. linux: check WSL then `xdg-open`
+  *
+diff --git a/packages/core-ts/tests/relay/browser.test.ts b/packages/core-ts/tests/relay/browser.test.ts
+index 4875474..3db8344 100644
+--- a/packages/core-ts/tests/relay/browser.test.ts
++++ b/packages/core-ts/tests/relay/browser.test.ts
+@@ -162,7 +162,7 @@ describe('tryOpenBrowser', () => {
+       const result = await tryOpenBrowser(url)
+       expect(result).toBe(false)
+     })
+-    it('uses powershell.exe with EncodedCommand and embedded URL on win32', async () => {
++    it('uses powershell.exe with parameterized Command and URL as argument on win32', async () => {
+       Object.defineProperty(process, 'platform', { value: 'win32' })
+       vi.mocked(execFile).mockImplementation((...args: any[]) => {
+         const _options = args[2]
+@@ -179,18 +179,19 @@ describe('tryOpenBrowser', () => {
+
+       expect(execFile).toHaveBeenCalledWith(
+         'powershell.exe',
+-        expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
++        expect.arrayContaining(['-NoProfile', '-Command']),
+         expect.any(Function)
+       )
+
+       const lastCall = vi.mocked(execFile).mock.calls[vi.mocked(execFile).mock.calls.length - 1]
+       const args = lastCall[1] as string[]
+-      const encodedCommand = args[args.indexOf('-EncodedCommand') + 1]
+-      const decoded = Buffer.from(encodedCommand, 'base64').toString('utf16le')
++      const script = args[args.indexOf('-Command') + 1]
++      const base64UrlArg = args[args.indexOf('-Command') + 2]
++
+       const base64Url = Buffer.from(url, 'utf8').toString('base64')
+-      expect(decoded).toContain(base64Url)
+-      expect(decoded).toContain('[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String')
+-      expect(decoded).toContain('Start-Process $url')
++      expect(base64UrlArg).toBe(base64Url)
++      expect(script).toContain('[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0]))')
++      expect(script).toContain('Start-Process $url')
+     })
+   })
+
+@@ -219,7 +220,7 @@ describe('tryOpenBrowser', () => {
+       expect(execFile).toHaveBeenCalledWith('wslview', [url], expect.any(Function))
+       expect(execFile).toHaveBeenCalledWith(
+         'powershell.exe',
+-        expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
++        expect.arrayContaining(['-NoProfile', '-Command']),
+         expect.any(Function)
+       )
+     })
+diff --git a/test_ps.py b/test_ps.py
+new file mode 100644
+index 0000000..b801538
+--- /dev/null
++++ b/test_ps.py
+@@ -0,0 +1,21 @@
++import subprocess
++import base64
++
++def test_ps(url):
++    command = "Start-Process $args[0]"
++    encoded_command = base64.b64encode(command.encode("utf-16le")).decode("ascii")
++    print(f"Running with URL: {url}")
++    try:
++        # Note: this might not work on Linux unless powershell (pwsh) is installed,
++        # but the code is intended for WSL/Windows where powershell.exe is available.
++        # In this environment, we might not have powershell.exe in the path or it might not run.
++        result = subprocess.run(
++            ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_command, url],
++            capture_output=True, text=True, timeout=5
++        )
++        print(f"STDOUT: {result.stdout}")
++        print(f"STDERR: {result.stderr}")
++    except Exception as e:
++        print(f"Error: {e}")
++
++test_ps("https://example.com")
