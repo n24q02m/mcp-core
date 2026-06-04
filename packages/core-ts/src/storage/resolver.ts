@@ -15,14 +15,16 @@ export async function resolveConfig(
   // 1. Check env vars -- if ALL required fields present as env vars, use them
   const envConfig: Record<string, string> = {}
   let allEnvPresent = requiredFields.length > 0
-  const serverPrefix = serverName.toUpperCase().replaceAll('-', '_')
+  const env = process.env
+  const basePrefix = `MCP_${serverName.toUpperCase().replaceAll('-', '_')}_`
   for (const field of requiredFields) {
-    const envKey = `MCP_${serverPrefix}_${field.toUpperCase().replaceAll('-', '_')}`
-    const value = process.env[envKey]
+    const envKey = `${basePrefix}${field.toUpperCase().replaceAll('-', '_')}`
+    const value = env[envKey]
     if (value !== undefined && value !== '') {
       envConfig[field] = value
     } else {
       allEnvPresent = false
+      break
     }
   }
   if (allEnvPresent) {
