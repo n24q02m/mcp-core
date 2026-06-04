@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any, Union
 
 from loguru import logger
 
+from starlette.datastructures import Headers
+
 if TYPE_CHECKING:
     from fastmcp import FastMCP
     from starlette.applications import Starlette
@@ -104,9 +106,9 @@ class BearerMCPApp:
         if public_url:
             base = public_url.rstrip("/")
         else:
-            headers = dict(scope.get("headers", []))
-            host = headers.get(b"host", b"").decode("latin-1") or "localhost"
-            proto = headers.get(b"x-forwarded-proto", b"").decode("latin-1") or scope.get("scheme", "http")
+            headers = Headers(scope=scope)
+            host = headers.get("host") or "localhost"
+            proto = headers.get("x-forwarded-proto") or scope.get("scheme", "http")
             base = f"{proto}://{host}"
         return f"{base}/.well-known/oauth-protected-resource"
 
@@ -129,14 +131,13 @@ class BearerMCPApp:
             return
 
         # Extract Bearer token from headers
+        headers = Headers(scope=scope)
+        auth_header = headers.get("authorization")
         bearer: str | None = None
-        for key, value in scope.get("headers", []):
-            if key == b"authorization":
-                auth_str = value.decode("utf-8", errors="ignore")
-                scheme, _, token_part = auth_str.partition(" ")
-                if scheme.lower() == "bearer" and token_part.strip():
-                    bearer = token_part.strip()
-                break
+        if auth_header:
+            scheme, _, token_part = auth_header.partition(" ")
+            if scheme.lower() == "bearer" and token_part.strip():
+                bearer = token_part.strip()
 
         if not bearer:
             from starlette.responses import Response

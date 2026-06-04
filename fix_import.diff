@@ -1,0 +1,18 @@
+<<<<<<< SEARCH
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
+from starlette.datastructures import Headers
+    from starlette.applications import Starlette
+    from starlette.types import ASGIApp, Receive, Scope, Send
+
+    from mcp_core.oauth.jwt_issuer import JWTIssuer
+=======
+from starlette.datastructures import Headers
+
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
+    from starlette.applications import Starlette
+    from starlette.types import ASGIApp, Receive, Scope, Send
+
+    from mcp_core.oauth.jwt_issuer import JWTIssuer
+>>>>>>> REPLACE
