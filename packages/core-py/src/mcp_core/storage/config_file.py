@@ -92,7 +92,7 @@ def _with_retry(fn: Any) -> Any:
 
 def _load_store() -> dict[str, Any]:
     config_path = _get_config_path()
-    if not config_path.exists():
+    if not config_path.exists() or config_path.stat().st_size == 0:
         return {"version": 1, "servers": {}}
 
     data = config_path.read_bytes()

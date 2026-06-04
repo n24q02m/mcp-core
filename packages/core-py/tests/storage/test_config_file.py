@@ -105,6 +105,12 @@ class TestWriteAndReadConfig:
         config = read_config("anything")
         assert config is None
 
+    def test_returns_none_when_config_file_is_empty(self, _temp_config):
+        config_path = _temp_config / "config.enc"
+        config_path.write_bytes(b"")
+        config = read_config("anything")
+        assert config is None
+
 
 class TestWriteConfigMerging:
     def test_does_not_overwrite_other_servers(self):
