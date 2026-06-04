@@ -13,6 +13,7 @@ direct FastMCP stdio mode and pure HTTP servers. See
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import os
 import shutil
 import sys
@@ -234,6 +235,57 @@ def _terminate_daemon(pid: int) -> None:
         pass
 
 
+def _clean_one_lock(lock: Path, cache_dir: Path, verbose: bool) -> tuple[int, int]:
+    """Helper for parallel lock cleanup in kill_daemons."""
+    killed = 0
+    removed = 0
+    pid = _parse_lock_pid(lock)
+    if pid is not None and _is_pid_alive(pid):
+        _terminate_daemon(pid)
+        # Brief pause to let the OS reap the process so subsequent lock
+        # writes by mcp-core do not collide with the old PID's handle.
+        for _ in range(20):
+            if not _is_pid_alive(pid):
+                break
+            time.sleep(0.05)
+        killed += 1
+        if verbose:
+            print(f"killed: pid={pid} ({lock.name})")
+
+    try:
+        lock.unlink()
+        removed += 1
+        if verbose:
+            print(f"removed: {lock}")
+    except OSError as exc:
+        print(f"failed to remove {lock}: {exc}", file=sys.stderr)
+
+    # Companion tools cache lives at:
+    #   ~/.config/mcp/cache/<server>-<pid>-<protocol>-<core>.tools.json
+    # We match by server+pid prefix since protocol/core suffix varies.
+    if cache_dir.exists() and pid is not None:
+        stem_prefix = f"{lock.stem}-"  # e.g. "wet-mcp-1234-"
+        for cache_file in cache_dir.glob(f"{stem_prefix}*.tools.json"):
+            try:
+                cache_file.unlink()
+                if verbose:
+                    print(f"removed: {cache_file}")
+            except OSError as exc:
+                print(f"failed to remove {cache_file}: {exc}", file=sys.stderr)
+
+    # Sibling sentinel ``<lock>.tools-list-changed`` (if used by future code).
+    sentinel = lock.with_suffix(lock.suffix + ".tools-list-changed")
+    if sentinel.exists():
+        try:
+            sentinel.unlink()
+            if verbose:
+                print(f"removed: {sentinel}")
+        except OSError as exc:
+            print(f"failed to remove {sentinel}: {exc}", file=sys.stderr)
+
+    return killed, removed
+
+
 def kill_daemons(verbose: bool = False) -> tuple[int, int]:
     """Terminate alive MCP daemons and remove their lock + companion files.
 
@@ -264,50 +316,13 @@ def kill_daemons(verbose: bool = False) -> tuple[int, int]:
 
     killed = 0
     removed = 0
-    for lock in locks:
-        pid = _parse_lock_pid(lock)
-        if pid is not None and _is_pid_alive(pid):
-            _terminate_daemon(pid)
-            # Brief pause to let the OS reap the process so subsequent lock
-            # writes by mcp-core do not collide with the old PID's handle.
-            for _ in range(20):
-                if not _is_pid_alive(pid):
-                    break
-                time.sleep(0.05)
-            killed += 1
-            if verbose:
-                print(f"killed: pid={pid} ({lock.name})")
 
-        try:
-            lock.unlink()
-            removed += 1
-            if verbose:
-                print(f"removed: {lock}")
-        except OSError as exc:
-            print(f"failed to remove {lock}: {exc}", file=sys.stderr)
-
-        # Companion tools cache lives at:
-        #   ~/.config/mcp/cache/<server>-<pid>-<protocol>-<core>.tools.json
-        # We match by server+pid prefix since protocol/core suffix varies.
-        if cache_dir.exists() and pid is not None:
-            stem_prefix = f"{lock.stem}-"  # e.g. "wet-mcp-1234-"
-            for cache_file in cache_dir.glob(f"{stem_prefix}*.tools.json"):
-                try:
-                    cache_file.unlink()
-                    if verbose:
-                        print(f"removed: {cache_file}")
-                except OSError as exc:
-                    print(f"failed to remove {cache_file}: {exc}", file=sys.stderr)
-
-        # Sibling sentinel ``<lock>.tools-list-changed`` (if used by future code).
-        sentinel = lock.with_suffix(lock.suffix + ".tools-list-changed")
-        if sentinel.exists():
-            try:
-                sentinel.unlink()
-                if verbose:
-                    print(f"removed: {sentinel}")
-            except OSError as exc:
-                print(f"failed to remove {sentinel}: {exc}", file=sys.stderr)
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(_clean_one_lock, lock, cache_dir, verbose) for lock in locks]
+        for future in concurrent.futures.as_completed(futures):
+            k, r = future.result()
+            killed += k
+            removed += r
 
     print(f"Killed {killed} daemons; cleaned {removed} lock files.")
     return (killed, removed)
