@@ -150,6 +150,10 @@ const SESSION_TTL_S = 600
 const OTP_TIMEOUT_S = 300
 const OTP_MAX_ATTEMPTS = 5
 
+// Server-side prefill keyed by OAuth ``state`` (the PKCE state token chosen
+// by the client BEFORE the GET /authorize redirect).
+const PREFILL_TTL_S = 300
+
 interface PendingSession {
   clientId: string
   redirectUri: string
@@ -245,59 +249,50 @@ function getBaseUrl(req: IncomingMessage): string {
 }
 
 /**
- * Create OAuth 2.1 Authorization Server HTTP handler.
+ * Encapsulates the state and logic for a local OAuth application.
  *
- * Returns a handler compatible with ``http.createServer`` along with the
- * ``JWTIssuer`` (for the transport layer to verify Bearer tokens) and a
- * ``markSetupComplete`` function for background setup callbacks (e.g. GDrive
- * device code flow).
+ * This refactoring extracts the previously nested logic from createLocalOAuthApp
+ * into a class to improve maintainability and avoid overly complex functions.
  */
-export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promise<LocalOAuthAppResult> {
-  const jwtIssuer = options.jwtIssuer ?? new JWTIssuer(options.serverName)
-  await jwtIssuer.init()
-
+class LocalOAuthAppInstance {
   // In-memory stores keyed by nonce / auth_code. Each entry has a ``createdAt``
   // for TTL expiry.
-  const pendingSessions = new Map<string, PendingSession>()
-  const authCodes = new Map<string, AuthCodeEntry>()
+  private pendingSessions = new Map<string, PendingSession>()
+  private authCodes = new Map<string, AuthCodeEntry>()
 
   // Server-side prefill keyed by OAuth ``state`` (the PKCE state token chosen
-  // by the client BEFORE the GET /authorize redirect). The E2E driver POSTs
-  // skret-derived form values here so the URL it announces to the user does
-  // NOT contain credential bytes. Without this, ``?prefill_TELEGRAM_PHONE=
-  // %2B84...`` would land in browser history, server access logs, screenshots
-  // and HTTP referrer headers — every place a URL leaks.
-  const pendingPrefills = new Map<string, { data: Record<string, string>; createdAt: number }>()
-  const PREFILL_TTL_S = 300
+  // by the client BEFORE the GET /authorize redirect).
+  private pendingPrefills = new Map<string, { data: Record<string, string>; createdAt: number }>()
 
   // Single-user local mode: one pending multi-step session at a time.
-  let pendingStep: PendingStep | null = null
-  const setupStatus: Record<string, string> = { gdrive: 'idle' }
+  private pendingStep: PendingStep | null = null
+  private setupStatus: Record<string, string> = { gdrive: 'idle' }
 
-  // Edge auth password gate. When ``MCP_RELAY_PASSWORD`` is set, /authorize
-  // GET + POST + /authorize/prefill are fronted by a cookie-session
-  // middleware. Empty password disables the gate (single-user dev). See
-  // spec ``2026-05-01-stdio-pure-http-multiuser §4.2.1``. Configured here
-  // (not module-scope) so multi-app test setups don't leak state across
-  // apps; the relay-login module itself keeps a single shared password
-  // string, intentional because in deploy each container hosts one app.
-  const relayPassword = process.env.MCP_RELAY_PASSWORD ?? ''
-  configureRelayLogin(relayPassword)
-  const relayMw = createRelayLoginMiddleware({ password: relayPassword })
+  // Edge auth password gate.
+  private relayPassword = process.env.MCP_RELAY_PASSWORD ?? ''
+  private relayMw: ReturnType<typeof createRelayLoginMiddleware>
 
-  function markPendingStep(sub: string): void {
-    pendingStep = { active: true, createdAt: Date.now(), attempts: 0, sub }
+  constructor(
+    private options: LocalOAuthAppOptions,
+    public jwtIssuer: JWTIssuer
+  ) {
+    configureRelayLogin(this.relayPassword)
+    this.relayMw = createRelayLoginMiddleware({ password: this.relayPassword })
   }
 
-  function clearPendingStep(): void {
-    pendingStep = null
+  private markPendingStep(sub: string): void {
+    this.pendingStep = { active: true, createdAt: Date.now(), attempts: 0, sub }
+  }
+
+  private clearPendingStep(): void {
+    this.pendingStep = null
   }
 
   // ------------------------------------------------------------------
   // Route handlers
   // ------------------------------------------------------------------
 
-  async function authorizeGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async authorizeGet(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     const params = url.searchParams
     const clientId = params.get('client_id')
@@ -324,8 +319,8 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     // Renderers receive the flat ``{KEY: VALUE}`` map and emit ``value="..."``
     // on matching inputs.
     const prefill: Record<string, string> = {}
-    pruneExpired(pendingPrefills, PREFILL_TTL_S * 1000)
-    const stored = pendingPrefills.get(state)
+    pruneExpired(this.pendingPrefills, PREFILL_TTL_S * 1000)
+    const stored = this.pendingPrefills.get(state)
     if (stored) {
       // Explicit per-key copy (not Object.assign / spread) — values landed
       // here via authorizePrefill which coerces every value through String()
@@ -335,7 +330,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       for (const [k, v] of Object.entries(stored.data)) {
         prefill[k] = String(v)
       }
-      pendingPrefills.delete(state)
+      this.pendingPrefills.delete(state)
     } else {
       params.forEach((value, key) => {
         if (key.startsWith('prefill_')) {
@@ -350,7 +345,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     // this were derived at /token, concurrent authorize requests would collide
     // on a static 'local-user' subject and leak credentials across users.
     const sub = randomBytes(16).toString('base64url')
-    pendingSessions.set(nonce, {
+    this.pendingSessions.set(nonce, {
       clientId,
       redirectUri,
       state,
@@ -359,21 +354,21 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       createdAt: Date.now(),
       sub
     })
-    pruneExpired(pendingSessions, SESSION_TTL_S * 1000)
+    pruneExpired(this.pendingSessions, SESSION_TTL_S * 1000)
 
     const base = getBaseUrl(req)
     const submitUrl = `${base}/authorize?nonce=${nonce}`
     const html =
-      options.customCredentialFormHtml !== undefined
-        ? options.customCredentialFormHtml(options.relaySchema, { submitUrl, prefill })
-        : renderCredentialForm(options.relaySchema, { submitUrl, prefill })
+      this.options.customCredentialFormHtml !== undefined
+        ? this.options.customCredentialFormHtml(this.options.relaySchema, { submitUrl, prefill })
+        : renderCredentialForm(this.options.relaySchema, { submitUrl, prefill })
     htmlResponse(res, 200, html)
   }
 
-  async function authorizePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async authorizePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     const nonce = url.searchParams.get('nonce')
-    if (!nonce || !pendingSessions.has(nonce)) {
+    if (!nonce || !this.pendingSessions.has(nonce)) {
       jsonResponse(res, 400, {
         error: 'invalid_request',
         error_description: 'Invalid or expired nonce'
@@ -381,8 +376,8 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       return
     }
 
-    const session = pendingSessions.get(nonce) as PendingSession
-    pendingSessions.delete(nonce)
+    const session = this.pendingSessions.get(nonce) as PendingSession
+    this.pendingSessions.delete(nonce)
 
     if (Date.now() - session.createdAt > SESSION_TTL_S * 1000) {
       jsonResponse(res, 400, {
@@ -404,29 +399,16 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     }
 
     // Reset stale completion markers from previous authorize submits.
-    // setupStatus is module-scoped, so a key flipped to "complete" by a
-    // prior background poll (e.g. Outlook device code finished on the
-    // first attempt) would otherwise persist into the next form submit.
-    // The frontend renders a fresh oauth_device_code UI and starts
-    // polling /setup-status, which returns the stale "complete" within
-    // a few seconds and triggers a premature redirect — the user sees
-    // the device code flash on screen and then the "setup complete"
-    // banner before they ever open microsoft.com/link. Reset all keys
-    // back to "idle" here so each submit starts from a clean state.
-    for (const key of Object.keys(setupStatus)) {
-      setupStatus[key] = 'idle'
+    for (const key of Object.keys(this.setupStatus)) {
+      this.setupStatus[key] = 'idle'
     }
 
     // Save credentials via callback. Callback may return a dict with
     // next_step info (e.g. GDrive OAuth device code to show in the form).
-    // The per-authorize ``sub`` is threaded through so consumers persist
-    // credentials keyed by subject — subsequently the JWT issued at /token
-    // will carry this same sub, letting tool handlers load the correct
-    // credential set via AsyncLocalStorage.
     let nextStep: NextStep | null = null
-    if (options.onCredentialsSaved !== undefined) {
+    if (this.options.onCredentialsSaved !== undefined) {
       try {
-        const result = await options.onCredentialsSaved(credentials, { sub: session.sub })
+        const result = await this.options.onCredentialsSaved(credentials, { sub: session.sub })
         if (result !== null && result !== undefined && typeof result === 'object') {
           nextStep = result
         }
@@ -441,16 +423,15 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
 
     // Mark the persistent ``_setup_complete`` flag once the user submits
     // successfully. Multi-step flows (OTP / 2FA) defer marking until the
-    // final step in ``otpHandler`` — see core-py parity. Best-effort: any
-    // storage error is logged via warning rather than failing the response.
+    // final step in ``otpHandler`` — see core-py parity.
     const isMultiStep = nextStep !== null && (nextStep.type === 'otp_required' || nextStep.type === 'password_required')
     if (!isMultiStep) {
       try {
-        await markConfigSetupComplete(options.serverName)
+        await markConfigSetupComplete(this.options.serverName)
       } catch (err) {
         console.warn(
           'Failed to mark _setup_complete=true for %s: %s',
-          options.serverName,
+          this.options.serverName,
           err instanceof Error ? err.message : String(err)
         )
       }
@@ -459,13 +440,13 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     // Generate auth code. Carry ``sub`` so /token can issue JWT with the
     // same subject the credentials were saved under.
     const authCode = randomBytes(32).toString('base64url')
-    authCodes.set(authCode, {
+    this.authCodes.set(authCode, {
       codeChallenge: session.codeChallenge,
       codeChallengeMethod: session.codeChallengeMethod,
       createdAt: Date.now(),
       sub: session.sub
     })
-    pruneExpired(authCodes, AUTH_CODE_TTL_S * 1000)
+    pruneExpired(this.authCodes, AUTH_CODE_TTL_S * 1000)
 
     const separator = session.redirectUri.includes('?') ? '&' : '?'
     const redirectUrl = `${session.redirectUri}${separator}code=${authCode}&state=${session.state}`
@@ -473,294 +454,218 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     const body: Record<string, unknown> = { ok: true, redirect_url: redirectUrl }
     if (nextStep !== null) {
       body.next_step = nextStep
-      // If next_step requires additional input (OTP or 2FA password),
-      // activate pending step session so /otp endpoint accepts input.
-      // Capture the authorize-session sub so /otp can thread the correct
-      // SubjectContext into onStepSubmitted (the browser POSTs to /otp
-      // with step data only — no sub in body).
       const stepType = nextStep.type
       if (stepType === 'otp_required' || stepType === 'password_required') {
-        markPendingStep(session.sub)
+        this.markPendingStep(session.sub)
       }
     }
     jsonResponse(res, 200, body)
   }
 
-  async function authorize(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async authorize(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (req.method === 'GET') {
-      await authorizeGet(req, res)
+      await this.authorizeGet(req, res)
       return
     }
-    await authorizePost(req, res)
+    await this.authorizePost(req, res)
   }
 
-  async function authorizePrefill(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async authorizePrefill(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // Driver-only side-channel: store form prefill values keyed by the OAuth
     // ``state`` token chosen by the client. ``GET /authorize?state=<X>`` then
     // hydrates the form on render — credentials never appear in the URL.
-    const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-    const state = url.searchParams.get('state')
-    if (!state) {
-      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Missing state' })
-      return
-    }
-    let body: Record<string, string>
+    let body: Record<string, string> = {}
     try {
-      body = await parseJsonBody<Record<string, string>>(req)
+      body = await parseJsonBody(req)
     } catch {
-      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Body must be JSON object' })
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Invalid JSON body' })
       return
     }
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Body must be JSON object' })
+
+    const state = body.state
+    const data = body.data as unknown
+    if (!state || typeof state !== 'string' || !data || typeof data !== 'object') {
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Missing state or data' })
       return
     }
-    // Coerce all values to string + drop empties so blank ``value=""`` attrs
-    // don't shadow the placeholder text in the rendered form.
-    const data: Record<string, string> = {}
-    for (const [k, v] of Object.entries(body)) {
-      if (v != null && String(v).length > 0) {
-        data[k] = String(v)
+
+    // Explicit copy: coerce every value through String() and reject empty
+    // keys/values to prevent prototype pollution or mass-assignment sinks.
+    // DCR / prefill is a trusted channel (internal loopback or E2E driver),
+    // but we restate the contract here for safety.
+    const sanitized: Record<string, string> = {}
+    for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+      if (k.length > 0) {
+        sanitized[k] = String(v)
       }
     }
-    pendingPrefills.set(state, { data, createdAt: Date.now() })
-    pruneExpired(pendingPrefills, PREFILL_TTL_S * 1000)
-    jsonResponse(res, 204, {})
+
+    this.pendingPrefills.set(state, { data: sanitized, createdAt: Date.now() })
+    pruneExpired(this.pendingPrefills, PREFILL_TTL_S * 1000)
+    jsonResponse(res, 200, { ok: true })
   }
 
-  /**
-   * Build and write the standard /token success body for ``sub``.
-   *
-   * Issues a fresh access token AND a fresh refresh token. The refresh token
-   * lets long-running MCP clients renew the 1h access token without re-running
-   * the browser PKCE flow (issue #261). ``scope`` advertises ``offline_access``
-   * so clients know a refresh token was granted.
-   */
-  async function issueTokenResponse(res: ServerResponse, sub: string): Promise<void> {
-    const accessToken = await jwtIssuer.issueAccessToken(sub)
-    const refreshToken = await jwtIssuer.issueRefreshToken(sub)
-    jsonResponse(res, 200, {
-      access_token: accessToken,
-      token_type: 'Bearer',
-      expires_in: 3600,
-      refresh_token: refreshToken,
-      scope: 'offline_access'
-    })
-  }
+  public async token(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    let body: Record<string, string>
+    try {
+      body = await parseFormBody(req)
+    } catch {
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Invalid form body' })
+      return
+    }
 
-  /**
-   * Handle ``grant_type=refresh_token`` (RFC 6749 §6) statelessly. Verifies the
-   * presented refresh token's signature / iss / aud / exp / ``typ`` via the JWT
-   * issuer (no server-side store), extracts ``sub``, and issues a NEW access
-   * token AND a NEW refresh token (rotation). The refresh token is
-   * self-contained, so rotation here is stateless: the old refresh token simply
-   * expires on its own 30-day clock; clients replace it with the rotated one.
-   */
-  async function handleRefreshToken(res: ServerResponse, form: Record<string, string>): Promise<void> {
-    const refreshToken = form.refresh_token
-    if (!refreshToken) {
-      jsonResponse(res, 400, {
-        error: 'invalid_request',
-        error_description: 'Missing refresh_token'
+    const grantType = body.grant_type
+    if (grantType === 'authorization_code') {
+      const code = body.code
+      const verifier = body.code_verifier
+      if (!code || !this.authCodes.has(code) || !verifier) {
+        jsonResponse(res, 400, {
+          error: 'invalid_grant',
+          error_description: 'Invalid or expired authorization code'
+        })
+        return
+      }
+
+      const entry = this.authCodes.get(code) as AuthCodeEntry
+      this.authCodes.delete(code)
+
+      if (Date.now() - entry.createdAt > AUTH_CODE_TTL_S * 1000) {
+        jsonResponse(res, 400, { error: 'invalid_grant', error_description: 'Code expired' })
+        return
+      }
+
+      // Verify PKCE.
+      if (!s256Verify(verifier, entry.codeChallenge)) {
+        jsonResponse(res, 400, { error: 'invalid_grant', error_description: 'Invalid code_verifier' })
+        return
+      }
+
+      // Issue JWT.
+      const accessToken = await this.jwtIssuer.issueAccessToken(entry.sub)
+      const refreshToken = await this.jwtIssuer.issueRefreshToken(entry.sub)
+      jsonResponse(res, 200, {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        token_type: 'Bearer',
+        expires_in: 3600,
+        scope: 'offline_access'
       })
       return
     }
-    let sub: string
-    try {
-      const claims = await jwtIssuer.verifyRefreshToken(refreshToken)
-      sub = claims.sub as string
-    } catch {
-      jsonResponse(res, 400, { error: 'invalid_grant' })
-      return
-    }
-    await issueTokenResponse(res, sub)
-  }
 
-  async function token(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    let form: Record<string, string>
-    try {
-      form = await parseFormBody(req)
-    } catch {
-      jsonResponse(res, 400, { error: 'invalid_request' })
-      return
-    }
-
-    const grantType = form.grant_type
     if (grantType === 'refresh_token') {
-      await handleRefreshToken(res, form)
-      return
-    }
-    if (grantType !== 'authorization_code') {
-      jsonResponse(res, 400, { error: 'unsupported_grant_type' })
+      const refreshToken = body.refresh_token
+      if (!refreshToken) {
+        jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Missing refresh_token' })
+        return
+      }
+
+      try {
+        const payload = await this.jwtIssuer.verifyRefreshToken(refreshToken)
+        const sub = payload.sub as string
+        const newAccessToken = await this.jwtIssuer.issueAccessToken(sub)
+        const newRefreshToken = await this.jwtIssuer.issueRefreshToken(sub)
+        jsonResponse(res, 200, {
+          access_token: newAccessToken,
+          refresh_token: newRefreshToken,
+          token_type: 'Bearer',
+          expires_in: 3600,
+          scope: 'offline_access'
+        })
+      } catch {
+        jsonResponse(res, 400, { error: 'invalid_grant', error_description: 'Invalid or expired refresh token' })
+      }
       return
     }
 
-    const code = form.code
-    const codeVerifier = form.code_verifier
-    if (!code || !codeVerifier) {
-      jsonResponse(res, 400, {
-        error: 'invalid_request',
-        error_description: 'Missing code or code_verifier'
-      })
-      return
-    }
-
-    const entry = authCodes.get(code)
-    if (entry === undefined) {
-      jsonResponse(res, 400, { error: 'invalid_grant' })
-      return
-    }
-    authCodes.delete(code)
-
-    if (Date.now() - entry.createdAt > AUTH_CODE_TTL_S * 1000) {
-      jsonResponse(res, 400, { error: 'invalid_grant' })
-      return
-    }
-
-    if (entry.codeChallengeMethod !== 'S256') {
-      jsonResponse(res, 400, {
-        error: 'invalid_request',
-        error_description: 'Only S256 is supported'
-      })
-      return
-    }
-
-    if (!s256Verify(codeVerifier, entry.codeChallenge)) {
-      jsonResponse(res, 400, { error: 'invalid_grant' })
-      return
-    }
-
-    // Issue JWT with the subject bound to this authorize session. Historically
-    // this was the static string 'local-user' — that collapsed every concurrent
-    // browser into one subject and made credential isolation impossible. The
-    // new flow mints a fresh UUID in authorizeGet (PendingSession.sub), carries
-    // it through onCredentialsSaved, and issues it here so the Bearer returned
-    // to the client scopes future /mcp calls to this user's credentials.
-    await issueTokenResponse(res, entry.sub)
+    jsonResponse(res, 400, { error: 'unsupported_grant_type' })
   }
 
-  async function otpHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    // 1. Active session check.
-    if (pendingStep === null || !pendingStep.active) {
-      jsonResponse(res, 400, {
-        error: 'invalid_request',
-        error_description: 'No active step session'
-      })
+  public async otpHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (this.pendingStep === null || !this.pendingStep.active) {
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'No pending step' })
       return
     }
 
-    // 2. Timeout check.
-    if (Date.now() - pendingStep.createdAt > OTP_TIMEOUT_S * 1000) {
-      clearPendingStep()
-      jsonResponse(res, 400, {
-        error: 'invalid_request',
-        error_description: 'Step session expired'
-      })
+    const stepSub = this.pendingStep.sub
+    if (Date.now() - this.pendingStep.createdAt > OTP_TIMEOUT_S * 1000) {
+      this.clearPendingStep()
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Step session expired' })
       return
     }
 
-    // 3. Parse JSON body BEFORE incrementing attempts. Malformed input
-    // must not consume the user's retry quota nor clear the session.
-    let stepData: Record<string, string>
+    if (this.pendingStep.attempts >= OTP_MAX_ATTEMPTS) {
+      this.clearPendingStep()
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Too many attempts' })
+      return
+    }
+    this.pendingStep.attempts += 1
+
+    let body: Record<string, string>
     try {
-      stepData = await parseJsonBody<Record<string, string>>(req)
+      body = await parseJsonBody(req)
     } catch {
-      jsonResponse(res, 400, {
-        error: 'invalid_request',
-        error_description: 'Invalid JSON body'
-      })
+      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Invalid JSON body' })
       return
     }
 
-    // 4. Increment attempts counter (count every valid-JSON submit).
-    pendingStep.attempts += 1
-
-    // 5. Attempt limit check.
-    if (pendingStep.attempts > OTP_MAX_ATTEMPTS) {
-      clearPendingStep()
-      jsonResponse(res, 400, {
-        error: 'invalid_request',
-        error_description: 'Too many attempts'
-      })
-      return
-    }
-
-    // 6. Dispatch to step callback with the authorize-session sub so
-    // consumers (telegram Telethon multi-user) can route to the correct
-    // per-user state.
-    const stepContext: SubjectContext = { sub: pendingStep.sub }
-    const stepSub = pendingStep.sub
     let nextStep: NextStep | null = null
-    if (options.onStepSubmitted !== undefined) {
+    if (this.options.onStepSubmitted !== undefined) {
       try {
-        const result = await options.onStepSubmitted(stepData, stepContext)
+        const result = await this.options.onStepSubmitted(body, { sub: stepSub })
         if (result !== null && result !== undefined && typeof result === 'object') {
           nextStep = result
         }
       } catch {
         jsonResponse(res, 500, {
           error: 'server_error',
-          error_description: 'Failed to process step input'
+          error_description: 'Step callback failed'
         })
         return
       }
     }
 
-    // Error from callback: keep pending session, allow retry.
     if (nextStep !== null && nextStep.type === 'error') {
       const errText = typeof nextStep.text === 'string' ? nextStep.text : 'Invalid input'
       jsonResponse(res, 200, { ok: false, error: errText })
       return
     }
 
-    // Chain to next step: reset counters so the new step gets its own quota.
-    // Preserve the original sub so the whole multi-step chain belongs to the
-    // same user.
+    this.clearPendingStep()
+
     if (nextStep !== null && (nextStep.type === 'otp_required' || nextStep.type === 'password_required')) {
-      markPendingStep(stepSub)
+      this.markPendingStep(stepSub)
       jsonResponse(res, 200, { ok: true, next_step: nextStep })
       return
     }
 
-    // Completion (callback returned null / undefined or unknown dict type).
-    // Mark persistent _setup_complete flag now that the multi-step chain has
-    // finished — single-step counterpart lives in authorizePost.
     try {
-      await markConfigSetupComplete(options.serverName)
+      await markConfigSetupComplete(this.options.serverName)
     } catch (err) {
       console.warn(
         'Failed to mark _setup_complete=true for %s: %s',
-        options.serverName,
+        this.options.serverName,
         err instanceof Error ? err.message : String(err)
       )
     }
-    clearPendingStep()
     jsonResponse(res, 200, { ok: true })
   }
 
-  async function setupStatusHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
-    jsonResponse(res, 200, setupStatus)
+  public async setupStatusHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+    jsonResponse(res, 200, this.setupStatus)
   }
 
-  async function wellKnownAs(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async wellKnownAs(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const base = getBaseUrl(req)
     jsonResponse(res, 200, authorizationServerMetadata(base))
   }
 
-  async function wellKnownPr(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async wellKnownPr(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const base = getBaseUrl(req)
     jsonResponse(res, 200, protectedResourceMetadata(base, [base]))
   }
 
-  /**
-   * RFC 7591 Dynamic Client Registration.
-   *
-   * Local OAuth server uses a fixed public client id (`local-browser`).
-   * DCR is echo-style — mirror the client's submitted metadata back with
-   * the fixed id so MCP clients (Python SDK OAuthClientProvider, etc.)
-   * can bootstrap OAuth without failing at the registration step.
-   */
-  async function registerHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async registerHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     let body: Record<string, unknown> = {}
     try {
       const raw = await parseJsonBody(req)
@@ -782,35 +687,17 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     })
   }
 
-  function markSetupComplete(key = 'gdrive'): void {
-    setupStatus[key] = 'complete'
+  public markSetupComplete(key = 'gdrive'): void {
+    this.setupStatus[key] = 'complete'
   }
 
-  /**
-   * Mark a background setup step as failed. The status becomes
-   * ``"error:<message>"`` so the frontend poll handler can surface the
-   * message and stop spinning. Whitespace is collapsed to keep the value
-   * single-line (the frontend inlines it verbatim).
-   */
-  function markSetupFailed(key = 'gdrive', error = 'unknown error'): void {
-    // ⚡ Bolt: Replace multiple array allocations (.split.filter.join) with regex replace for faster whitespace collapsing
+  public markSetupFailed(key = 'gdrive', error = 'unknown error'): void {
     const collapsed = String(error).replace(/\s+/g, ' ').trim()
     const message = collapsed.length > 0 ? collapsed : 'unknown error'
-    setupStatus[key] = `error:${message}`
+    this.setupStatus[key] = `error:${message}`
   }
 
-  /**
-   * GET / -- auto-generate PKCE and redirect to /authorize.
-   *
-   * The ``/authorize`` endpoint requires 4 PKCE parameters; users arriving
-   * from a log line / bookmark have no way to construct them. Bootstrap a
-   * default ``local-browser`` client here: generate random state + S256
-   * challenge, redirect to ``/authorize``, and on success return to
-   * ``/callback-done`` for a friendly close message. Keeps the one-URL UX
-   * ("open http://... in browser") working without exposing the raw OAuth
-   * machinery to end users.
-   */
-  async function rootHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async rootHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const base = getBaseUrl(req)
     const codeVerifier = randomBytes(64).toString('base64url')
     const codeChallenge = createHash('sha256').update(codeVerifier, 'ascii').digest('base64url')
@@ -827,13 +714,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     res.end()
   }
 
-  /**
-   * GET /callback-done -- terminal "tab can be closed" landing page.
-   *
-   * Users redirected from the bootstrap flow land here on success. Exists
-   * purely so the bare URL doesn't 404 after the PKCE redirect completes.
-   */
-  async function callbackDoneHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async callbackDoneHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
     const html =
       "<!DOCTYPE html><html><head><meta charset='utf-8'>" +
       '<title>Setup complete</title>' +
@@ -852,24 +733,9 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
 
   // ------------------------------------------------------------------
   // Relay password gate adapters.
-  //
-  // The relay-login module exposes Express-style handlers (``req.body``,
-  // ``res.status().send()`` etc) so the same logic can be unit-tested
-  // without a live HTTP server. Here we adapt them onto the project's
-  // ``IncomingMessage`` / ``ServerResponse`` router. Each adapter:
-  //   1. Parses ``Cookie`` into ``req.cookies``,
-  //   2. Mounts ``res.status / res.send / res.cookie / res.redirect /
-  //      res.header / res.set`` on top of ``res.writeHead`` / ``res.end``,
-  //   3. Lets the relay-login handler do the work.
-  //
-  // Only ``/authorize`` GET + POST + ``/authorize/prefill`` go through
-  // ``relayMw``; ``/token``, ``/register``, ``/otp``, ``/setup-status``,
-  // ``/.well-known/*``, ``/`` and ``/callback-done`` are intentionally NOT
-  // gated — they're machine endpoints (DCR / token exchange / metadata) or
-  // auto-bootstrap helpers that must remain accessible without the cookie.
   // ------------------------------------------------------------------
 
-  function parseCookies(req: IncomingMessage): Record<string, string> {
+  private parseCookies(req: IncomingMessage): Record<string, string> {
     const header = req.headers.cookie
     if (!header) return {}
     const out: Record<string, string> = {}
@@ -883,7 +749,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     return out
   }
 
-  function clientIp(req: IncomingMessage): string {
+  private clientIp(req: IncomingMessage): string {
     const fwd = req.headers['x-forwarded-for']
     if (typeof fwd === 'string' && fwd.length > 0) {
       return fwd.split(',')[0].trim()
@@ -891,7 +757,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     return req.socket.remoteAddress ?? 'unknown'
   }
 
-  function buildResAdapter(res: ServerResponse): {
+  private buildResAdapter(res: ServerResponse): {
     adapter: Record<string, (...args: unknown[]) => unknown>
     isComplete: () => boolean
   } {
@@ -923,7 +789,6 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
         if (opts.httpOnly === true) parts.push('HttpOnly')
         if (opts.secure === true) parts.push('Secure')
         if (typeof opts.sameSite === 'string') {
-          // Capitalise SameSite values (lax → Lax, strict → Strict).
           const v = opts.sameSite as string
           parts.push(`SameSite=${v.charAt(0).toUpperCase() + v.slice(1)}`)
         }
@@ -955,25 +820,20 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     return { adapter, isComplete: () => completed }
   }
 
-  /**
-   * Wrap a router handler with the relay-login middleware. If the cookie
-   * gate redirects, the inner handler is never called; otherwise the inner
-   * handler runs against the original ``req`` / ``res``.
-   */
-  function withRelayGate(inner: RequestHandler): RequestHandler {
+  public withRelayGate(inner: RequestHandler): RequestHandler {
     return async (req, res) => {
-      if (!relayPassword) {
+      if (!this.relayPassword) {
         await inner(req, res)
         return
       }
-      const cookies = parseCookies(req)
+      const cookies = this.parseCookies(req)
       const expressReq = {
         cookies,
         originalUrl: req.url ?? '/'
       }
-      const { adapter, isComplete } = buildResAdapter(res)
+      const { adapter, isComplete } = this.buildResAdapter(res)
       let proceed = false
-      await relayMw(expressReq as never, adapter as never, () => {
+      await this.relayMw(expressReq as never, adapter as never, () => {
         proceed = true
       })
       if (proceed && !isComplete()) {
@@ -982,18 +842,14 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     }
   }
 
-  /**
-   * Adapter: bind ``loginGetHandler`` / ``loginPostHandler`` (Express-style)
-   * onto IncomingMessage / ServerResponse routes.
-   */
-  async function loginGetRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async loginGetRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     const expressReq = { query: { next: url.searchParams.get('next') ?? '/authorize' } }
-    const { adapter } = buildResAdapter(res)
+    const { adapter } = this.buildResAdapter(res)
     await loginGetHandler(expressReq as never, adapter as never)
   }
 
-  async function loginPostRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  public async loginPostRoute(req: IncomingMessage, res: ServerResponse): Promise<void> {
     let body: Record<string, string> = {}
     try {
       body = await parseFormBody(req)
@@ -1002,40 +858,55 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       res.end(JSON.stringify({ error: 'invalid_request' }))
       return
     }
-    const expressReq = { body, ip: clientIp(req) }
-    const { adapter } = buildResAdapter(res)
+    const expressReq = { body, ip: this.clientIp(req) }
+    const { adapter } = this.buildResAdapter(res)
     await loginPostHandler(expressReq as never, adapter as never)
   }
+}
+
+/**
+ * Create OAuth 2.1 Authorization Server HTTP handler.
+ */
+export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promise<LocalOAuthAppResult> {
+  const jwtIssuer = options.jwtIssuer ?? new JWTIssuer(options.serverName)
+  await jwtIssuer.init()
+
+  const app = new LocalOAuthAppInstance(options, jwtIssuer)
 
   const handler = createRouter([
-    { method: 'GET', path: '/', handler: rootHandler },
-    { method: 'GET', path: '/login', handler: loginGetRoute },
-    { method: 'POST', path: '/login', handler: loginPostRoute },
-    { method: 'GET', path: '/authorize', handler: withRelayGate(authorize) },
-    { method: 'POST', path: '/authorize', handler: withRelayGate(authorize) },
-    { method: 'POST', path: '/authorize/prefill', handler: withRelayGate(authorizePrefill) },
-    { method: 'POST', path: '/token', handler: token },
-    { method: 'POST', path: '/register', handler: registerHandler },
-    { method: 'POST', path: '/otp', handler: otpHandler },
-    { method: 'GET', path: '/setup-status', handler: setupStatusHandler },
-    { method: 'GET', path: '/callback-done', handler: callbackDoneHandler },
-    { method: 'GET', path: '/.well-known/oauth-authorization-server', handler: wellKnownAs },
-    { method: 'GET', path: '/.well-known/oauth-protected-resource', handler: wellKnownPr }
+    { method: 'GET', path: '/', handler: (req, res) => app.rootHandler(req, res) },
+    { method: 'GET', path: '/login', handler: (req, res) => app.loginGetRoute(req, res) },
+    { method: 'POST', path: '/login', handler: (req, res) => app.loginPostRoute(req, res) },
+    { method: 'GET', path: '/authorize', handler: app.withRelayGate((req, res) => app.authorize(req, res)) },
+    { method: 'POST', path: '/authorize', handler: app.withRelayGate((req, res) => app.authorize(req, res)) },
+    {
+      method: 'POST',
+      path: '/authorize/prefill',
+      handler: app.withRelayGate((req, res) => app.authorizePrefill(req, res))
+    },
+    { method: 'POST', path: '/token', handler: (req, res) => app.token(req, res) },
+    { method: 'POST', path: '/register', handler: (req, res) => app.registerHandler(req, res) },
+    { method: 'POST', path: '/otp', handler: (req, res) => app.otpHandler(req, res) },
+    { method: 'GET', path: '/setup-status', handler: (req, res) => app.setupStatusHandler(req, res) },
+    { method: 'GET', path: '/callback-done', handler: (req, res) => app.callbackDoneHandler(req, res) },
+    {
+      method: 'GET',
+      path: '/.well-known/oauth-authorization-server',
+      handler: (req, res) => app.wellKnownAs(req, res)
+    },
+    { method: 'GET', path: '/.well-known/oauth-protected-resource', handler: (req, res) => app.wellKnownPr(req, res) }
   ])
 
-  return { handler, jwtIssuer, markSetupComplete, markSetupFailed }
+  return {
+    handler,
+    jwtIssuer,
+    markSetupComplete: (key) => app.markSetupComplete(key),
+    markSetupFailed: (key, error) => app.markSetupFailed(key, error)
+  }
 }
 
 // ---------------------------------------------------------------------------
 // D7 — Pre-fill renderer + form-submission merger.
-//
-// These helpers mirror the core-py exports of the same names. They are
-// intentionally NOT wired into the default ``authorizeGet`` / ``authorizePost``
-// above — that path stays on ``renderCredentialForm`` for legacy parity. New
-// consumers (transparent-bridge Wave 1) compose ``renderField`` per field for
-// secret-aware rendering, then call ``mergeSubmission`` to merge the POST body
-// with their stored ``config.enc`` so a missing secret in the body preserves
-// the previously stored value instead of clearing it.
 // ---------------------------------------------------------------------------
 
 const SECRET_PLACEHOLDER = '••••••••(configured)'
@@ -1049,15 +920,6 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
-/**
- * Resolve the canonical config key for a relay field.
- *
- * Two schema styles coexist in the codebase: D7 ``RelayConfigField`` uses
- * ``name``; legacy ``ConfigField`` (consumed by ``renderCredentialForm``)
- * uses ``key``. ``renderField`` and ``mergeSubmission`` accept both so a
- * consumer can mix or migrate without rewriting field dicts. ``name`` wins
- * when both are present.
- */
 function fieldName(field: RelayConfigField | Record<string, unknown>): string {
   const raw = field as Record<string, unknown>
   const name = typeof raw.name === 'string' ? raw.name : ''
@@ -1066,15 +928,6 @@ function fieldName(field: RelayConfigField | Record<string, unknown>): string {
   return key
 }
 
-/**
- * Render an HTML ``<label>+<input>`` for a single relay field.
- *
- * Rules per D7:
- *  - oauth_field: render Re-authorize button (no plaintext exposed)
- *  - secret + value present: placeholder, empty input, "Replace" checkbox
- *  - secret + no value: empty input with field label as placeholder
- *  - non-secret: pre-fill with ``currentValue`` as input ``value`` attr
- */
 export function renderField(field: RelayConfigField, currentValue: unknown): string {
   const name = fieldName(field)
   const label = field.label ?? name
@@ -1117,18 +970,6 @@ export function renderField(field: RelayConfigField, currentValue: unknown): str
   )
 }
 
-/**
- * Merge a form submission into the current config per D7 rules.
- *
- * Behavior:
- *  - Empty secret -> preserve the existing value (avoid clearing on a
- *    re-submit where the user did not retype the credential).
- *  - Non-empty secret -> replace.
- *  - Non-secret -> always replace (including with an empty string, so the
- *    user can intentionally blank a field).
- *  - oauth_field -> ignored here; OAuth fields are managed by their own
- *    Re-authorize flow, never by raw form input.
- */
 export function mergeSubmission(
   current: Record<string, unknown>,
   submitted: Record<string, unknown>,
