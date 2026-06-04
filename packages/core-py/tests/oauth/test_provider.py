@@ -89,8 +89,8 @@ def mock_jwt_issuer():
 @pytest.fixture
 def relay_schema():
     return RelayConfigSchema(
-        publicKey="mock_pub_key",
-        endpoints={"session": "https://relay.io/s"},
+        displayName="Test Server",
+        description="A test server",
     )
 
 
