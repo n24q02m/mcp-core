@@ -23,6 +23,9 @@ export async function resolveConfig(
       envConfig[field] = value
     } else {
       allEnvPresent = false
+      // Bolt optimization: Since all fields are required, as soon as one is missing,
+      // we can short-circuit the loop to avoid unnecessary process.env lookups and string allocations.
+      break
     }
   }
   if (allEnvPresent) {
