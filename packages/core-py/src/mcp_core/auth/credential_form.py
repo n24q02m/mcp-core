@@ -423,7 +423,7 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
     required_badge = (
         '<span class="required-badge" aria-hidden="true">Required</span>'
         if required
-        else '<span class="optional-badge" aria-hidden="true">Optional</span>'
+        else '<span class="optional-badge">Optional</span>'
     )
 
     value_attr = f' value="{_escape(value)}"' if value else ""
