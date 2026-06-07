@@ -49,3 +49,11 @@ htmlcov/
 
 # AI traces (capital J variant)
 .Jules/
+
+# Bot/merge junk artifacts (prevent accidental commits) — 2026-06-07
+*.orig
+*.rej
+*.cover
+*.bak
+/*.patch
+/*.diff
