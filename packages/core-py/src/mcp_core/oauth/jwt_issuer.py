@@ -29,7 +29,10 @@ class JWTIssuer:
         self._load_or_generate_keys()
 
     def _load_or_generate_keys(self) -> None:
-        self.keys_dir.mkdir(parents=True, exist_ok=True)
+        # mode=0o700 closes the TOCTOU window where a freshly-created keys dir
+        # would briefly be world-readable before the chmod below; the chmod
+        # still runs to fix an already-existing dir and to override umask.
+        self.keys_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         import os
 
         if os.name != "nt":

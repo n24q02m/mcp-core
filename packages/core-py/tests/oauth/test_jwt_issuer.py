@@ -43,6 +43,16 @@ class TestKeyGeneration:
         assert isinstance(issuer.public_key, rsa.RSAPublicKey)
         assert issuer.private_key.key_size == 2048
 
+    def test_keys_dir_is_private(self, tmp_path):
+        """Keys dir must be 0o700 (owner-only) — closes the TOCTOU window where a
+        freshly mkdir'd dir is briefly world-readable. Parity with core-ts
+        (jwt-issuer.ts uses mkdirSync mode 0o700)."""
+        keys_dir = tmp_path / "fresh-keys"
+        assert not keys_dir.exists()
+        JWTIssuer(server_name="perm-server", keys_dir=keys_dir)
+        if os.name == "posix":
+            assert stat.S_IMODE(keys_dir.stat().st_mode) == 0o700
+
 
 class TestKeyPersistence:
     def test_loads_existing_keys(self, keys_dir):
