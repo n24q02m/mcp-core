@@ -7,14 +7,14 @@
  * failure crashed the bridge).
  */
 
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as cacheModule from '../../src/transport/cache.js'
-import { cacheFilename, loadToolsCache, persistToolsCache } from '../../src/transport/cache.js'
+import { atomicWrite, cacheDir, cacheFilename, loadToolsCache, persistToolsCache } from '../../src/transport/cache.js'
 
 let dir: string
 
@@ -29,6 +29,12 @@ afterEach(() => {
 })
 
 describe('tools cache', () => {
+  it('cacheDir returns home-based path', () => {
+    vi.restoreAllMocks() // Use real implementation
+    const expected = join(homedir(), '.config', 'mcp', 'cache')
+    expect(cacheDir()).toBe(expected)
+  })
+
   it('filename includes versions', () => {
     expect(cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')).toBe('wet-mcp-55317-2.28.4-1.11.0.tools.json')
   })
@@ -47,6 +53,27 @@ describe('tools cache', () => {
   it('mismatched core_version returns null', () => {
     persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.12.0')).toBeNull()
+  })
+
+  it('load returns null on invalid JSON', () => {
+    const name = cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')
+    const path = join(dir, name)
+    writeFileSync(path, 'not-json')
+    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+  })
+
+  it('load returns null when tools is not an array', () => {
+    const name = cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')
+    const path = join(dir, name)
+    writeFileSync(path, JSON.stringify({ tools: 'not-array', srvVersion: '2.28.4', coreVersion: '1.11.0' }))
+    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+  })
+
+  it('atomicWrite creates directory if missing', () => {
+    const nestedDir = join(dir, 'nested', 'dir')
+    const path = join(nestedDir, 'test.json')
+    atomicWrite(path, '{}')
+    expect(existsSync(path)).toBe(true)
   })
 
   it('atomic replace existing', () => {
