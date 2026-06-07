@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import os
-import secrets
 from pathlib import Path
 from typing import Optional
 
@@ -44,7 +43,7 @@ def _load_or_generate_machine_key(plugin_name: str) -> bytes:
     secret_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if secret_path.exists():
         return secret_path.read_bytes()
-    key = secrets.token_bytes(32)
+    key = os.urandom(32)
     secret_path.write_bytes(key)
     if os.name != "nt":
         os.chmod(secret_path, 0o600)
@@ -97,7 +96,7 @@ class PerPluginStore:
     def save(self, payload: dict) -> None:
         self.cred_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         plaintext = json.dumps(payload).encode("utf-8")
-        nonce = secrets.token_bytes(12)
+        nonce = os.urandom(12)
         aesgcm = AESGCM(self._key())
         ciphertext = aesgcm.encrypt(nonce, plaintext, None)
         self.cred_path.write_bytes(nonce + ciphertext)
