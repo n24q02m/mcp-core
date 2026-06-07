@@ -28,13 +28,29 @@ def _is_wsl() -> bool:
 
 
 def _open_in_powershell(url: str) -> bool:
-    """Open URL using powershell.exe -EncodedCommand."""
+    """Open URL using powershell.exe with the URL passed as a secure argument."""
     try:
+        # Base64-encode the URL to prevent any shell injection or escaping issues
         base64_url = base64.b64encode(url.encode("utf-8")).decode("ascii")
-        command = f"$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('{base64_url}')); Start-Process $url"
-        encoded_command = base64.b64encode(command.encode("utf-16le")).decode("ascii")
+
+        # The script block retrieves the URL from $args[0] rather than having it interpolated.
+        # We use a script block with -Command as it is the preferred secure pattern.
+        script = (
+            "& { "
+            "$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0])); "
+            "Start-Process $url "
+            "}"
+        )
+
         subprocess.run(
-            ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_command],
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+                base64_url,
+            ],
             check=True,
             capture_output=True,
             timeout=10,

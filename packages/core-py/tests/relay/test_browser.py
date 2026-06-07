@@ -157,7 +157,7 @@ class TestOpenInWsl:
 
 
 class TestOpenInPowerShell:
-    def test_uses_embedded_base64_url_and_noprofile(self):
+    def test_uses_secure_command_and_noprofile(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.SubprocessError = Exception
             from mcp_core.relay.browser import _open_in_powershell
@@ -172,15 +172,17 @@ class TestOpenInPowerShell:
             cmd_list = args[0]
             assert cmd_list[0] == "powershell.exe"
             assert "-NoProfile" in cmd_list
-            assert "-EncodedCommand" in cmd_list
+            assert "-NonInteractive" in cmd_list
+            assert "-Command" in cmd_list
 
-            encoded_command = cmd_list[cmd_list.index("-EncodedCommand") + 1]
-            decoded = base64.b64decode(encoded_command).decode("utf-16le")
+            script = cmd_list[cmd_list.index("-Command") + 1]
+            base64_url_arg = cmd_list[-1]
 
             base64_url = base64.b64encode(url.encode("utf-8")).decode("ascii")
-            assert base64_url in decoded
-            assert "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String" in decoded
-            assert "Start-Process $url" in decoded
+            assert base64_url == base64_url_arg
+            assert "$args[0]" in script
+            assert "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0]))" in script
+            assert "Start-Process $url" in script
 
             # MCP_BROWSER_URL should NOT be in env if env is passed (kwargs might be empty or not contain it)
             if "env" in kwargs:
