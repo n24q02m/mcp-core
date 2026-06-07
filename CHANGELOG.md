@@ -2,6 +2,44 @@
 
 <!-- version list -->
 
+## v1.17.3-beta.1 (2026-06-07)
+
+### Bug Fixes
+
+- Add exception-handling tests for Python OAuth apps
+  ([`0750d08`](https://github.com/n24q02m/mcp-core/commit/0750d085310b2cd01b7ac3bdf52497ed453d3905))
+
+- Add tests for clean_state script
+  ([`ffd15f2`](https://github.com/n24q02m/mcp-core/commit/ffd15f2e16780bce8b2fdc044611c932d0685c56))
+
+- Add tests for Python OAuthProvider
+  ([`59f0517`](https://github.com/n24q02m/mcp-core/commit/59f0517d0d633e037878c4b51330047a70be0537))
+
+- Add tests for Python relay session token
+  ([`87e8a59`](https://github.com/n24q02m/mcp-core/commit/87e8a5955c9171240a54045ca9c6cd169d7f8454))
+
+- Add tests for Python relay tool_helpers
+  ([`e0f116f`](https://github.com/n24q02m/mcp-core/commit/e0f116f75ae779c6a970616c20e8bc466d4f2be8))
+
+- Add tests for TypeScript PKCE utilities
+  ([`30dd048`](https://github.com/n24q02m/mcp-core/commit/30dd048b6e256ec23315dccf7e1ae4f241821da4))
+
+- Add tests for TypeScript transport cache version key
+  ([`1a6bc36`](https://github.com/n24q02m/mcp-core/commit/1a6bc36f26c4ce3206d85223fecdef087727fef5))
+
+- Remove aria-hidden from optional field badges for screen readers
+  ([`9eea86e`](https://github.com/n24q02m/mcp-core/commit/9eea86e8c30a0dae6a6204e35b9c7e5a9336d51a))
+
+- Update actions/checkout digest to df4cb1c
+  ([`899db3d`](https://github.com/n24q02m/mcp-core/commit/899db3dfbb6c3b6ecbf09543b9438f3d74731214))
+
+- Update non-major dependencies
+  ([`6463ff2`](https://github.com/n24q02m/mcp-core/commit/6463ff2a82d22b7161ed2ced51053305df02f8ad))
+
+- Update semgrep/semgrep Docker digest to 2079836
+  ([`55a67a8`](https://github.com/n24q02m/mcp-core/commit/55a67a8f593bcd9e8fe1878f2e2fb628230b1929))
+
+
 ## v1.17.2 (2026-06-01)
 
 
