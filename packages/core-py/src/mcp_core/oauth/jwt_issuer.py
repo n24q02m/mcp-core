@@ -1,6 +1,7 @@
 """RSA JWT Issuer and JWKS generation helper."""
 
 import datetime
+import os
 from pathlib import Path
 
 import jwt
@@ -29,8 +30,7 @@ class JWTIssuer:
         self._load_or_generate_keys()
 
     def _load_or_generate_keys(self) -> None:
-        self.keys_dir.mkdir(parents=True, exist_ok=True)
-        import os
+        self.keys_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
 
         if os.name != "nt":
             self.keys_dir.chmod(0o700)
