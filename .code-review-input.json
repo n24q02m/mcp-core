@@ -1,0 +1,12 @@
+{
+  "files": [
+    {
+      "path": "packages/core-py/src/mcp_core/scripts/clean_state.py",
+      "description": "Refactored kill_daemons to use ThreadPoolExecutor to parallelize daemon termination and wait cycles."
+    },
+    {
+      "path": "packages/core-py/tests/test_clean_state.py",
+      "description": "Added unit tests for kill_daemons including basic, multi-daemon, and liveness check scenarios."
+    }
+  ]
+}
