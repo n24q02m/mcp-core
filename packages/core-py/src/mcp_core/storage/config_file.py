@@ -96,6 +96,8 @@ def _load_store() -> dict[str, Any]:
         return {"version": 1, "servers": {}}
 
     data = config_path.read_bytes()
+    if not data:
+        return {"version": 1, "servers": {}}
 
     # Try new format: [16-byte salt][iv][ciphertext]
     if len(data) >= _SALT_SIZE + 12:

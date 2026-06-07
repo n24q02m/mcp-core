@@ -251,3 +251,15 @@ class TestMigration:
         current_key = derive_file_key(machine_id, username, salt, PBKDF2_ITERATIONS)
         decrypted = decrypt_data(current_key, payload)
         assert json.loads(decrypted) == store
+
+
+class TestEdgeCases:
+    def test_load_store_handles_empty_file(self, _temp_config):
+        config_path = _temp_config / "config.enc"
+        config_path.touch()  # Create empty file (0 bytes)
+
+        # Should return default store instead of crashing on decryption
+        from mcp_core.storage.config_file import _load_store
+
+        store = _load_store()
+        assert store == {"version": 1, "servers": {}}
