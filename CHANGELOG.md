@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.17.3-beta.2 (2026-06-07)
+
+### Bug Fixes
+
+- Create JWT keys dir with mode 0o700 to close TOCTOU window
+  ([#352](https://github.com/n24q02m/mcp-core/pull/352),
+  [`c225ddc`](https://github.com/n24q02m/mcp-core/commit/c225ddcbd70b8a12501c9e361fc309ad97836c74))
+
+
 ## v1.17.3-beta.1 (2026-06-07)
 
 ### Bug Fixes
