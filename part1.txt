@@ -1,0 +1,300 @@
+"""Delegated OAuth 2.1 Authorization Server as a Starlette ASGI app.
+
+Unified abstraction for upstream OAuth providers. Fronts two upstream flows
+behind a single local OAuth 2.1 PKCE facade for the MCP client:
+
+* ``redirect`` flow -- classic authorization_code redirect (Notion, Grafana,
+  GitHub, ...). The local server proxies ``/authorize`` to the upstream
+  authorize endpoint, handles the callback, exchanges the upstream code for
+  upstream tokens via ``upstream.token_url``, forwards the tokens to the
+  consumer via ``on_token_received``, then finishes the local PKCE exchange
+  so the MCP client receives a local JWT.
+* ``device_code`` flow (RFC 8628) -- used by GDrive, Outlook, etc. The local
+  server initiates the upstream device authorization, renders a page showing
+  ``user_code`` + ``verification_url``, runs a background polling task on
+  ``upstream.token_url`` until the upstream grants a token, invokes
+  ``on_token_received``, and signals completion via the setup-status endpoint.
+
+Routes:
+
+- GET  /authorize                                 -- Initiate upstream flow
+- GET  /callback                                  -- (redirect flow) upstream redirect
+- POST /token                                     -- Exchange local auth code + PKCE verifier for JWT
+- GET  /setup-status                              -- Poll background device-code completion
+- GET  /.well-known/oauth-authorization-server    -- RFC 8414 metadata
+- GET  /.well-known/oauth-protected-resource      -- RFC 9728 metadata
+
+The ``/mcp`` endpoint is NOT included -- it is mounted by the transport layer.
+
+The upstream tokens are passed to ``on_token_received`` ONLY; they are never
+persisted by this module. Storage is the consumer's responsibility.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import hashlib
+import inspect
+import os
+import secrets
+import time
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from typing import Any, Literal, Union
+
+import httpx
+from loguru import logger
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.routing import Route
+
+from mcp_core.auth.relay_login import (
+    configure_relay_login,
+    login_get_handler,
+    login_post_handler,
+    require_relay_session,
+)
+from mcp_core.auth.well_known import (
+    derive_base_url,
+    authorization_server_metadata,
+    protected_resource_metadata,
+)
+from mcp_core.oauth.jwt_issuer import JWTIssuer
+
+# Auth codes and PKCE sessions expire after 10 minutes
+_AUTH_CODE_TTL_S = 600
+_SESSION_TTL_S = 600
+
+FlowType = Literal["device_code", "redirect"]
+
+TokenEndpointAuthMethod = Literal["client_secret_basic", "client_secret_post"]
+
+TokenCallback = Callable[
+    [dict[str, Any]],
+    Union[None, str, Awaitable[Union[None, str]]],
+]
+"""Callback invoked after upstream token exchange.
+
+Return a string subject identifier (e.g. provider user id) to use as the
+JWT ``sub`` in the bearer token issued to the MCP client. Returning
+``None`` falls back to ``"local-user"`` (single-user mode).
+"""
+
+
+@dataclass
+class UpstreamOAuthConfig:
+    """Configuration for the upstream OAuth provider.
+
+    Fields required depend on ``flow``:
+
+    * ``redirect``: ``authorize_url`` required.
+    * ``device_code``: ``device_auth_url`` required.
+    """
+
+    # Common
+    token_url: str
+    client_id: str
+    scopes: list[str] = field(default_factory=list)
+    client_secret: str | None = None
+    # How to pass client credentials to the upstream token endpoint.
+    # Defaults to ``client_secret_basic`` per RFC 6749 §2.3.1. Notion / GitHub
+    # / Microsoft require basic; Google / Slack accept both.
+    token_endpoint_auth_method: TokenEndpointAuthMethod = "client_secret_basic"
+    # Redirect flow only
+    authorize_url: str | None = None
+    callback_path: str = "/callback"
+    # Device code flow only
+    device_auth_url: str | None = None
+    poll_interval_ms: int = 5000
+
+
+def _build_client_auth(form_data: dict[str, str], upstream: UpstreamOAuthConfig) -> dict[str, str]:
+    """Mutate ``form_data`` with client credentials and return auth headers.
+
+    Public clients (no ``client_secret``) put ``client_id`` in the body and
+    no header. Confidential clients default to HTTP Basic per RFC 6749;
+    callers can opt into ``client_secret_post`` for providers that require it.
+    """
+    if upstream.client_secret is None:
+        form_data["client_id"] = upstream.client_id
+        return {}
+    if upstream.token_endpoint_auth_method == "client_secret_post":
+        form_data["client_id"] = upstream.client_id
+        form_data["client_secret"] = upstream.client_secret
+        return {}
+    encoded = base64.b64encode(f"{upstream.client_id}:{upstream.client_secret}".encode("utf-8")).decode("ascii")
+    return {"Authorization": f"Basic {encoded}"}
+
+
+def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
+    """Verify PKCE S256: base64url(sha256(code_verifier)) == code_challenge."""
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return secrets.compare_digest(computed, code_challenge)
+
+
+def _render_device_code_page(*, server_name: str, user_code: str, verification_url: str) -> str:
+    """Render a minimal HTML page showing the device code to the user."""
+    safe_name = server_name.replace("<", "&lt;").replace(">", "&gt;")
+    safe_code = user_code.replace("<", "&lt;").replace(">", "&gt;")
+    safe_url = verification_url.replace('"', "&quot;")
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Authorize {safe_name}</title>
+<style>
+body {{ font-family: system-ui, sans-serif; background: #0d0d0d; color: #eee;
+       display: flex; align-items: center; justify-content: center;
+       min-height: 100vh; margin: 0; }}
+.card {{ background: #181818; padding: 2rem 3rem; border-radius: 12px;
+        border: 1px solid #333; max-width: 480px; text-align: center; }}
+h1 {{ margin-top: 0; }}
+.code {{ font-size: 2rem; font-family: ui-monospace, monospace;
+         letter-spacing: 0.25em; padding: 1rem 1.5rem; background: #000;
+         border-radius: 8px; border: 1px solid #444; margin: 1.5rem 0; }}
+a {{ color: #4ea1ff; }}
+.status {{ margin-top: 1.5rem; color: #888; font-size: 0.9rem; }}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Authorize {safe_name}</h1>
+  <p>Visit the URL below and enter this code:</p>
+  <div class="code">{safe_code}</div>
+  <p><a href="{safe_url}" target="_blank" rel="noopener noreferrer">{safe_url}</a></p>
+  <p class="status" id="status">Waiting for you to approve...</p>
+</div>
+<script>
+async function poll() {{
+  try {{
+    const r = await fetch('/setup-status');
+    const j = await r.json();
+    const s = j[Object.keys(j)[0]] || 'idle';
+    if (s === 'complete') {{
+      document.getElementById('status').textContent = 'Authorized! You can close this window.';
+      return;
+    }}
+    if (s === 'error') {{
+      document.getElementById('status').textContent = 'Authorization failed. Please restart.';
+      return;
+    }}
+  }} catch (e) {{}}
+  setTimeout(poll, 2000);
+}}
+poll();
+</script>
+</body>
+</html>
+"""
+
+
+def create_delegated_oauth_app(
+    *,
+    server_name: str,
+    flow: FlowType,
+    upstream: UpstreamOAuthConfig,
+    on_token_received: TokenCallback,
+    jwt_issuer: JWTIssuer | None = None,
+) -> tuple[Starlette, JWTIssuer]:
+    """Create a delegated OAuth 2.1 Authorization Server Starlette app.
+
+    Args:
+        server_name: Identifier for the MCP server (used for JWT iss/aud and
+            for the JWT key directory when no issuer is provided).
+        flow: Either ``"device_code"`` or ``"redirect"``.
+        upstream: Upstream OAuth provider configuration.
+        on_token_received: Callback invoked with the raw upstream token dict
+            (``access_token``, optionally ``refresh_token``/``expires_in``/...)
+            once the upstream flow completes. Consumer persists tokens as it
+            sees fit -- this module never stores them.
+        jwt_issuer: Optional pre-created JWTIssuer.
+
+    Returns:
+        ``(app, jwt_issuer)``. ``jwt_issuer`` is needed by the transport
+        layer to verify Bearer tokens on ``/mcp``.
+    """
+    if flow == "redirect" and not upstream.authorize_url:
+        raise ValueError("authorize_url is required for redirect flow")
+    if flow == "device_code" and not upstream.device_auth_url:
+        raise ValueError("device_auth_url is required for device_code flow")
+
+    if jwt_issuer is None:
+        jwt_issuer = JWTIssuer(server_name=server_name)
+
+    # Structure keyed by upstream-state nonce: PKCE session from the MCP client.
+    # {nonce: {client_id, redirect_uri, state, code_challenge, code_challenge_method, created_at}}
+    pending_sessions: dict[str, dict[str, Any]] = {}
+    # Local auth codes issued to the MCP client after upstream completes.
+    # {auth_code: {code_challenge, code_challenge_method, created_at}}
+    auth_codes: dict[str, dict[str, Any]] = {}
+    # Setup status for device-code polling UI.
+    _setup_status: dict[str, str] = {server_name: "idle"}
+    # Background poll tasks to cancel on shutdown.
+    _poll_tasks: set[asyncio.Task] = set()
+    # Device-code flow: latest pending session (single-user). When the upstream
+    # approves, we inject auth code so subsequent /token can complete.
+    _device_pending: dict[str, Any] = {}
+
+    # Edge auth password gate (per spec 2026-05-01-stdio-pure-http-multiuser
+    # §4.2.1 + §5.1.2.1). When ``MCP_RELAY_PASSWORD`` is set, /authorize is
+    # fronted by a thin cookie-session check. Empty password disables the
+    # gate. Mirrors create_local_oauth_app wiring (PR #158); /token,
+    # /register, /setup-status, /callback, /.well-known/* stay ungated by
+    # design — they are machine endpoints / mid-OAuth callbacks.
+    _relay_password = os.environ.get("MCP_RELAY_PASSWORD", "")
+    configure_relay_login(_relay_password)
+
+    def _prune_expired(store: dict[str, dict[str, Any]], ttl: float) -> None:
+        now = time.monotonic()
+        expired = [k for k, v in store.items() if now - v["created_at"] > ttl]
+        for k in expired:
+            del store[k]
+
+    def mark_setup_complete(key: str | None = None) -> None:
+        k = key or server_name
+        _setup_status[k] = "complete"
+
+    def _mark_setup_error(key: str | None = None) -> None:
+        k = key or server_name
+        _setup_status[k] = "error"
+
+    async def _invoke_token_callback(tokens: dict[str, Any]) -> str:
+        try:
+            result = on_token_received(tokens)
+            if inspect.isawaitable(result):
+                result = await result
+        except Exception:  # noqa: BLE001
+            logger.exception("on_token_received callback failed")
+            raise
+        if isinstance(result, str) and result:
+            return result
+        return "local-user"
+
+    # ------------------------------------------------------------------
+    # Redirect flow
+    # ------------------------------------------------------------------
+
+    async def _authorize_redirect(request: Request) -> JSONResponse | RedirectResponse:
+        params = request.query_params
+        client_id = params.get("client_id")
+        redirect_uri = params.get("redirect_uri")
+        state = params.get("state")
+        code_challenge = params.get("code_challenge")
+        code_challenge_method = params.get("code_challenge_method", "S256")
+
+        if not all([client_id, redirect_uri, state, code_challenge]):
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Missing required parameters"},
+                status_code=400,
+            )
+
+        nonce = secrets.token_urlsafe(32)
+        pending_sessions[nonce] = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method,

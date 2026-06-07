@@ -1,0 +1,300 @@
+            "created_at": time.monotonic(),
+        }
+        _prune_expired(pending_sessions, _SESSION_TTL_S)
+
+        base = derive_base_url(request)
+        upstream_redirect = f"{base}{upstream.callback_path}"
+        qs: dict[str, str] = {
+            "client_id": upstream.client_id,
+            "redirect_uri": upstream_redirect,
+            "response_type": "code",
+            "state": nonce,
+        }
+        if upstream.scopes:
+            qs["scope"] = " ".join(upstream.scopes)
+
+        assert upstream.authorize_url is not None
+        separator = "&" if "?" in upstream.authorize_url else "?"
+        from urllib.parse import urlencode
+
+        target = f"{upstream.authorize_url}{separator}{urlencode(qs)}"
+        return RedirectResponse(target, status_code=302)
+
+    async def _callback(request: Request) -> JSONResponse | RedirectResponse:
+        params = request.query_params
+        code = params.get("code")
+        state = params.get("state")
+
+        if not code or not state:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Missing code or state"},
+                status_code=400,
+            )
+
+        session = pending_sessions.pop(state, None)
+        if session is None:
+            # CSRF: unknown state.
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Invalid state"},
+                status_code=400,
+            )
+
+        if time.monotonic() - session["created_at"] > _SESSION_TTL_S:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Session expired"},
+                status_code=400,
+            )
+
+        base = derive_base_url(request)
+        form_data: dict[str, str] = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": f"{base}{upstream.callback_path}",
+        }
+        auth_headers = _build_client_auth(form_data, upstream)
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    upstream.token_url,
+                    data=form_data,
+                    headers={"Accept": "application/json", **auth_headers},
+                )
+        except Exception:  # noqa: BLE001
+            logger.exception("Upstream token exchange failed")
+            return JSONResponse(
+                {"error": "server_error", "error_description": "Upstream token exchange failed"},
+                status_code=502,
+            )
+
+        if resp.status_code != 200:
+            return JSONResponse(
+                {
+                    "error": "invalid_grant",
+                    "error_description": f"Upstream rejected token exchange: {resp.text}",
+                },
+                status_code=400,
+            )
+
+        tokens = resp.json()
+
+        try:
+            sub = await _invoke_token_callback(tokens)
+        except Exception:
+            return JSONResponse(
+                {"error": "server_error", "error_description": "Failed to persist tokens"},
+                status_code=500,
+            )
+
+        auth_code = secrets.token_urlsafe(32)
+        auth_codes[auth_code] = {
+            "code_challenge": session["code_challenge"],
+            "code_challenge_method": session["code_challenge_method"],
+            "sub": sub,
+            "created_at": time.monotonic(),
+        }
+        _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
+
+        redirect_uri = session["redirect_uri"]
+        separator = "&" if "?" in redirect_uri else "?"
+        redirect_url = f"{redirect_uri}{separator}code={auth_code}&state={session['state']}"
+        return RedirectResponse(redirect_url, status_code=302)
+
+    # ------------------------------------------------------------------
+    # Device code flow
+    # ------------------------------------------------------------------
+
+    async def _poll_device_token(
+        *,
+        device_code: str,
+        interval_ms: int,
+        auth_code: str,
+    ) -> None:
+        """Background task: poll upstream token endpoint until granted or error.
+
+        Implements the RFC 8628 polling semantics: ``authorization_pending``
+        -> continue; ``slow_down`` -> increase interval; terminal errors stop.
+        """
+        interval = max(interval_ms, 1000) / 1000.0
+        form_data: dict[str, str] = {
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            "device_code": device_code,
+        }
+        auth_headers = _build_client_auth(form_data, upstream)
+
+        try:
+            async with httpx.AsyncClient() as client:
+                while True:
+                    await asyncio.sleep(interval)
+                    try:
+                        resp = await client.post(
+                            upstream.token_url,
+                            data=form_data,
+                            headers={"Accept": "application/json", **auth_headers},
+                        )
+                    except Exception:  # noqa: BLE001
+                        logger.exception("Upstream poll request failed")
+                        _mark_setup_error()
+                        return
+
+                    if resp.status_code == 200:
+                        tokens = resp.json()
+                        try:
+                            sub = await _invoke_token_callback(tokens)
+                        except Exception:
+                            _mark_setup_error()
+                            return
+                        # Update pre-allocated auth code entry with real subject
+                        # (was placeholder "local-user" during pre-allocation).
+                        if auth_code in auth_codes:
+                            auth_codes[auth_code]["sub"] = sub
+                        # Stash the auth code so the later /token exchange works.
+                        _device_pending["auth_code"] = auth_code
+                        mark_setup_complete()
+                        return
+
+                    try:
+                        body = resp.json()
+                    except Exception:  # noqa: BLE001
+                        _mark_setup_error()
+                        return
+
+                    err = body.get("error")
+                    if err == "authorization_pending":
+                        continue
+                    if err == "slow_down":
+                        interval += 5
+                        continue
+                    # Terminal: access_denied, expired_token, other.
+                    logger.warning("Device code polling terminated: {}", err)
+                    _mark_setup_error()
+                    return
+        except asyncio.CancelledError:
+            raise
+
+    async def _authorize_device_code(request: Request) -> HTMLResponse | JSONResponse:
+        params = request.query_params
+        client_id = params.get("client_id")
+        redirect_uri = params.get("redirect_uri")
+        state = params.get("state")
+        code_challenge = params.get("code_challenge")
+        code_challenge_method = params.get("code_challenge_method", "S256")
+
+        if not all([client_id, redirect_uri, state, code_challenge]):
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Missing required parameters"},
+                status_code=400,
+            )
+
+        # Start upstream device authorization.
+        device_form: dict[str, str] = {"client_id": upstream.client_id}
+        if upstream.scopes:
+            device_form["scope"] = " ".join(upstream.scopes)
+
+        try:
+            assert upstream.device_auth_url is not None
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(upstream.device_auth_url, data=device_form)
+        except Exception:  # noqa: BLE001
+            logger.exception("Upstream device_auth request failed")
+            return JSONResponse(
+                {"error": "server_error", "error_description": "Upstream device auth failed"},
+                status_code=502,
+            )
+
+        if resp.status_code != 200:
+            return JSONResponse(
+                {
+                    "error": "server_error",
+                    "error_description": f"Upstream device auth rejected: {resp.text}",
+                },
+                status_code=502,
+            )
+
+        device = resp.json()
+        device_code = device.get("device_code")
+        user_code = device.get("user_code")
+        verification_url = device.get("verification_url") or device.get("verification_uri")
+        interval_secs = int(device.get("interval", upstream.poll_interval_ms / 1000))
+        if not device_code or not user_code or not verification_url:
+            return JSONResponse(
+                {
+                    "error": "server_error",
+                    "error_description": "Upstream device auth response missing fields",
+                },
+                status_code=502,
+            )
+
+        # Pre-allocate the auth code now so the /token exchange can use it
+        # as soon as polling completes (no race with the browser redirect).
+        # ``sub`` is a placeholder; the polling task updates it after
+        # ``_invoke_token_callback`` returns the real subject id.
+        auth_code = secrets.token_urlsafe(32)
+        auth_codes[auth_code] = {
+            "code_challenge": code_challenge,
+            "code_challenge_method": code_challenge_method,
+            "sub": "local-user",
+            "created_at": time.monotonic(),
+        }
+        _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
+
+        # Reset setup status and spawn background polling task.
+        _setup_status[server_name] = "pending"
+        _device_pending["redirect_uri"] = redirect_uri
+        _device_pending["state"] = state
+        _device_pending["auth_code"] = auth_code
+
+        task = asyncio.create_task(
+            _poll_device_token(
+                device_code=device_code,
+                interval_ms=interval_secs * 1000,
+                auth_code=auth_code,
+            )
+        )
+        _poll_tasks.add(task)
+        task.add_done_callback(_poll_tasks.discard)
+
+        html = _render_device_code_page(
+            server_name=server_name,
+            user_code=user_code,
+            verification_url=verification_url,
+        )
+        return HTMLResponse(html)
+
+    # ------------------------------------------------------------------
+    # Shared endpoints
+    # ------------------------------------------------------------------
+
+    async def authorize(request: Request) -> HTMLResponse | JSONResponse | RedirectResponse:
+        """Dispatch GET /authorize for redirect / device_code flows.
+
+        When ``MCP_RELAY_PASSWORD`` is set, requests without a valid
+        ``mcp_relay_session`` cookie are redirected to ``/login`` (handled
+        inside ``require_relay_session``).
+        """
+        if _relay_password:
+            gated = await require_relay_session(
+                dict(request.cookies),
+                str(request.url.path) + (f"?{request.url.query}" if request.url.query else ""),
+            )
+            if gated is not None:
+                return gated
+        if flow == "redirect":
+            return await _authorize_redirect(request)
+        return await _authorize_device_code(request)
+
+    def _issue_token_response(sub: str) -> JSONResponse:
+        """Build the standard /token success body for *sub*.
+
+        Issues a fresh access token AND a fresh refresh token. The refresh
+        token lets long-running MCP clients renew the 1h access token without
+        re-running the upstream OAuth flow (issue #261). ``scope`` advertises
+        ``offline_access`` so clients know a refresh token was granted. Note
+        the local refresh token is keyed only on ``sub`` -- it does NOT carry
+        upstream provider tokens; consumers that need upstream refresh manage
+        that separately via ``on_token_received``.
+        """
+        access_token = jwt_issuer.issue_access_token(sub=sub)
+        refresh_token = jwt_issuer.issue_refresh_token(sub=sub)
+        return JSONResponse(
+            {
