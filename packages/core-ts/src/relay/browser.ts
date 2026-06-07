@@ -24,16 +24,11 @@ async function isWsl(): Promise<boolean> {
   }
 }
 
-function encodePowerShellCommand(command: string): string {
-  return Buffer.from(command, 'utf16le').toString('base64')
-}
-
 async function openInPowerShell(url: string): Promise<boolean> {
   try {
     const base64Url = Buffer.from(url, 'utf8').toString('base64')
-    const command = `$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64Url}')); Start-Process $url`
-    const encodedCommand = encodePowerShellCommand(command)
-    await execFileAsync('powershell.exe', ['-NoProfile', '-EncodedCommand', encodedCommand])
+    const command = `& { $url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0])); Start-Process $url }`
+    await execFileAsync('powershell.exe', ['-NoProfile', '-Command', command, base64Url])
     return true
   } catch {
     return false

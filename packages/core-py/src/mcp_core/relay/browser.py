@@ -28,13 +28,12 @@ def _is_wsl() -> bool:
 
 
 def _open_in_powershell(url: str) -> bool:
-    """Open URL using powershell.exe -EncodedCommand."""
+    """Open URL using powershell.exe -Command."""
     try:
         base64_url = base64.b64encode(url.encode("utf-8")).decode("ascii")
-        command = f"$url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('{base64_url}')); Start-Process $url"
-        encoded_command = base64.b64encode(command.encode("utf-16le")).decode("ascii")
+        command = "& { $url = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0])); Start-Process $url }"
         subprocess.run(
-            ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_command],
+            ["powershell.exe", "-NoProfile", "-Command", command, base64_url],
             check=True,
             capture_output=True,
             timeout=10,
