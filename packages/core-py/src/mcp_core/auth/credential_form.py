@@ -538,7 +538,7 @@ def render_credential_form(
                     Connect
                 </button>
 
-                <div class="status-box" id="status-box" role="alert"></div>
+                <div class="status-box" id="status-box" role="alert" aria-live="polite"></div>
             </form>
         </div>
         {capabilities_html}
@@ -621,6 +621,7 @@ def render_credential_form(
                     errorEl.id = "step-error";
                     errorEl.className = "status-box error";
                     errorEl.setAttribute("role", "alert");
+                    errorEl.setAttribute("aria-live", "polite");
                     errorEl.style.display = "none";
                     container.appendChild(errorEl);
 
