@@ -5,10 +5,8 @@ __version__ = "0.1.0"
 from mcp_core.crypto.aes import decrypt, encrypt
 from mcp_core.crypto.ecdh import (
     derive_shared_secret,
-    export_private_key as export_private_key,
     export_public_key,
     generate_key_pair,
-    import_private_key as import_private_key,
     import_public_key,
 )
 from mcp_core.crypto.kdf import derive_aes_key
