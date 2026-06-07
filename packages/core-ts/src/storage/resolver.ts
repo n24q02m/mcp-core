@@ -23,6 +23,8 @@ export async function resolveConfig(
       envConfig[field] = value
     } else {
       allEnvPresent = false
+      // ⚡ Bolt: Early return/break to skip expensive process.env access (Proxy) once we know we're missing a required variable.
+      break
     }
   }
   if (allEnvPresent) {
