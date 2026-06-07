@@ -44,3 +44,54 @@ def test_browser_open_failure_still_returns_url(monkeypatch) -> None:
     result = handler()
     assert result["url"] == "http://127.0.0.1:8080/authorize"
     assert result["browser_opened"] is False
+
+
+def test_register_open_relay_tool_http(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+    from mcp_core.relay.tool_helpers import register_open_relay_tool
+
+    monkeypatch.setattr(
+        "mcp_core.relay.tool_helpers._try_open_browser",
+        lambda url: True,
+    )
+
+    mcp = MagicMock()
+    # mcp.tool is used as a decorator with arguments
+    # @mcp.tool(name=..., description=...)
+    # def func(): ...
+
+    register_open_relay_tool(mcp, "test-server", "http://127.0.0.1:8080")
+
+    # Verify mcp.tool was called with correct arguments
+    mcp.tool.assert_called_once()
+    args, kwargs = mcp.tool.call_args
+    assert kwargs["name"] == "config__open_relay"
+    assert "test-server" in kwargs["description"]
+
+    # The decorator returned by mcp.tool was called with the handler function
+    decorator = mcp.tool.return_value
+    decorator.assert_called_once()
+
+    # Get the actual tool function that was registered
+    registered_func = decorator.call_args[0][0]
+
+    # Execute it and check result
+    result = registered_func()
+    assert result["url"] == "http://127.0.0.1:8080/authorize"
+    assert result["status"] == "unconfigured"
+
+
+def test_register_open_relay_tool_stdio() -> None:
+    from unittest.mock import MagicMock
+    from mcp_core.relay.tool_helpers import register_open_relay_tool
+
+    mcp = MagicMock()
+    register_open_relay_tool(mcp, "test-server", None)
+
+    mcp.tool.assert_called_once()
+    decorator = mcp.tool.return_value
+    registered_func = decorator.call_args[0][0]
+
+    result = registered_func()
+    assert result["status"] == "stdio_unsupported"
+    assert result["url"] == ""
