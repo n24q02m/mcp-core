@@ -20,7 +20,6 @@ import json
 import secrets
 import socket
 import threading
-import time
 import webbrowser
 from collections.abc import Callable
 from typing import Any
@@ -208,16 +207,11 @@ def _build_relay_app(
         # Delay the shutdown signal so uvicorn can flush this response before
         # the watchdog flips ``server.should_exit`` and closes the socket.
         # 0.5s is generous for a localhost JSON response.
-        def _delayed_shutdown() -> None:
-            time.sleep(0.5)
+        async def _delayed_shutdown() -> None:
+            await asyncio.sleep(0.5)
             shutdown_event.set()
 
-        threading.Thread(
-            target=_delayed_shutdown,
-            daemon=True,
-            name=f"relay-shutdown-{server_name}",
-        ).start()
-
+        asyncio.create_task(_delayed_shutdown())
         return JSONResponse({"status": "saved"})
 
     return Starlette(
