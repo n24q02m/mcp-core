@@ -8,6 +8,7 @@ import pytest
 from starlette.testclient import TestClient
 from mcp_core.relay.transient import _build_relay_app
 
+
 @pytest.mark.asyncio
 async def test_submit_triggers_shutdown_event() -> None:
     shutdown_event = threading.Event()
