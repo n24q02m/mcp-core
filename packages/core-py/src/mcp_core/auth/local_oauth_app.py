@@ -98,6 +98,37 @@ def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
     return secrets.compare_digest(computed, code_challenge)
 
 
+class _SetupStatusManager:
+    """Manages in-memory setup status for background tasks."""
+
+    def __init__(self) -> None:
+        self._status: dict[str, str] = {"gdrive": "idle"}
+
+    def mark_complete(self, key: str = "gdrive") -> None:
+        """Mark a background setup step as complete."""
+        self._status[key] = "complete"
+
+    def mark_failed(self, key: str = "gdrive", error: str = "unknown error") -> None:
+        """Mark a background setup step as failed."""
+        # Sanitize: collapse whitespace so the error string is single-line
+        # (the frontend inlines it). Strip colons in the user-visible part
+        # only by replacing the rare ``error:`` prefix in callback text, to
+        # avoid double-prefixing.
+        message = " ".join(str(error).split()) or "unknown error"
+        if message.startswith("error:"):
+            message = message.removeprefix("error:").strip() or "unknown error"
+        self._status[key] = f"error:{message}"
+
+    def get_all(self) -> dict[str, str]:
+        """Return all statuses."""
+        return self._status
+
+    def reset_all(self) -> None:
+        """Reset all keys to "idle"."""
+        for k in list(self._status.keys()):
+            self._status[k] = "idle"
+
+
 def create_local_oauth_app(
     *,
     server_name: str,
@@ -147,6 +178,7 @@ def create_local_oauth_app(
     if jwt_issuer is None:
         jwt_issuer = JWTIssuer(server_name=server_name)
 
+    setup_status_manager = _SetupStatusManager()
     # In-memory stores keyed by nonce / auth_code.
     # Each entry includes a ``created_at`` timestamp for TTL expiry.
     # Structure: {nonce: {client_id, redirect_uri, state, code_challenge, code_challenge_method, created_at}}
@@ -292,7 +324,7 @@ def create_local_oauth_app(
             )
 
         # Reset stale completion markers from previous authorize submits.
-        # _setup_status is closure-scoped, so a key flipped to "complete"
+        # setup_status_manager is closure-scoped, so a key flipped to "complete"
         # by a prior background poll (e.g. Outlook device code finished
         # on the first attempt) would otherwise persist into the next
         # form submit. The frontend renders a fresh oauth_device_code UI
@@ -300,8 +332,7 @@ def create_local_oauth_app(
         # "complete" within a few seconds and triggers a premature
         # redirect. Reset all keys to "idle" so each submit starts from
         # a clean state.
-        for _k in list(_setup_status.keys()):
-            _setup_status[_k] = "idle"
+        setup_status_manager.reset_all()
 
         # Save credentials via callback. Callback may return a dict with
         # next_step info (e.g., GDrive OAuth device code to show in the form).
@@ -660,29 +691,17 @@ def create_local_oauth_app(
 
     # In-memory setup status (set by background tasks via mark_setup_complete
     # or mark_setup_failed). Values: "idle", "complete", or "error:<message>".
-    _setup_status: dict[str, str] = {"gdrive": "idle"}
-
     def mark_setup_complete(key: str = "gdrive") -> None:
         """Mark a background setup step as complete (called externally)."""
-        _setup_status[key] = "complete"
+        setup_status_manager.mark_complete(key)
 
     def mark_setup_failed(key: str = "gdrive", error: str = "unknown error") -> None:
-        """Mark a background setup step as failed (called externally).
-
-        The status is encoded as ``"error:<message>"`` so the frontend poll
-        handler can detect failure and surface the message to the user,
-        stopping the spinner that would otherwise wait forever.
-        """
-        # Sanitize: collapse whitespace so the error string is single-line
-        # (the frontend inlines it). Strip colons in the user-visible part
-        # only by replacing the rare ``error:`` prefix in callback text, to
-        # avoid double-prefixing.
-        message = " ".join(str(error).split()) or "unknown error"
-        _setup_status[key] = f"error:{message}"
+        """Mark a background setup step as failed (called externally)."""
+        setup_status_manager.mark_failed(key, error)
 
     async def setup_status(request: Request) -> JSONResponse:
         """GET /setup-status -- polled by the form to detect GDrive auth completion."""
-        return JSONResponse(_setup_status)
+        return JSONResponse(setup_status_manager.get_all())
 
     async def root(request: Request):
         """GET / -- auto-generate PKCE and redirect to /authorize.

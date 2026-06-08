@@ -1245,3 +1245,12 @@ def test_otp_endpoint_with_future_callbacks():
     data = resp.json()
     assert data["ok"] is True
     assert "next_step" not in data
+
+
+def test_mark_setup_failed_avoids_double_prefix(app_and_issuer, client):
+    """mark_setup_failed strips redundant error: prefix to avoid double-prefixing."""
+    app, _, _ = app_and_issuer
+    app.state.mark_setup_failed("gdrive", "error:invalid_grant")
+
+    resp = client.get("/setup-status")
+    assert resp.json()["gdrive"] == "error:invalid_grant"
