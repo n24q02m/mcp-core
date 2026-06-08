@@ -101,3 +101,17 @@ def test_session_expires_exactly_at_limit(monkeypatch):
     )
     assert is_session_active() is False
     assert validate_session_token(info.token) is False
+
+
+def test_release_session_when_none():
+    # Session is already None due to reset_state fixture
+    release_session()
+    assert get_active_session() is None
+
+
+def test_release_session_multiple_times():
+    claim_session(client_id="bridge-1")
+    release_session()
+    assert get_active_session() is None
+    release_session()
+    assert get_active_session() is None
