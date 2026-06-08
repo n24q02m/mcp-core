@@ -1,27 +1,32 @@
 """Tests for encrypted config file management."""
 
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 from cryptography.exceptions import InvalidTag
 
 from mcp_core.storage.config_file import (
+    SETUP_COMPLETE_KEY,
+    _get_config_path,
     _with_retry,
     clear_key_cache_for_testing,
     delete_config,
     export_config,
     import_config,
     list_configs,
+    mark_setup_complete,
     read_config,
+    schedule_reload_exit,
     set_config_path,
     write_config,
 )
 from mcp_core.storage.encryption import (
-    LEGACY_PBKDF2_ITERATIONS,
-    PBKDF2_ITERATIONS,
-    LEGACY_SALT,
     LEGACY_EXPORT_SALT,
+    LEGACY_PBKDF2_ITERATIONS,
+    LEGACY_SALT,
+    PBKDF2_ITERATIONS,
     decrypt_data,
     derive_file_key,
     derive_passphrase_key,
@@ -89,6 +94,14 @@ class TestWithRetry:
                 _with_retry(fn)
             assert fn.call_count == 1
             assert mock_sleep.call_count == 0
+
+    def test_unreachable_error_if_loop_somehow_finishes(self):
+        # This is hard to trigger normally because the loop is range(3)
+        # and it either returns or raises.
+        # But we can patch range to return an empty list.
+        with patch("builtins.range", return_value=[]):
+            with pytest.raises(RuntimeError, match="Unreachable"):
+                _with_retry(lambda: None)
 
 
 class TestWriteAndReadConfig:
@@ -208,6 +221,28 @@ class TestExportImportConfig:
         import_config("pass", encrypted)
         assert read_config("legacy") == {"k": "v"}
 
+    def test_import_config_legacy_iterations_unsalted(self):
+        store = {"version": 1, "servers": {"legacy-unsalted": {"k": "v"}}}
+        key = derive_passphrase_key("pass", LEGACY_EXPORT_SALT, LEGACY_PBKDF2_ITERATIONS)
+        encrypted = encrypt_data(key, json.dumps(store))
+
+        import_config("pass", encrypted)
+        assert read_config("legacy-unsalted") == {"k": "v"}
+
+    def test_import_config_legacy_iterations_salted(self):
+        store = {"version": 1, "servers": {"legacy-salted": {"k": "v"}}}
+        salt = os.urandom(16)
+        key = derive_passphrase_key("pass", salt, LEGACY_PBKDF2_ITERATIONS)
+        encrypted = encrypt_data(key, json.dumps(store))
+        final_data = salt + encrypted
+
+        import_config("pass", final_data)
+        assert read_config("legacy-salted") == {"k": "v"}
+
+    def test_import_config_invalid_data(self):
+        with pytest.raises(Exception):
+            import_config("pass", b"too short")
+
 
 class TestMigration:
     def test_migrates_from_legacy_unsalted_format(self, _temp_config):
@@ -251,3 +286,50 @@ class TestMigration:
         current_key = derive_file_key(machine_id, username, salt, PBKDF2_ITERATIONS)
         decrypted = decrypt_data(current_key, payload)
         assert json.loads(decrypted) == store
+
+    def test_load_store_raises_original_error_if_all_fail(self, _temp_config):
+        config_path = _temp_config / "config.enc"
+        config_path.write_bytes(b"garbage data that is too short")
+
+        with pytest.raises(Exception):
+            read_config("any")
+
+
+class TestSetupComplete:
+    def test_mark_setup_complete_existing_server(self):
+        write_config("test-server", {"key": "val"})
+        mark_setup_complete("test-server")
+
+        config = read_config("test-server")
+        assert config is not None
+        assert config["key"] == "val"
+        assert config[SETUP_COMPLETE_KEY] == "true"
+
+    def test_mark_setup_complete_new_server(self):
+        mark_setup_complete("new-server")
+        config = read_config("new-server")
+        assert config == {SETUP_COMPLETE_KEY: "true"}
+
+
+def test_get_config_path_default():
+    set_config_path(None)
+    path = _get_config_path()
+    assert isinstance(path, os.PathLike)
+
+
+def test_schedule_reload_exit_starts_thread():
+    with patch.dict(os.environ, {}, clear=True):
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            del os.environ["PYTEST_CURRENT_TEST"]
+
+        with patch("threading.Thread") as mock_thread:
+            schedule_reload_exit()
+            assert mock_thread.called
+            assert mock_thread.call_args[1]["daemon"] is True
+
+            # Now we extract the internal _exit function and test it
+            exit_fn = mock_thread.call_args[1]["target"]
+            with patch("time.sleep"), patch("os._exit") as mock_os_exit:
+                exit_fn()
+                assert mock_os_exit.called
+                mock_os_exit.assert_called_with(0)

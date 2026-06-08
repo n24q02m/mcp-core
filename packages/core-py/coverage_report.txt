@@ -1,0 +1,19 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0
+rootdir: /app/packages/core-py
+configfile: pyproject.toml
+plugins: cov-7.1.0, anyio-4.13.0, asyncio-1.4.0, timeout-2.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 21 items
+
+tests/storage/test_config_file.py .....................                  [100%]
+
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.13.12-final-0 _______________
+
+Name                                  Stmts   Miss  Cover   Missing
+-------------------------------------------------------------------
+src/mcp_core/storage/config_file.py     153     13    92%   64, 89-90, 127-128, 162-168, 227-229
+-------------------------------------------------------------------
+TOTAL                                   153     13    92%
+============================= 21 passed in 10.15s ==============================
