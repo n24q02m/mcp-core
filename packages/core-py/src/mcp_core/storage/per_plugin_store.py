@@ -28,14 +28,22 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 
+def _validate_path_component(name: str, label: str) -> None:
+    if not name or "/" in name or "\\" in name or ".." in name:
+        raise ValueError(f"Invalid {label}: {name}")
+
+
 def _cred_path(plugin_name: str, sub: Optional[str]) -> Path:
+    _validate_path_component(plugin_name, "plugin name")
     base = Path.home() / f".{plugin_name}-mcp"
     if sub:
+        _validate_path_component(sub, "sub identifier")
         return base / "subs" / sub / "config.json"
     return base / "config.json"
 
 
 def _machine_key_path(plugin_name: str) -> Path:
+    _validate_path_component(plugin_name, "plugin name")
     return Path.home() / f".{plugin_name}-mcp" / ".secret"
 
 

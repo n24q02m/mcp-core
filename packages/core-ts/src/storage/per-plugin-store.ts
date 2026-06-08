@@ -32,9 +32,20 @@ function getHomeDir(): string {
   return homeDirOverride ?? homedir()
 }
 
+function validatePathComponent(name: string, label: string): void {
+  if (!name || name.includes('/') || name.includes('\\') || name.includes('..')) {
+    throw new Error(`Invalid ${label}: ${name}`)
+  }
+}
+
 export function credPath(pluginName: string, sub: string | null): string {
+  validatePathComponent(pluginName, 'plugin name')
   const base = join(getHomeDir(), `.${pluginName}-mcp`)
-  return sub ? join(base, 'subs', sub, 'config.json') : join(base, 'config.json')
+  if (sub) {
+    validatePathComponent(sub, 'sub identifier')
+    return join(base, 'subs', sub, 'config.json')
+  }
+  return join(base, 'config.json')
 }
 
 async function loadOrGenMachineKey(pluginName: string): Promise<Buffer> {

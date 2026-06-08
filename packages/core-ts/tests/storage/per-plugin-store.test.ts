@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -69,5 +69,22 @@ describe('PerPluginStore', () => {
     tampered[tampered.length - 1] ^= 0xff // flip last byte
     writeFileSync(store.credPath, tampered)
     expect(await store.load()).toBeNull()
+  })
+
+  it('load returns null on short file', async () => {
+    const store = new PerPluginStore('test-plugin')
+    const { mkdirSync } = await import('node:fs')
+    const { dirname } = await import('node:path')
+    mkdirSync(dirname(store.credPath), { recursive: true })
+    writeFileSync(store.credPath, Buffer.from('too short'))
+    expect(await store.load()).toBeNull()
+  })
+
+  it('getHomeDir uses homedir() when no override', async () => {
+    setHomeDirForTesting(null)
+    const { homedir } = await import('node:os')
+    // Just verify it doesn't throw and returns something like a path
+    expect(credPath('test', null)).toContain('.test-mcp')
+    expect(credPath('test', null)).toContain(homedir())
   })
 })

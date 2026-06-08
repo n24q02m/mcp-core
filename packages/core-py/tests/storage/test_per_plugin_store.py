@@ -77,3 +77,9 @@ def test_load_returns_none_on_tampered_ciphertext(store_factory):
     tampered = blob[:-1] + bytes([blob[-1] ^ 0xFF])
     store.cred_path.write_bytes(tampered)
     assert store.load() is None
+
+def test_load_short_file(store_factory):
+    store = store_factory("test-plugin")
+    store.cred_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    store.cred_path.write_bytes(b"too short")
+    assert store.load() is None
