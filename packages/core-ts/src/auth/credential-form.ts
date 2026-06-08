@@ -542,11 +542,17 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
   const capabilityInfo = schema.capabilityInfo ?? []
   const prefill = options.prefill ?? {}
 
-  const fieldsHtml = fields.map((f) => renderField(f, prefill[f.key] ?? '')).join('')
+  let fieldsHtml = ''
+  for (const f of fields) {
+    fieldsHtml += renderField(f, prefill[f.key] ?? '')
+  }
 
   let capabilitiesHtml = ''
   if (capabilityInfo.length > 0) {
-    const itemsHtml = capabilityInfo.map(renderCapability).join('')
+    let itemsHtml = ''
+    for (const cap of capabilityInfo) {
+      itemsHtml += renderCapability(cap)
+    }
     capabilitiesHtml = `
         <section class="capabilities-section">
             <h2 class="capabilities-title">Capabilities Requested</h2>
