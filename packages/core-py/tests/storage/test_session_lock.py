@@ -2,6 +2,8 @@
 
 import json
 import time
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -11,6 +13,7 @@ from mcp_core.storage.session_lock import (
     release_session_lock,
     set_lock_dir,
     write_session_lock,
+    _get_lock_dir,
 )
 
 
@@ -95,6 +98,19 @@ class TestAcquireSessionLock:
         result = await acquire_session_lock("test-server")
         assert result is None
 
+    async def test_returns_none_on_read_oserror(self):
+        with patch("mcp_core.storage.session_lock.Path.exists", return_value=True):
+            with patch("mcp_core.storage.session_lock.Path.read_text", side_effect=OSError("Read error")):
+                result = await acquire_session_lock("test-server")
+                assert result is None
+
+    async def test_handles_cleanup_oserror(self):
+        with patch("mcp_core.storage.session_lock.Path.exists", return_value=True):
+            with patch("mcp_core.storage.session_lock.Path.read_text", side_effect=OSError("Read error")):
+                with patch("mcp_core.storage.session_lock.release_session_lock", side_effect=OSError("Unlink error")):
+                    result = await acquire_session_lock("test-server")
+                    assert result is None
+
 
 class TestWriteSessionLock:
     async def test_creates_lock_file(self, _temp_lock_dir):
@@ -172,6 +188,10 @@ class TestReleaseSessionLock:
         # Should not raise
         await release_session_lock("nonexistent-server")
 
+    async def test_handles_unlink_oserror(self):
+        with patch("mcp_core.storage.session_lock.Path.unlink", side_effect=OSError("Permission denied")):
+            await release_session_lock("test-server")
+
     async def test_different_servers_have_independent_locks(self, _temp_lock_dir):
         info1 = SessionInfo(
             session_id="server-a",
@@ -192,3 +212,9 @@ class TestReleaseSessionLock:
         result = await acquire_session_lock("server-b")
         assert result is not None
         assert result.session_id == "server-b"
+
+
+def test_get_lock_dir_default():
+    set_lock_dir(None)
+    lock_dir = _get_lock_dir()
+    assert isinstance(lock_dir, Path)
