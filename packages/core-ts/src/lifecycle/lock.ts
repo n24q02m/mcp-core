@@ -24,7 +24,8 @@
  * identical for cross-language parity.
  */
 
-import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
+import { readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -78,11 +79,11 @@ function parseLockText(raw: string): LockMetadata | null {
  * Padded to 512 bytes so on-disk size stays stable while a Windows
  * byte-range lock is held past the metadata region (parity with core-py).
  */
-export function refreshLockTimestamp(path: string): void {
+export async function refreshLockTimestamp(path: string): Promise<void> {
   if (!existsSync(path)) return
   let raw: string
   try {
-    raw = readFileSync(path, { encoding: 'utf-8' })
+    raw = await readFile(path, { encoding: 'utf-8' })
   } catch {
     return
   }
@@ -91,7 +92,7 @@ export function refreshLockTimestamp(path: string): void {
   const now = new Date().toISOString()
   const payload = `${md.pid}\n${md.port}\n${md.token}\n${now}\n`
   try {
-    writeFileSync(path, payload.padEnd(512, ' '), { encoding: 'utf-8' })
+    await writeFile(path, payload.padEnd(512, ' '), { encoding: 'utf-8' })
   } catch {
     // Best-effort
   }
@@ -108,14 +109,14 @@ export function refreshLockTimestamp(path: string): void {
  *  - file is unreadable or has malformed payload (legacy / corrupt)
  *  - `spawnedAt` is older than the TTL
  */
-export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: string): number {
+export async function sweepStaleLocks(serverName: string, ttlHours?: number, root?: string): Promise<number> {
   const dir = root !== undefined ? root : self.lockDir()
   if (!existsSync(dir)) return 0
 
   let removed = 0
   let entries: string[]
   try {
-    entries = readdirSync(dir)
+    entries = await readdir(dir)
   } catch {
     return 0
   }
@@ -130,10 +131,10 @@ export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: st
     const full = join(dir, entry)
     let raw: string
     try {
-      raw = readFileSync(full, { encoding: 'utf-8' })
+      raw = await readFile(full, { encoding: 'utf-8' })
     } catch {
       try {
-        unlinkSync(full)
+        await unlink(full)
         removed += 1
       } catch {
         /* ignore */
@@ -143,7 +144,7 @@ export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: st
     const meta = parseLockText(raw)
     if (meta === null) {
       try {
-        unlinkSync(full)
+        await unlink(full)
         removed += 1
       } catch {
         /* ignore */
@@ -152,7 +153,7 @@ export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: st
     }
     if (now - meta.spawnedAt.getTime() > ttlMs) {
       try {
-        unlinkSync(full)
+        await unlink(full)
         removed += 1
       } catch {
         /* ignore */
@@ -169,10 +170,10 @@ export function sweepStaleLocks(serverName: string, ttlHours?: number, root?: st
  *
  * Returns the absolute path to the lock file.
  */
-export function writeLockFile(serverName: string, port: number, token: string, root?: string): string {
+export async function writeLockFile(serverName: string, port: number, token: string, root?: string): Promise<string> {
   const dir = locksDir(root)
   const path = join(dir, `${serverName}-${port}.lock`)
   const payload = `${process.pid}\n${port}\n${token}\n${new Date().toISOString()}\n`
-  writeFileSync(path, payload.padEnd(512, ' '), { encoding: 'utf-8', mode: 0o600 })
+  await writeFile(path, payload.padEnd(512, ' '), { encoding: 'utf-8', mode: 0o600 })
   return path
 }
