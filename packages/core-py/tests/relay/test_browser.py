@@ -79,6 +79,20 @@ class TestTryOpenBrowser:
                 result = try_open_browser("https://example.com")
                 assert result is False
 
+    def test_deduplicates_browser_opens(self):
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                mock_wb.open.return_value = True
+                url = "https://example.com/dedupe"
+
+                # First open
+                assert try_open_browser(url) is True
+                assert mock_wb.open.call_count == 1
+
+                # Second open (should be deduped)
+                assert try_open_browser(url) is True
+                assert mock_wb.open.call_count == 1
+
     def test_returns_false_on_exception(self):
         with patch("mcp_core.relay.browser._is_wsl", return_value=False):
             with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
@@ -185,3 +199,29 @@ class TestOpenInPowerShell:
             # MCP_BROWSER_URL should NOT be in env if env is passed (kwargs might be empty or not contain it)
             if "env" in kwargs:
                 assert "MCP_BROWSER_URL" not in kwargs["env"]
+
+    def test_open_in_powershell_inherits_env(self):
+        with patch("mcp_core.relay.browser.subprocess.run") as mock_run:
+            from mcp_core.relay.browser import _open_in_powershell
+
+            _open_in_powershell("https://example.com")
+
+            mock_run.assert_called_once()
+            _, kwargs = mock_run.call_args
+            # Verify that 'env' is NOT passed to subprocess.run,
+            # which means it inherits the parent environment by default.
+            assert "env" not in kwargs
+
+    def test_open_in_powershell_handles_subprocess_error(self):
+        import subprocess
+
+        with patch("mcp_core.relay.browser.subprocess.run", side_effect=subprocess.SubprocessError):
+            from mcp_core.relay.browser import _open_in_powershell
+
+            assert _open_in_powershell("https://example.com") is False
+
+    def test_open_in_powershell_handles_file_not_found(self):
+        with patch("mcp_core.relay.browser.subprocess.run", side_effect=FileNotFoundError):
+            from mcp_core.relay.browser import _open_in_powershell
+
+            assert _open_in_powershell("https://example.com") is False
