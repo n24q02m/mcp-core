@@ -102,3 +102,20 @@ def test_sqlite_user_store_corrupt_payload(db_path: Path, master_key: bytes):
         conn.execute("UPDATE users SET encrypted_config = ?", (b"invalid_data",))
 
     assert store.get_credentials(user_id) is None
+
+
+def test_sqlite_user_store_init_with_directory(tmp_path: Path, master_key: bytes):
+    db_dir = tmp_path / "a_directory"
+    db_dir.mkdir()
+    # sqlite3.connect fails if the path is a directory
+    with pytest.raises(sqlite3.OperationalError, match="unable to open database file"):
+        SqliteUserStore(db_dir, master_key)
+
+
+def test_sqlite_user_store_init_with_file_as_parent(tmp_path: Path, master_key: bytes):
+    parent_file = tmp_path / "not_a_directory"
+    parent_file.touch()
+    db_path = parent_file / "users.db"
+    # mkdir(parents=True) fails if a component of the path exists but is not a directory
+    with pytest.raises(FileExistsError):
+        SqliteUserStore(db_path, master_key)
