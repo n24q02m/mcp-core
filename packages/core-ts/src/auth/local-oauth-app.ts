@@ -793,8 +793,8 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
    * single-line (the frontend inlines it verbatim).
    */
   function markSetupFailed(key = 'gdrive', error = 'unknown error'): void {
-    // ⚡ Bolt: Replace multiple array allocations (.split.filter.join) with regex replace for faster whitespace collapsing
-    const collapsed = String(error).replace(/\s+/g, ' ').trim()
+    // ⚡ Bolt: Use manual single-pass iteration for fastest whitespace collapsing without regex or array allocations
+    const collapsed = collapseWhitespace(String(error))
     const message = collapsed.length > 0 ? collapsed : 'unknown error'
     setupStatus[key] = `error:${message}`
   }
@@ -1047,6 +1047,40 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
+}
+
+/**
+ * Collapses multiple whitespace characters into a single space and trims the result.
+ * Avoids regex and array allocations for performance in hot paths.
+ */
+function collapseWhitespace(str: string): string {
+  let result = ''
+  let inWhitespace = false
+  let start = 0
+  let end = str.length
+
+  // Trim start
+  while (start < end && str.charCodeAt(start) <= 32) {
+    start++
+  }
+  // Trim end
+  while (end > start && str.charCodeAt(end - 1) <= 32) {
+    end--
+  }
+
+  for (let i = start; i < end; i++) {
+    const charCode = str.charCodeAt(i)
+    if (charCode <= 32) {
+      if (!inWhitespace) {
+        result += ' '
+        inWhitespace = true
+      }
+    } else {
+      result += str[i]
+      inWhitespace = false
+    }
+  }
+  return result
 }
 
 /**
