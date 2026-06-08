@@ -18,6 +18,7 @@ export class JWTIssuer {
   private kid = 'key-1'
   private privateKey: jose.CryptoKey | null = null
   private publicKey: jose.CryptoKey | null = null
+  private jwks: jose.JSONWebKeySet | null = null
   private _initialized = false
 
   constructor(serverName: string, keysDir = DEFAULT_KEYS_DIR) {
@@ -33,35 +34,61 @@ export class JWTIssuer {
     mkdirSync(this.keysDir, { recursive: true, mode: 0o700 })
 
     if (existsSync(this.privateKeyPath) && existsSync(this.publicKeyPath)) {
-      const privatePem = readFileSync(this.privateKeyPath, 'utf-8')
-      const publicPem = readFileSync(this.publicKeyPath, 'utf-8')
-      this.privateKey = await jose.importPKCS8(privatePem, 'RS256')
-      this.publicKey = await jose.importSPKI(publicPem, 'RS256')
+      const privatePemBuf = readFileSync(this.privateKeyPath)
+      const publicPemBuf = readFileSync(this.publicKeyPath)
+      try {
+        const privatePem = privatePemBuf.toString()
+        const publicPem = publicPemBuf.toString()
+
+        this.privateKey = await jose.importPKCS8(privatePem, 'RS256', { extractable: false })
+
+        // Export JWKS from a temporary extractable public key
+        const tempPubKey = await jose.importSPKI(publicPem, 'RS256', { extractable: true })
+        const jwk = await jose.exportJWK(tempPubKey)
+        jwk.kid = this.kid
+        jwk.use = 'sig'
+        jwk.alg = 'RS256'
+        this.jwks = { keys: [jwk] }
+
+        this.publicKey = await jose.importSPKI(publicPem, 'RS256', { extractable: false })
+      } finally {
+        privatePemBuf.fill(0)
+        publicPemBuf.fill(0)
+      }
     } else {
       const { publicKey, privateKey } = await jose.generateKeyPair('RS256', {
         modulusLength: 2048,
         extractable: true
       })
-      this.privateKey = privateKey
-      this.publicKey = publicKey
 
       const privatePem = await jose.exportPKCS8(privateKey)
       const publicPem = await jose.exportSPKI(publicKey)
 
       writeFileSync(this.privateKeyPath, privatePem, { mode: 0o600 })
       writeFileSync(this.publicKeyPath, publicPem, { mode: 0o644 })
+
+      // Re-import as non-extractable for memory safety
+      this.privateKey = await jose.importPKCS8(privatePem, 'RS256', { extractable: false })
+
+      const jwk = await jose.exportJWK(publicKey)
+      jwk.kid = this.kid
+      jwk.use = 'sig'
+      jwk.alg = 'RS256'
+      this.jwks = { keys: [jwk] }
+
+      this.publicKey = await jose.importSPKI(publicPem, 'RS256', { extractable: false })
+
+      // Attempt to clear strings by converting to buffers and filling
+      Buffer.from(privatePem).fill(0)
+      Buffer.from(publicPem).fill(0)
     }
     this._initialized = true
   }
 
   /** Return JWKS payload for /.well-known/jwks.json */
   async getJwks(): Promise<jose.JSONWebKeySet> {
-    if (!this.publicKey) throw new Error('JWTIssuer not initialized')
-    const jwk = await jose.exportJWK(this.publicKey)
-    jwk.kid = this.kid
-    jwk.use = 'sig'
-    jwk.alg = 'RS256'
-    return { keys: [jwk] }
+    if (!this.jwks) throw new Error('JWTIssuer not initialized')
+    return this.jwks
   }
 
   /** Issue an RS256 JWT access token (``typ="access"``). */
