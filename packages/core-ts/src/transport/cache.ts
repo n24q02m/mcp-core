@@ -25,7 +25,8 @@ export function cacheDir(): string {
 }
 
 export function cacheFilename(serverName: string, port: number, srvVersion: string, coreVersion: string): string {
-  return `${serverName}-${port}-${srvVersion}-${coreVersion}.tools.json`
+  const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9.-]/g, '_')
+  return `${sanitize(serverName)}-${port}-${sanitize(srvVersion)}-${sanitize(coreVersion)}.tools.json`
 }
 
 export function atomicWrite(path: string, content: string): void {

@@ -39,6 +39,16 @@ describe('tools cache', () => {
     expect(cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')).toBe('wet-mcp-55317-2.28.4-1.11.0.tools.json')
   })
 
+  it('filename sanitizes path traversal characters', () => {
+    const malicious = '../../../etc/passwd'
+    const filename = cacheFilename(malicious, 80, malicious, malicious)
+    expect(filename).not.toContain('../')
+    expect(filename).not.toContain('..\\')
+    expect(filename).not.toContain('/')
+    expect(filename).not.toContain('\\')
+    expect(filename).toBe('.._.._.._etc_passwd-80-.._.._.._etc_passwd-.._.._.._etc_passwd.tools.json')
+  })
+
   it('persist + load match', () => {
     const tools = [{ name: 'search' }]
     persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', tools)
