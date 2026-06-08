@@ -4,25 +4,27 @@ import { deriveAesKey } from '../crypto/kdf.js'
 import type { RelayConfigSchema } from '../schema/types.js'
 import { WORDLIST } from './wordlist.js'
 
-// Single fallback buffer for rejection sampling, reused to minimize GC
-const fallbackBuffer = new Uint16Array(1)
-
 export function generatePassphrase(wordCount = 4): string {
   const words: string[] = []
   const max = Math.floor(0x10000 / WORDLIST.length) * WORDLIST.length // rejection threshold
 
-  // Optimization: Batch random generation for all words at once
-  const buffer = new Uint16Array(wordCount)
+  // Use a slightly larger buffer to account for rejection sampling
+  // wordCount + 2 is almost always enough given ~5% rejection rate
+  const buffer = new Uint16Array(wordCount + 2)
   crypto.getRandomValues(buffer)
+  let offset = 0
 
-  for (let i = 0; i < wordCount; i++) {
-    let index = buffer[i]
-    while (index >= max) {
-      // Reject biased values and resample
-      crypto.getRandomValues(fallbackBuffer)
-      index = fallbackBuffer[0]
+  while (words.length < wordCount) {
+    if (offset >= buffer.length) {
+      // Buffer exhausted (rare), refill
+      crypto.getRandomValues(buffer)
+      offset = 0
     }
-    words.push(WORDLIST[index % WORDLIST.length])
+
+    const index = buffer[offset++]
+    if (index < max) {
+      words.push(WORDLIST[index % WORDLIST.length])
+    }
   }
   return words.join('-')
 }
