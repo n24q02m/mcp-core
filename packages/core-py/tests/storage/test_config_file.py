@@ -1,6 +1,7 @@
 """Tests for encrypted config file management."""
 
 import json
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -251,3 +252,93 @@ class TestMigration:
         current_key = derive_file_key(machine_id, username, salt, PBKDF2_ITERATIONS)
         decrypted = decrypt_data(current_key, payload)
         assert json.loads(decrypted) == store
+
+
+class TestSaveStoreRetry:
+    def test_write_config_retries_on_busy_error(self):
+        # We need to patch where Path is used in config_file
+        with patch("mcp_core.storage.config_file.Path.write_bytes") as mock_write:
+            mock_write.side_effect = [OSError(11, "EAGAIN"), None]
+            with patch("os.chmod"):  # Avoid chmod failure if file doesn't exist
+                with patch("time.sleep") as mock_sleep:
+                    write_config("test-server", {"key": "val"})
+                    assert mock_write.call_count == 2
+                    assert mock_sleep.call_count == 1
+                    mock_sleep.assert_called_once_with(0.1)
+
+    def test_write_config_fails_after_max_retries(self):
+        with patch("mcp_core.storage.config_file.Path.write_bytes") as mock_write:
+            mock_write.side_effect = OSError(16, "EBUSY")
+            with patch("time.sleep") as mock_sleep:
+                with pytest.raises(OSError) as excinfo:
+                    write_config("test-server", {"key": "val"})
+                assert excinfo.value.errno == 16
+                assert mock_write.call_count == 3
+                assert mock_sleep.call_count == 2
+
+
+class TestExtraCoverage:
+    def test_get_config_path_default(self):
+        # Temporarily unset the override
+        with patch("mcp_core.storage.config_file._config_path_override", None):
+            from mcp_core.storage.config_file import _DEFAULT_CONFIG_PATH, _get_config_path
+
+            assert _get_config_path() == _DEFAULT_CONFIG_PATH
+
+    def test_load_store_decryption_failure(self, _temp_config):
+        config_path = _temp_config / "config.enc"
+        # Write some garbage that looks like it might be the new format but fails decryption
+        config_path.write_bytes(b"a" * 32)
+
+        # Also need to make sure legacy attempts fail
+        with patch("mcp_core.storage.config_file.decrypt_data", side_effect=Exception("Decryption failed")):
+            with pytest.raises(Exception, match="Decryption failed"):
+                read_config("any")
+
+    def test_mark_setup_complete(self):
+        from mcp_core.storage.config_file import SETUP_COMPLETE_KEY, mark_setup_complete
+
+        mark_setup_complete("server1")
+        config = read_config("server1")
+        assert config[SETUP_COMPLETE_KEY] == "true"
+
+    def test_schedule_reload_exit_skips_in_pytest(self):
+        # It should skip because PYTEST_CURRENT_TEST is in os.environ
+        with patch.dict(os.environ, {"PYTEST_CURRENT_TEST": "true"}, clear=True):
+            with patch("threading.Thread") as mock_thread:
+                from mcp_core.storage.config_file import schedule_reload_exit
+
+                schedule_reload_exit()
+                mock_thread.assert_not_called()
+
+    def test_schedule_reload_exit_skips_with_env_var(self):
+        with patch.dict(os.environ, {"MCP_NO_RELOAD": "true"}, clear=True):
+            with patch("threading.Thread") as mock_thread:
+                from mcp_core.storage.config_file import schedule_reload_exit
+
+                schedule_reload_exit()
+                mock_thread.assert_not_called()
+
+    def test_schedule_reload_exit_starts_thread(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("threading.Thread") as mock_thread:
+                from mcp_core.storage.config_file import schedule_reload_exit
+
+                schedule_reload_exit()
+                mock_thread.assert_called_once()
+
+    def test_schedule_reload_exit_execution(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("threading.Thread") as mock_thread:
+                with patch("os._exit") as mock_os_exit:
+                    with patch("time.sleep") as mock_sleep:
+                        from mcp_core.storage.config_file import schedule_reload_exit
+
+                        schedule_reload_exit()
+
+                        # Get the target function (_exit)
+                        target = mock_thread.call_args[1]["target"]
+                        target()
+
+                        mock_sleep.assert_called_once_with(1.0)
+                        mock_os_exit.assert_called_once_with(0)
