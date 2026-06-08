@@ -522,45 +522,28 @@ function renderCapability(cap: CapabilityInfo): string {
             </li>`
 }
 
-/**
- * Render a dark-themed HTML credential form from a RelayConfigSchema.
- *
- * @param schema RelayConfigSchema with server metadata and field definitions.
- * @param options.submitUrl URL the form POSTs to as JSON via fetch().
- * @param options.pageTitle Optional browser tab title. Defaults to displayName.
- * @param options.prefill Optional ``{KEY: VALUE}`` map for input ``value=`` attrs.
- * @returns Complete HTML document string, XSS-safe with all dynamic content escaped.
- */
-export function renderCredentialForm(schema: RelayConfigSchema, options: RenderOptions): string {
-  const displayName = escapeHtml(schema.displayName ?? schema.server ?? 'Configuration')
-  const server = escapeHtml(schema.server ?? '')
-  const description = escapeHtml(schema.description ?? '')
-  const title = options.pageTitle !== undefined ? escapeHtml(options.pageTitle) : displayName
-  const submitUrlEscaped = escapeHtml(options.submitUrl)
+function renderCapabilities(capabilityInfo: CapabilityInfo[]): string {
+  if (capabilityInfo.length === 0) {
+    return ''
+  }
 
-  const fields = schema.fields ?? []
-  const capabilityInfo = schema.capabilityInfo ?? []
-  const prefill = options.prefill ?? {}
-
-  const fieldsHtml = fields.map((f) => renderField(f, prefill[f.key] ?? '')).join('')
-
-  let capabilitiesHtml = ''
-  if (capabilityInfo.length > 0) {
-    const itemsHtml = capabilityInfo.map(renderCapability).join('')
-    capabilitiesHtml = `
+  const itemsHtml = capabilityInfo.map(renderCapability).join('')
+  return `
         <section class="capabilities-section">
             <h2 class="capabilities-title">Capabilities Requested</h2>
             <ul class="capabilities-list">${itemsHtml}
             </ul>
         </section>`
-  }
+}
 
-  const descriptionHtml = description ? `<p class="server-description">${description}</p>` : ''
-
-  // The body is wrapped in `renderFormShell` below. The shell injects the
-  // `<head>` (with the shared `FORM_SHELL_CSS`) and the `<body>` opening +
-  // closing tags, so this template starts at the first child of `<body>`.
-  const bodyHtml = `    <div class="container">
+function renderCredentialFormBody(
+  displayName: string,
+  server: string,
+  descriptionHtml: string,
+  fieldsHtml: string,
+  capabilitiesHtml: string
+): string {
+  return `    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">${displayName}</h1>
@@ -581,9 +564,11 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
             </form>
         </div>
         ${capabilitiesHtml}
-    </div>
+    </div>`
+}
 
-    <script>
+function renderCredentialFormScript(submitUrlEscaped: string): string {
+  return `    <script>
         (function () {
             var form = document.getElementById("credential-form");
             var submitBtn = document.getElementById("submit-btn");
@@ -942,6 +927,36 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
             });
         })();
     </script>`
+}
+
+/**
+ * Render a dark-themed HTML credential form from a RelayConfigSchema.
+ *
+ * @param schema RelayConfigSchema with server metadata and field definitions.
+ * @param options.submitUrl URL the form POSTs to as JSON via fetch().
+ * @param options.pageTitle Optional browser tab title. Defaults to displayName.
+ * @param options.prefill Optional ``{KEY: VALUE}`` map for input ``value=`` attrs.
+ * @returns Complete HTML document string, XSS-safe with all dynamic content escaped.
+ */
+export function renderCredentialForm(schema: RelayConfigSchema, options: RenderOptions): string {
+  const displayName = escapeHtml(schema.displayName ?? schema.server ?? 'Configuration')
+  const server = escapeHtml(schema.server ?? '')
+  const description = escapeHtml(schema.description ?? '')
+  const title = options.pageTitle !== undefined ? escapeHtml(options.pageTitle) : displayName
+  const submitUrlEscaped = escapeHtml(options.submitUrl)
+
+  const fields = schema.fields ?? []
+  const capabilityInfo = schema.capabilityInfo ?? []
+  const prefill = options.prefill ?? {}
+
+  const fieldsHtml = fields.map((f) => renderField(f, prefill[f.key] ?? '')).join('')
+  const capabilitiesHtml = renderCapabilities(capabilityInfo)
+  const descriptionHtml = description ? `<p class="server-description">${description}</p>` : ''
+
+  const bodyHtml =
+    renderCredentialFormBody(displayName, server, descriptionHtml, fieldsHtml, capabilitiesHtml) +
+    '\n\n' +
+    renderCredentialFormScript(submitUrlEscaped)
 
   return renderFormShell(title, bodyHtml)
 }
