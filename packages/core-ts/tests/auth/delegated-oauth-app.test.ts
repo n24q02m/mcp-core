@@ -744,3 +744,51 @@ describe('sub propagation + DCR', () => {
     }
   })
 })
+
+describe('regression: better-email-mcp', () => {
+  it('resets setupStatus to idle on each /authorize call', async () => {
+    const upstream = await startUpstream((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({ device_code: 'dc', user_code: 'uc', verification_url: 'v', interval: 1, expires_in: 60 })
+      )
+    })
+    try {
+      const srv = await startApp({
+        flow: 'device_code',
+        upstream: {
+          tokenUrl: `${upstream.url}/token`,
+          clientId: 'up',
+          deviceAuthUrl: `${upstream.url}/device`
+        },
+        onTokenReceived: () => {},
+        keysDir: tempKeysDir
+      })
+      try {
+        // 1. Mark setup as complete.
+        srv.app.markSetupComplete()
+        const r1 = await fetch(`${srv.url}/setup-status`)
+        expect(await r1.json()).toEqual({ 'test-delegated': 'complete' })
+
+        // 2. Start a new authorization.
+        const { challenge } = pkce()
+        const params = new URLSearchParams({
+          client_id: 'mcp-client',
+          redirect_uri: 'http://localhost/cb',
+          state: 'st',
+          code_challenge: challenge,
+          code_challenge_method: 'S256'
+        })
+        await fetch(`${srv.url}/authorize?${params.toString()}`)
+
+        // 3. Verify setupStatus is reset to idle.
+        const r2 = await fetch(`${srv.url}/setup-status`)
+        expect(await r2.json()).toEqual({ 'test-delegated': 'pending' })
+      } finally {
+        await srv.close()
+      }
+    } finally {
+      await upstream.close()
+    }
+  })
+})

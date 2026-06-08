@@ -635,6 +635,15 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
   // ------------------------------------------------------------------
 
   async function authorize(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // Reset stale completion markers from previous authorize attempts.
+    // setupStatus is app-instance-scoped, so a key flipped to "complete" by a
+    // prior background poll (e.g. Outlook device code finished on the
+    // first attempt) would otherwise persist into the next authorization.
+    // Each fresh /authorize call must start from a clean state.
+    for (const key of Object.keys(setupStatus)) {
+      setupStatus[key] = 'idle'
+    }
+
     if (options.flow === 'redirect') {
       await authorizeRedirect(req, res)
       return

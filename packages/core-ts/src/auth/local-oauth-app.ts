@@ -404,7 +404,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     }
 
     // Reset stale completion markers from previous authorize submits.
-    // setupStatus is module-scoped, so a key flipped to "complete" by a
+    // setupStatus is app-instance-scoped, so a key flipped to "complete" by a
     // prior background poll (e.g. Outlook device code finished on the
     // first attempt) would otherwise persist into the next form submit.
     // The frontend renders a fresh oauth_device_code UI and starts
