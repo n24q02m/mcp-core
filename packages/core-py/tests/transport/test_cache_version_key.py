@@ -63,3 +63,55 @@ def test_persist_silent_on_oserror(tmp_path, monkeypatch, caplog):
     assert "Failed to persist capabilities cache for wet-mcp: Windows access denied" in caplog.text
     # And cache stays absent (load returns None)
     assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
+
+
+def test_persist_then_load_empty_tools(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+
+    persist_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0", tools=[])
+    loaded = load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    assert loaded == []
+
+
+def test_load_returns_none_on_invalid_json(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+
+    name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    (tmp_path / name).write_text("invalid json", encoding="utf-8")
+
+    assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
+
+
+def test_load_returns_none_on_non_list_tools(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+
+    import json
+
+    name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    payload = {"tools": "not a list", "srv_version": "2.28.4", "core_version": "1.11.0"}
+    (tmp_path / name).write_text(json.dumps(payload), encoding="utf-8")
+
+    assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
+
+
+def test_cache_dir_path():
+    import os
+    from pathlib import Path
+    from mcp_core.transport.cache import _cache_dir
+
+    path = _cache_dir()
+    assert isinstance(path, Path)
+    assert str(path).endswith(os.path.join(".config", "mcp", "cache"))
+
+
+def test_load_returns_none_on_internal_version_mismatch(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+
+    import json
+
+    # Use same filename as expected by load_tools_cache, but with different internal versions
+    name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    payload = {"tools": [], "srv_version": "WRONG", "core_version": "1.11.0"}
+    (tmp_path / name).write_text(json.dumps(payload), encoding="utf-8")
+
+    assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
