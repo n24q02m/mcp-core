@@ -7,7 +7,7 @@
  * failure crashed the bridge).
  */
 
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -15,6 +15,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as cacheModule from '../../src/transport/cache.js'
 import { atomicWrite, cacheDir, cacheFilename, loadToolsCache, persistToolsCache } from '../../src/transport/cache.js'
+
+// Mock node:fs to allow spying on its exports
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  return {
+    ...actual,
+    chmodSync: vi.fn(actual.chmodSync),
+    readFileSync: vi.fn(actual.readFileSync)
+  }
+})
 
 let dir: string
 
@@ -26,6 +36,7 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('tools cache', () => {
@@ -45,20 +56,47 @@ describe('tools cache', () => {
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toEqual(tools)
   })
 
-  it('mismatched srv_version returns null', () => {
+  it('mismatched srv_version in filename returns null', () => {
     persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
     expect(loadToolsCache('wet-mcp', 55317, '2.29.0', '1.11.0')).toBeNull()
   })
 
-  it('mismatched core_version returns null', () => {
+  it('mismatched core_version in filename returns null', () => {
     persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.12.0')).toBeNull()
+  })
+
+  it('load returns null on content version mismatch', () => {
+    const name = cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')
+    const path = join(dir, name)
+    // Case 1: srvVersion mismatch
+    writeFileSync(path, JSON.stringify({ tools: [], srvVersion: '2.29.0', coreVersion: '1.11.0' }))
+    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+
+    // Case 2: coreVersion mismatch
+    writeFileSync(path, JSON.stringify({ tools: [], srvVersion: '2.28.4', coreVersion: '1.12.0' }))
+    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
   })
 
   it('load returns null on invalid JSON', () => {
     const name = cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')
     const path = join(dir, name)
     writeFileSync(path, 'not-json')
+    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+  })
+
+  it('load returns null when readFileSync throws', () => {
+    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
+    vi.mocked(readFileSync).mockImplementationOnce(() => {
+      throw new Error('read failure')
+    })
+    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+  })
+
+  it('load returns null when payload is null', () => {
+    const name = cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')
+    const path = join(dir, name)
+    writeFileSync(path, 'null')
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
   })
 
@@ -76,6 +114,15 @@ describe('tools cache', () => {
     expect(existsSync(path)).toBe(true)
   })
 
+  it('atomicWrite skips chmod on win32', () => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    const path = join(dir, 'win32-test.json')
+    vi.mocked(chmodSync).mockClear()
+    atomicWrite(path, '{}')
+    expect(existsSync(path)).toBe(true)
+    expect(chmodSync).not.toHaveBeenCalled()
+  })
+
   it('atomic replace existing', () => {
     persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'a' }])
     persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'b' }])
@@ -88,5 +135,15 @@ describe('tools cache', () => {
     })
     expect(() => persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [])).not.toThrow()
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+  })
+
+  it('atomicWrite handles chmod error', () => {
+    vi.stubGlobal('process', { ...process, platform: 'linux' })
+    vi.mocked(chmodSync).mockImplementationOnce(() => {
+      throw new Error('chmod failed')
+    })
+    const path = join(dir, 'chmod-err.json')
+    expect(() => atomicWrite(path, '{}')).not.toThrow()
+    expect(existsSync(path)).toBe(true)
   })
 })
