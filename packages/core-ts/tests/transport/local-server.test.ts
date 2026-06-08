@@ -18,6 +18,7 @@ vi.mock('../../src/relay/browser.js', () => ({
 }))
 
 import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
+import { JWTIssuer } from '../../src/oauth/jwt-issuer.js'
 import { type HttpServerHandle, runHttpServer } from '../../src/transport/local-server.js'
 
 const SCHEMA: RelayConfigSchema = {
@@ -108,6 +109,64 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
       const wwwAuth = resp.headers.get('www-authenticate')
       expect(wwwAuth).toContain('error="invalid_token"')
       expect(wwwAuth).toContain('resource_metadata=')
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('returns 401 with invalid_token for expired Bearer token', async () => {
+    const serverName = `test-expired-token-${Date.now()}`
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      const issuer = new JWTIssuer(serverName, tempKeysDir)
+      await issuer.init()
+      // Issue a token that expired 10 seconds ago
+      const token = await issuer.issueAccessToken('test-user', -10)
+
+      const resp = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 })
+      })
+      expect(resp.status).toBe(401)
+      const wwwAuth = resp.headers.get('www-authenticate')
+      expect(wwwAuth).toContain('error="invalid_token"')
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('returns 401 with invalid_token for token with wrong issuer', async () => {
+    const serverName = `test-wrong-issuer-${Date.now()}`
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName,
+      relaySchema: SCHEMA,
+      port: 0
+    })
+    try {
+      // Use a DIFFERENT server name for the issuer than the one the server is running as
+      const wrongIssuer = new JWTIssuer('completely-different-server', tempKeysDir)
+      await wrongIssuer.init()
+      const token = await wrongIssuer.issueAccessToken('test-user')
+
+      const resp = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'initialize', id: 1 })
+      })
+      expect(resp.status).toBe(401)
+      const wwwAuth = resp.headers.get('www-authenticate')
+      expect(wwwAuth).toContain('error="invalid_token"')
     } finally {
       await handle.close()
     }
