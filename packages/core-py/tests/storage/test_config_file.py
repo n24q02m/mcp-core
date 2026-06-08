@@ -300,6 +300,7 @@ class TestExtraCoverage:
 
         mark_setup_complete("server1")
         config = read_config("server1")
+        assert config is not None
         assert config[SETUP_COMPLETE_KEY] == "true"
 
     def test_schedule_reload_exit_skips_in_pytest(self):
