@@ -39,7 +39,8 @@ import inspect
 import os
 import secrets
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, Literal, Union
 
@@ -198,6 +199,7 @@ def create_delegated_oauth_app(
     upstream: UpstreamOAuthConfig,
     on_token_received: TokenCallback,
     jwt_issuer: JWTIssuer | None = None,
+    client: httpx.AsyncClient | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create a delegated OAuth 2.1 Authorization Server Starlette app.
 
@@ -220,6 +222,14 @@ def create_delegated_oauth_app(
         raise ValueError("authorize_url is required for redirect flow")
     if flow == "device_code" and not upstream.device_auth_url:
         raise ValueError("device_auth_url is required for device_code flow")
+
+    @asynccontextmanager
+    async def _maybe_client() -> AsyncIterator[httpx.AsyncClient]:
+        if client is None:
+            async with httpx.AsyncClient() as c:
+                yield c
+        else:
+            yield client
 
     if jwt_issuer is None:
         jwt_issuer = JWTIssuer(server_name=server_name)
@@ -354,7 +364,7 @@ def create_delegated_oauth_app(
         auth_headers = _build_client_auth(form_data, upstream)
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with _maybe_client() as client:
                 resp = await client.post(
                     upstream.token_url,
                     data=form_data,
@@ -423,7 +433,7 @@ def create_delegated_oauth_app(
         auth_headers = _build_client_auth(form_data, upstream)
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with _maybe_client() as client:
                 while True:
                     await asyncio.sleep(interval)
                     try:
@@ -493,7 +503,7 @@ def create_delegated_oauth_app(
 
         try:
             assert upstream.device_auth_url is not None
-            async with httpx.AsyncClient() as client:
+            async with _maybe_client() as client:
                 resp = await client.post(upstream.device_auth_url, data=device_form)
         except Exception:  # noqa: BLE001
             logger.exception("Upstream device_auth request failed")
@@ -779,8 +789,6 @@ def create_delegated_oauth_app(
     ]
     if flow == "redirect":
         routes.append(Route(upstream.callback_path, _callback, methods=["GET"]))
-
-    from contextlib import asynccontextmanager
 
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
