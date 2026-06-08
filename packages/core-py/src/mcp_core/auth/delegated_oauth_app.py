@@ -144,6 +144,7 @@ def _render_device_code_page(*, server_name: str, user_code: str, verification_u
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Authorize {safe_name}</title>
 <style>
 body {{ font-family: system-ui, sans-serif; background: #0d0d0d; color: #eee;
@@ -739,7 +740,7 @@ def create_delegated_oauth_app(
     async def callback_done(_request: Request) -> HTMLResponse:
         """GET /callback-done -- terminal "tab can be closed" landing page."""
         html_content = (
-            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>"
             "<title>Setup complete</title>"
             "<style>body{font-family:-apple-system,Segoe UI,sans-serif;"
             "background:#111;color:#eee;display:flex;align-items:center;"

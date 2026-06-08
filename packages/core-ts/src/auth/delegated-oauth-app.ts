@@ -191,6 +191,7 @@ function renderDeviceCodePage(opts: { serverName: string; userCode: string; veri
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Authorize ${safeName}</title>
 <style>
 body { font-family: system-ui, sans-serif; background: #0d0d0d; color: #eee;
@@ -827,7 +828,7 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
    */
   async function callbackDoneHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
     const html =
-      "<!DOCTYPE html><html><head><meta charset='utf-8'>" +
+      "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
       '<title>Setup complete</title>' +
       '<style>body{font-family:-apple-system,Segoe UI,sans-serif;' +
       'background:#111;color:#eee;display:flex;align-items:center;' +

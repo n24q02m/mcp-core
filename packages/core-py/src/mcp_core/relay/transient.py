@@ -59,7 +59,7 @@ def _generate_token() -> str:
 # A plugin author who picks a malicious server name (e.g.
 # ``"</script><script>alert(1)</script>"``) cannot escape either context.
 _HTML_FORM_TEMPLATE = (
-    "<!DOCTYPE html><html><head><title>__SERVER_NAME_HTML__ setup</title></head>"
+    "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>__SERVER_NAME_HTML__ setup</title></head>"
     "<body><h1 id='title'></h1>"
     "<p>Paste a JSON object containing your credentials below, then click "
     "Submit. The form auto-closes after a successful save.</p>"
