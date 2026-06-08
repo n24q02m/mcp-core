@@ -2,7 +2,21 @@ import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    readFile: vi.fn(actual.readFile),
+    unlink: vi.fn(actual.unlink),
+    mkdir: vi.fn(actual.mkdir),
+    writeFile: vi.fn(actual.writeFile),
+    rename: vi.fn(actual.rename)
+  }
+})
+
+import * as fsPromises from 'node:fs/promises'
 import {
   acquireSessionLock,
   releaseSessionLock,
@@ -21,6 +35,7 @@ beforeEach(async () => {
 afterEach(async () => {
   setLockDir(null)
   await rm(tempDir, { recursive: true, force: true })
+  vi.clearAllMocks()
 })
 
 describe('acquireSessionLock', () => {
@@ -102,9 +117,56 @@ describe('acquireSessionLock', () => {
     const result = await acquireSessionLock('test-server')
     expect(result).toBeNull()
   })
+
+  it('returns null and cleans up on readFile error', async () => {
+    const info: SessionInfo = {
+      sessionId: 'read-error',
+      relayUrl: 'https://relay.example.com/error',
+      createdAt: Date.now()
+    }
+    await writeSessionLock('test-server', info)
+    const lockFile = join(tempDir, 'relay-session-test-server.lock')
+    expect(existsSync(lockFile)).toBe(true)
+
+    vi.mocked(fsPromises.readFile).mockRejectedValueOnce(new Error('Read failed'))
+
+    const result = await acquireSessionLock('test-server')
+    expect(result).toBeNull()
+    // Should have called releaseSessionLock which unlinks the file
+    expect(existsSync(lockFile)).toBe(false)
+  })
+
+  it('handles errors during releaseSessionLock within acquireSessionLock', async () => {
+    const lockFile = join(tempDir, 'relay-session-test-server.lock')
+    await writeFile(lockFile, 'not valid json', 'utf-8')
+
+    // Force readFile to fail to trigger the catch block in acquireSessionLock
+    vi.mocked(fsPromises.readFile).mockRejectedValueOnce(new Error('Read failed'))
+
+    // Force unlink to fail to trigger the inner catch block
+    const unlinkSpy = vi.mocked(fsPromises.unlink).mockRejectedValueOnce(new Error('Unlink failed'))
+
+    const result = await acquireSessionLock('test-server')
+    expect(result).toBeNull()
+    expect(unlinkSpy).toHaveBeenCalled()
+  })
 })
 
 describe('writeSessionLock', () => {
+  it('creates directory if it does not exist', async () => {
+    const subDir = join(tempDir, 'nested/dir')
+    setLockDir(subDir)
+    const info: SessionInfo = {
+      sessionId: 'nested-session',
+      relayUrl: 'https://relay.example.com/nested',
+      createdAt: Date.now()
+    }
+    await writeSessionLock('test-server', info)
+
+    const lockFile = join(subDir, 'relay-session-test-server.lock')
+    expect(existsSync(lockFile)).toBe(true)
+  })
+
   it('creates lock file with correct format', async () => {
     const info: SessionInfo = {
       sessionId: 'new-session',
@@ -171,5 +233,15 @@ describe('releaseSessionLock', () => {
     const resultB = await acquireSessionLock('server-b')
     expect(resultB).not.toBeNull()
     expect(resultB?.sessionId).toBe('server-b')
+  })
+})
+
+describe('getLockDir', () => {
+  it('uses default lock dir when override is null', async () => {
+    setLockDir(null)
+    // We can't easily check the path without duplicating logic,
+    // but we can verify it doesn't throw and uses some path.
+    const result = await acquireSessionLock('test-server')
+    expect(result).toBeNull()
   })
 })
