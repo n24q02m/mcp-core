@@ -1,6 +1,5 @@
 import pytest
-from mcp_core.storage.per_plugin_store import PerPluginStore, _cred_path
-from pathlib import Path
+from mcp_core.storage.per_plugin_store import _cred_path
 
 def test_path_traversal_plugin_name(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
