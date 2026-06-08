@@ -199,6 +199,91 @@ class TestAuthorizeEndpoint:
         assert saved["API_KEY"] == "sk-test-123"
         assert saved["WORKSPACE"] == "my-workspace"
 
+    def test_authorize_on_credentials_saved_exception(self):
+        """POST /authorize handles exceptions in on_credentials_saved callback."""
+
+        def on_saved(_creds, _context):
+            raise ValueError("Simulated failure")
+
+        app, _ = create_local_oauth_app(
+            server_name="test-server",
+            relay_schema=RELAY_SCHEMA,
+            on_credentials_saved=on_saved,
+        )
+        client = TestClient(app, base_url="http://localhost")
+
+        _, challenge = _pkce_pair()
+        resp = client.get(
+            "/authorize",
+            params={
+                "client_id": "test-client",
+                "redirect_uri": "http://localhost/callback",
+                "state": "test-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        )
+        nonce = _extract_nonce(client)
+
+        resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+        assert resp.status_code == 500
+        assert resp.json()["error"] == "server_error"
+
+    def test_authorize_on_credentials_saved_returns_error(self):
+        """POST /authorize handles error returns from on_credentials_saved callback."""
+
+        def on_saved(_creds, _context):
+            return {"type": "error", "text": "Callback-level error"}
+
+        app, _ = create_local_oauth_app(
+            server_name="test-server",
+            relay_schema=RELAY_SCHEMA,
+            on_credentials_saved=on_saved,
+        )
+        client = TestClient(app, base_url="http://localhost")
+
+        _, challenge = _pkce_pair()
+        client.get(
+            "/authorize",
+            params={
+                "client_id": "test-client",
+                "redirect_uri": "http://localhost/callback",
+                "state": "test-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        )
+        nonce = _extract_nonce(client)
+
+        resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is False
+        assert resp.json()["error"] == "Callback-level error"
+
+    def test_authorize_post_invalid_json(self, client):
+        """POST /authorize returns 400 for invalid JSON body."""
+        _, challenge = _pkce_pair()
+        client.get(
+            "/authorize",
+            params={
+                "client_id": "test-client",
+                "redirect_uri": "http://localhost/callback",
+                "state": "test-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        )
+        nonce = _extract_nonce(client)
+
+        resp = client.post(
+            f"/authorize?nonce={nonce}",
+            content="not json",
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "invalid_request"
+        assert "Invalid JSON" in resp.json()["error_description"]
+
     def test_authorize_isolates_subjects_across_sessions(self):
         """Two authorize flows receive distinct subjects in on_credentials_saved.
 
