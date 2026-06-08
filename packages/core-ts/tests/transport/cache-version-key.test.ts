@@ -39,54 +39,52 @@ describe('tools cache', () => {
     expect(cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')).toBe('wet-mcp-55317-2.28.4-1.11.0.tools.json')
   })
 
-  it('persist + load match', () => {
+  it('persist + load match', async () => {
     const tools = [{ name: 'search' }]
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', tools)
-    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toEqual(tools)
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', tools)
+    expect(await loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toEqual(tools)
   })
 
-  it('mismatched srv_version returns null', () => {
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
-    expect(loadToolsCache('wet-mcp', 55317, '2.29.0', '1.11.0')).toBeNull()
+  it('mismatched srv_version returns null', async () => {
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
+    expect(await loadToolsCache('wet-mcp', 55317, '2.29.0', '1.11.0')).toBeNull()
   })
 
-  it('mismatched core_version returns null', () => {
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
-    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.12.0')).toBeNull()
+  it('mismatched core_version returns null', async () => {
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'search' }])
+    expect(await loadToolsCache('wet-mcp', 55317, '2.28.4', '1.12.0')).toBeNull()
   })
 
-  it('load returns null on invalid JSON', () => {
+  it('load returns null on invalid JSON', async () => {
     const name = cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')
     const path = join(dir, name)
     writeFileSync(path, 'not-json')
-    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+    expect(await loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
   })
 
-  it('load returns null when tools is not an array', () => {
+  it('load returns null when tools is not an array', async () => {
     const name = cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')
     const path = join(dir, name)
     writeFileSync(path, JSON.stringify({ tools: 'not-array', srvVersion: '2.28.4', coreVersion: '1.11.0' }))
-    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+    expect(await loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
   })
 
-  it('atomicWrite creates directory if missing', () => {
+  it('atomicWrite creates directory if missing', async () => {
     const nestedDir = join(dir, 'nested', 'dir')
     const path = join(nestedDir, 'test.json')
-    atomicWrite(path, '{}')
+    await atomicWrite(path, '{}')
     expect(existsSync(path)).toBe(true)
   })
 
-  it('atomic replace existing', () => {
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'a' }])
-    persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'b' }])
-    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toEqual([{ name: 'b' }])
+  it('atomic replace existing', async () => {
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'a' }])
+    await persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [{ name: 'b' }])
+    expect(await loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toEqual([{ name: 'b' }])
   })
 
-  it('persist suppresses error', () => {
-    vi.spyOn(cacheModule, 'atomicWrite').mockImplementation(() => {
-      throw new Error('access denied')
-    })
-    expect(() => persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [])).not.toThrow()
-    expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
+  it('persist suppresses error', async () => {
+    vi.spyOn(cacheModule, 'atomicWrite').mockRejectedValue(new Error('access denied'))
+    await expect(persistToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0', [])).resolves.not.toThrow()
+    expect(await loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
   })
 })
