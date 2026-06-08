@@ -1,6 +1,7 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createRouter, htmlResponse, jsonResponse, parseFormBody, parseJsonBody } from '../../src/auth/router.js'
 
 function startTestServer(handler: ReturnType<typeof createRouter>): Promise<{ url: string; close: () => void }> {
@@ -65,6 +66,52 @@ describe('createRouter', () => {
     } finally {
       close()
     }
+  })
+
+  it('does not write 500 if headers already sent', async () => {
+    const handler = createRouter([
+      {
+        method: 'GET',
+        path: '/fail-after-headers',
+        handler: (_req, res) => {
+          res.writeHead(200)
+          res.write('partial')
+          throw new Error('boom')
+        }
+      }
+    ])
+    const { url, close } = await startTestServer(handler)
+    try {
+      const resp = await fetch(`${url}/fail-after-headers`)
+      expect(resp.status).toBe(200)
+    } finally {
+      close()
+    }
+  })
+
+  it('uses default values for missing request properties', async () => {
+    const handler = createRouter([
+      {
+        method: 'GET',
+        path: '/',
+        handler: (_req, res) => jsonResponse(res, 200, { ok: true })
+      }
+    ])
+
+    const mockReq = {
+      method: undefined,
+      url: undefined,
+      headers: {}
+    } as unknown as IncomingMessage
+    const mockRes = {
+      writeHead: vi.fn(),
+      end: vi.fn(),
+      headersSent: false
+    } as unknown as ServerResponse
+
+    await handler(mockReq, mockRes)
+
+    expect(mockRes.writeHead).toHaveBeenCalledWith(200, expect.any(Object))
   })
 
   it('routes different methods independently', async () => {
