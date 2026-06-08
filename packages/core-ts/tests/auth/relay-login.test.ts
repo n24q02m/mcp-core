@@ -197,4 +197,50 @@ describe('relay-login', () => {
     expect(stub6.status()).toBe(429)
     expect(stub6.retryAfter()).not.toBeNull()
   })
+
+  it('rejects password longer than 1024 chars', async () => {
+    configureRelayLogin('secret123')
+    const req: RelayLoginRequest = {
+      body: { password: 'a'.repeat(1025), next: '/authorize' },
+      ip: '1.2.3.6'
+    }
+    const stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.status()).toBe(401)
+  })
+
+  it('rejects non-string password', async () => {
+    configureRelayLogin('secret123')
+    const req: RelayLoginRequest = {
+      // biome-ignore lint/suspicious/noExplicitAny: test requires passing invalid type
+      body: { password: 123 as any, next: '/authorize' },
+      ip: '1.2.3.7'
+    }
+    const stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.status()).toBe(401)
+  })
+
+  it('rejects next param longer than 2048 chars (defaults to /authorize)', async () => {
+    configureRelayLogin('secret123')
+    const req: RelayLoginRequest = {
+      body: { password: 'secret123', next: `/${'a'.repeat(2048)}` },
+      ip: '1.2.3.8'
+    }
+    const stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.redirect()).toBe('/authorize')
+  })
+
+  it('rejects non-string next param (defaults to /authorize)', async () => {
+    configureRelayLogin('secret123')
+    const req: RelayLoginRequest = {
+      // biome-ignore lint/suspicious/noExplicitAny: test requires passing invalid type
+      body: { password: 'secret123', next: ['/abc'] as any },
+      ip: '1.2.3.9'
+    }
+    const stub = makeResponseStub()
+    await loginPostHandler(req, stub.res)
+    expect(stub.redirect()).toBe('/authorize')
+  })
 })

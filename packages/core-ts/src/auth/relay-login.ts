@@ -151,7 +151,13 @@ function escapeHtml(s: string): string {
  * normalize into a protocol-relative URL.
  */
 function getSafeNext(input: unknown): string {
+  if (typeof input !== 'string' && input !== undefined && input !== null) {
+    return '/authorize'
+  }
   const next = String(input ?? '/authorize')
+  if (next.length > 2048) {
+    return '/authorize'
+  }
   if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\') || next.startsWith('\\\\')) {
     return '/authorize'
   }
@@ -230,7 +236,14 @@ export async function loginPostHandler(
     res.status(429).send('Too many login attempts. Try again later.')
     return
   }
-  const password = String(req.body?.password ?? '')
+
+  const password = req.body?.password
+  if (typeof password !== 'string' || password.length > 1024) {
+    bumpFail(ip)
+    res.status(401).send('Invalid password.')
+    return
+  }
+
   const next = getSafeNext(req.body?.next)
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
     bumpFail(ip)
