@@ -472,3 +472,74 @@ async def test_browser_form_no_creds_no_prefill_qs(
 
     url = captured_url[0]
     assert "prefill_" not in url
+
+# ---------------------------------------------------------------------------
+# Silent failure mode driver bug: flows must probe health BEFORE registration.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_acquire_jwt_probes_health_before_registration(monkeypatch):
+    """Headless flow must proactively check health so it doesn't 30s hang."""
+    probed = []
+
+    async def fake_health(client, base_url):
+        probed.append(base_url)
+        raise RuntimeError("Health probe FAIL")
+
+    async def fake_register(client, base_url):
+        pytest.fail("Should not reach registration if health probe fails")
+
+    monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+    monkeypatch.setattr(oauth_client, "_register_client", fake_register)
+
+    with pytest.raises(RuntimeError, match="Health probe FAIL"):
+        await oauth_client.acquire_jwt("http://dead-server", creds={})
+
+    assert probed == ["http://dead-server"]
+
+
+@pytest.mark.asyncio
+async def test_browser_form_probes_health_before_registration(monkeypatch):
+    """Browser form flow must proactively check health so it doesn't 30s hang."""
+    probed = []
+
+    async def fake_health(client, base_url):
+        probed.append(base_url)
+        raise RuntimeError("Health probe FAIL")
+
+    async def fake_register(client, base_url):
+        pytest.fail("Should not reach registration if health probe fails")
+
+    monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+    monkeypatch.setattr(oauth_client, "_register_client", fake_register)
+
+    with pytest.raises(RuntimeError, match="Health probe FAIL"):
+        await oauth_client.acquire_jwt_via_browser_form(
+            "http://dead-server", lambda url: None
+        )
+
+    assert probed == ["http://dead-server"]
+
+
+@pytest.mark.asyncio
+async def test_upstream_consent_probes_health_before_registration(monkeypatch):
+    """Upstream consent flow must proactively check health so it doesn't 30s hang."""
+    probed = []
+
+    async def fake_health(client, base_url):
+        probed.append(base_url)
+        raise RuntimeError("Health probe FAIL")
+
+    async def fake_register(client, base_url):
+        pytest.fail("Should not reach registration if health probe fails")
+
+    monkeypatch.setattr(oauth_client, "_health_probe", fake_health)
+    monkeypatch.setattr(oauth_client, "_register_client", fake_register)
+
+    with pytest.raises(RuntimeError, match="Health probe FAIL"):
+        await oauth_client.acquire_jwt_via_upstream_consent(
+            "http://dead-server", lambda url: None
+        )
+
+    assert probed == ["http://dead-server"]
