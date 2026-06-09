@@ -152,6 +152,9 @@ function escapeHtml(s: string): string {
  */
 function getSafeNext(input: unknown): string {
   const next = String(input ?? '/authorize')
+  if (next.length > 2048) {
+    return '/authorize'
+  }
   if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\') || next.startsWith('\\\\')) {
     return '/authorize'
   }
@@ -231,6 +234,11 @@ export async function loginPostHandler(
     return
   }
   const password = String(req.body?.password ?? '')
+  if (password.length > 1024) {
+    bumpFail(ip)
+    res.status(401).send('Invalid password.')
+    return
+  }
   const next = getSafeNext(req.body?.next)
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
     bumpFail(ip)

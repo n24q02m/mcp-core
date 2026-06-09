@@ -73,6 +73,8 @@ def _get_safe_next(input_val: Any) -> str:
     normalize into a protocol-relative URL.
     """
     next_ = str(input_val or "/authorize")
+    if len(next_) > 2048:
+        return "/authorize"
     if not next_.startswith("/") or next_.startswith("//") or next_.startswith("/\\") or next_.startswith("\\\\"):
         return "/authorize"
     # Block cases like "/ google.com" or "/\tgoogle.com" (ASCII <= 32).
@@ -163,6 +165,9 @@ async def login_post_handler(form: dict, ip: str) -> Response:
             headers={"Retry-After": str(retry_after)},
         )
     password = str(form.get("password", ""))
+    if len(password) > 1024:
+        _bump_fail(ip)
+        return Response("Invalid password.", status_code=401)
     next_ = _get_safe_next(form.get("next"))
     if not _configured_password or not hmac.compare_digest(password.encode(), _configured_password.encode()):
         _bump_fail(ip)
