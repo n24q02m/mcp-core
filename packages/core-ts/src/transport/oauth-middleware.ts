@@ -46,13 +46,17 @@ function writeChallenge(res: ServerResponse, resourceMetadataUrl: string, error?
   )
 }
 
-function extractBearerToken(authHeader: string | undefined): string | null {
+export function extractBearerToken(authHeader: string | undefined): string | null {
   if (!authHeader) return null
   const trimmed = authHeader.trim()
-  const match = trimmed.match(/^Bearer\s+(.+)$/i)
-  if (!match) return null
-  const token = match[1]?.trim() ?? ''
-  return token.length > 0 ? token : null
+  if (trimmed.length <= 7) return null
+
+  const prefix = trimmed.substring(0, 7)
+  if (prefix === 'Bearer ' || prefix === 'bearer ' || prefix.toLowerCase() === 'bearer ') {
+    const token = trimmed.substring(7).trim()
+    return token.length > 0 ? token : null
+  }
+  return null
 }
 
 export class OAuthMiddleware {

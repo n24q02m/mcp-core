@@ -10,3 +10,7 @@
 ## 2025-05-04 - [Avoid fragile optimizations and micro-optimizing small loop iterations]
 **Learning:** In Python, attempting to optimize a short loop (like scanning a small JSON list `responses` in `poll_for_responses`) by keeping a `last_seen_count` state to skip previously scanned elements provides zero measurable performance gain, because the time saved (fractions of a millisecond) is dwarfed by the massive HTTP request latency and `asyncio.sleep()` in the same loop. Furthermore, assuming the server array is append-only is dangerous and could break if the server starts paginating or clearing old items.
 **Action:** Do not micro-optimize small iterations in Python when the loop contains expensive operations (like I/O or network requests), and never assume an external API's response array is strictly append-only without verification.
+
+## 2024-06-09 - Optimize string regex extractions
+**Learning:** Using regular expressions on the hot path for short string extraction (like parsing `Authorization: Bearer <token>`) incurs significant overhead (~3x to 5x slower) compared to using built-in string functions (`substring()`, `trim()`, `.toLowerCase()`) in both V8 (Node) and JavaScriptCore (Bun).
+**Action:** When extracting components from common HTTP headers or short strings on performance-critical paths (e.g. middleware running on every request), replace regular expressions with manual string slicing and indexing.

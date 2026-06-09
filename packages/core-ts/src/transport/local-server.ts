@@ -42,6 +42,7 @@ import { refreshLockTimestamp, sweepStaleLocks, writeLockFile } from '../lifecyc
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 import { tryOpenBrowser } from '../relay/browser.js'
 import { readConfig } from '../storage/config-file.js'
+import { extractBearerToken } from './oauth-middleware.js'
 
 /** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
 export type JWTClaims = JWTPayload
@@ -272,9 +273,7 @@ export async function runHttpServer(
     }
     // Bearer auth if configured.
     if (jwtIssuer) {
-      const authHeader = req.headers.authorization
-      const match = authHeader?.match(/^Bearer\s+(\S.*)$/i)
-      const token = match?.[1]?.trim()
+      const token = extractBearerToken(req.headers.authorization)
       if (!token) {
         res.writeHead(401, {
           'WWW-Authenticate': `Bearer resource_metadata="${resourceMetadataUrl(req)}"`
