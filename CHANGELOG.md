@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v1.17.4-beta.1 (2026-06-09)
+
+### Bug Fixes
+
+- Fix silent failure mode driver bug in OAuth flows
+  ([#372](https://github.com/n24q02m/mcp-core/pull/372),
+  [`62a4950`](https://github.com/n24q02m/mcp-core/commit/62a4950a5b69922c0762dd2b9261c9b94b9441b3))
+
+- Gitignore bot/merge junk artifacts (*.orig/*.rej/*.patch/*.diff/*.cover/*.bak)
+  ([#353](https://github.com/n24q02m/mcp-core/pull/353),
+  [`f69f556`](https://github.com/n24q02m/mcp-core/commit/f69f556c5cd85ac458378654962c253732829f96))
+
+- **deps**: Lock file maintenance ([#356](https://github.com/n24q02m/mcp-core/pull/356),
+  [`b121d1d`](https://github.com/n24q02m/mcp-core/commit/b121d1d770c3582a1897bc0c857030e642c753e3))
+
+- **deps**: Update codecov/codecov-action action to v7
+  ([#355](https://github.com/n24q02m/mcp-core/pull/355),
+  [`4c4b0fc`](https://github.com/n24q02m/mcp-core/commit/4c4b0fc440fe53f65ceb56802bc59db621e61fec))
+
+- **deps**: Update non-major dependencies ([#397](https://github.com/n24q02m/mcp-core/pull/397),
+  [`b17ccb1`](https://github.com/n24q02m/mcp-core/commit/b17ccb1a69dae8a09e33148f646dc5506b569c1f))
+
+
 ## v1.17.3 (2026-06-07)
 
 
