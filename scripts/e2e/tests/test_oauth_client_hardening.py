@@ -473,6 +473,7 @@ async def test_browser_form_no_creds_no_prefill_qs(
     url = captured_url[0]
     assert "prefill_" not in url
 
+
 # ---------------------------------------------------------------------------
 # Silent failure mode driver bug: flows must probe health BEFORE registration.
 # ---------------------------------------------------------------------------
