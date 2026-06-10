@@ -1245,3 +1245,75 @@ def test_otp_endpoint_with_future_callbacks():
     data = resp.json()
     assert data["ok"] is True
     assert "next_step" not in data
+
+# ---------------------------------------------------------------------------
+# Authorize POST error paths (Coverage)
+# ---------------------------------------------------------------------------
+
+
+class TestAuthorizePostErrorPaths:
+    def test_on_credentials_saved_sync_exception(self):
+        def on_saved(creds, context):
+            raise ValueError("Sync failure")
+
+        app, _ = create_local_oauth_app(
+            server_name="test-server",
+            relay_schema=RELAY_SCHEMA,
+            on_credentials_saved=on_saved,
+        )
+        client = TestClient(app, base_url="http://localhost")
+        nonce = _extract_nonce(client)
+
+        resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+        assert resp.status_code == 500
+        assert resp.json()["error"] == "server_error"
+        assert resp.json()["error_description"] == "Failed to save credentials"
+
+    def test_on_credentials_saved_async_exception(self):
+        async def on_saved(creds, context):
+            raise ValueError("Async failure")
+
+        app, _ = create_local_oauth_app(
+            server_name="test-server",
+            relay_schema=RELAY_SCHEMA,
+            on_credentials_saved=on_saved,
+        )
+        client = TestClient(app, base_url="http://localhost")
+        nonce = _extract_nonce(client)
+
+        resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+        assert resp.status_code == 500
+        assert resp.json()["error"] == "server_error"
+        assert resp.json()["error_description"] == "Failed to save credentials"
+
+    def test_on_credentials_saved_returns_error_step(self):
+        def on_saved(creds, context):
+            return {"type": "error", "text": "Callback-level error"}
+
+        app, _ = create_local_oauth_app(
+            server_name="test-server",
+            relay_schema=RELAY_SCHEMA,
+            on_credentials_saved=on_saved,
+        )
+        client = TestClient(app, base_url="http://localhost")
+        nonce = _extract_nonce(client)
+
+        resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is False
+        assert resp.json()["error"] == "Callback-level error"
+
+    def test_authorize_post_invalid_json(self):
+        app, _ = create_local_oauth_app(
+            server_name="test-server",
+            relay_schema=RELAY_SCHEMA,
+        )
+        client = TestClient(app, base_url="http://localhost")
+        nonce = _extract_nonce(client)
+
+        resp = client.post(
+            f"/authorize?nonce={nonce}", content="not json", headers={"Content-Type": "application/json"}
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "invalid_request"
+        assert "Invalid JSON" in resp.json()["error_description"]
