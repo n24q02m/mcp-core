@@ -9,6 +9,7 @@ from mcp_core.http import (
     validate_url_and_get_ip,
     vet_api_base,
 )
+from mcp_core.http.ssrf import AsyncSSRFSafeBackend
 
 
 def _fake_getaddrinfo(ip: str):
@@ -74,6 +75,22 @@ def test_allow_private_flag(monkeypatch):
 def test_allows_public_ip(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
     assert validate_url_and_get_ip("https://example.com/") == "93.184.216.34"
+
+
+@pytest.mark.parametrize("ip", ["0.0.0.0", "::", "::ffff:0.0.0.0"])
+def test_blocks_unspecified_even_with_allow_private(monkeypatch, ip):
+    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo(ip))
+    with pytest.raises(SSRFBlockedError, match="[Uu]nspecified"):
+        validate_url_and_get_ip("https://evil.example.com/", allow_private=True, allow_loopback=True)
+
+
+# --- AsyncSSRFSafeBackend ---
+
+
+async def test_connect_unix_socket_rejected():
+    backend = AsyncSSRFSafeBackend()
+    with pytest.raises(SSRFBlockedError):
+        await backend.connect_unix_socket("/tmp/x.sock")
 
 
 # --- vet_api_base policy theo mode (spec D4) ---

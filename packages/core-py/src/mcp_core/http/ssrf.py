@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 import httpcore
 import httpx
 
+# Module-lifetime pool, finalized at interpreter exit — deliberately no shutdown().
 _DNS_RESOLVER_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="mcp_core_dns")
 _SAFE_URL_SCHEMES = frozenset({"http", "https"})
 _RESOLVE_TIMEOUT_S = 2.0
@@ -32,6 +33,9 @@ def _vet_ip(ip_str: str, *, allow_private: bool, allow_loopback: bool) -> None:
     ip_obj = ipaddress.ip_address(ip_str)
     if ip_obj.version == 6 and ip_obj.ipv4_mapped:
         ip_obj = ip_obj.ipv4_mapped
+    # Unconditional: 0.0.0.0 / :: are never a valid dial target, regardless of flags.
+    if ip_obj.is_unspecified:
+        raise SSRFBlockedError(f"Unspecified address {ip_obj} is not a valid target")
     if ip_obj.is_loopback:
         if not allow_loopback:
             raise SSRFBlockedError(f"URL resolves to loopback address {ip_obj}")
@@ -41,21 +45,15 @@ def _vet_ip(ip_str: str, *, allow_private: bool, allow_loopback: bool) -> None:
             raise SSRFBlockedError(f"URL resolves to internal/private address {ip_obj}")
 
 
-def _validate_hostname_and_get_ip(
+def _resolve_and_vet(
     hostname: str,
     port: int | None,
     *,
-    allow_private: bool = False,
-    allow_loopback: bool = False,
+    allow_private: bool,
+    allow_loopback: bool,
 ) -> str:
-    try:
-        future = _DNS_RESOLVER_POOL.submit(socket.getaddrinfo, hostname, port, socket.AF_UNSPEC)
-        addr_info = future.result(timeout=_RESOLVE_TIMEOUT_S)
-    except concurrent.futures.TimeoutError as e:
-        raise SSRFBlockedError(f"DNS resolution timed out for {hostname!r}") from e
-    except socket.gaierror as e:
-        raise SSRFBlockedError(f"Could not resolve hostname {hostname!r}") from e
-
+    """Blocking resolve + vet (no pool). Raises socket.gaierror / SSRFBlockedError."""
+    addr_info = socket.getaddrinfo(hostname, port, socket.AF_UNSPEC)
     first_ip: str | None = None
     for res in addr_info:
         ip_str = str(res[4][0])
@@ -66,6 +64,28 @@ def _validate_hostname_and_get_ip(
     if first_ip is None:
         raise SSRFBlockedError(f"No IP found for {hostname!r}")
     return first_ip
+
+
+def _validate_hostname_and_get_ip(
+    hostname: str,
+    port: int | None,
+    *,
+    allow_private: bool = False,
+    allow_loopback: bool = False,
+) -> str:
+    try:
+        future = _DNS_RESOLVER_POOL.submit(
+            _resolve_and_vet,
+            hostname,
+            port,
+            allow_private=allow_private,
+            allow_loopback=allow_loopback,
+        )
+        return future.result(timeout=_RESOLVE_TIMEOUT_S)
+    except concurrent.futures.TimeoutError as e:
+        raise SSRFBlockedError(f"DNS resolution timed out for {hostname!r}") from e
+    except socket.gaierror as e:
+        raise SSRFBlockedError(f"Could not resolve hostname {hostname!r}") from e
 
 
 def validate_url_and_get_ip(url: str, *, allow_private: bool = False, allow_loopback: bool = False) -> str:
@@ -101,13 +121,21 @@ class AsyncSSRFSafeBackend(httpcore.AsyncNetworkBackend):
         local_address: str | None = None,
         socket_options: typing.Iterable[httpcore.SOCKET_OPTION] | None = None,
     ) -> httpcore.AsyncNetworkStream:
-        ip = await asyncio.to_thread(
-            _validate_hostname_and_get_ip,
-            host,
-            port,
-            allow_private=self._allow_private,
-            allow_loopback=self._allow_loopback,
-        )
+        try:
+            ip = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _resolve_and_vet,
+                    host,
+                    port,
+                    allow_private=self._allow_private,
+                    allow_loopback=self._allow_loopback,
+                ),
+                timeout=_RESOLVE_TIMEOUT_S,
+            )
+        except TimeoutError as e:
+            raise SSRFBlockedError(f"DNS resolution timed out for {host!r}") from e
+        except socket.gaierror as e:
+            raise SSRFBlockedError(f"Could not resolve hostname {host!r}") from e
         return await self._backend.connect_tcp(
             host=ip,
             port=port,
@@ -147,6 +175,7 @@ class AsyncSSRFSafeTransport(httpx.AsyncHTTPTransport):
         url = request.url
         if url.scheme.lower() not in _SAFE_URL_SCHEMES:
             raise SSRFBlockedError(f"Unsupported scheme {url.scheme!r}")
+        # Defensive: httpx clients always set Host; matters only for direct transport use.
         if "Host" not in request.headers:
             request.headers["Host"] = url.host
         request.extensions["sni_hostname"] = url.host
