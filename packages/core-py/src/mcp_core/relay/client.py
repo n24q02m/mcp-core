@@ -28,7 +28,6 @@ from mcp_core.relay.wordlist import WORDLIST
 from mcp_core.schema.types import RelayConfigSchema
 
 
-
 @asynccontextmanager
 async def _maybe_client(client: httpx.AsyncClient | None = None) -> AsyncIterator[httpx.AsyncClient]:
     """Context manager that yields the provided client or creates a new one."""
@@ -37,6 +36,7 @@ async def _maybe_client(client: httpx.AsyncClient | None = None) -> AsyncIterato
     else:
         async with httpx.AsyncClient() as new_client:
             yield new_client
+
 
 def _safe_urljoin(base_url: str, path: str) -> str:
     """Safely join a base URL and a path, ensuring valid scheme to prevent SSRF."""

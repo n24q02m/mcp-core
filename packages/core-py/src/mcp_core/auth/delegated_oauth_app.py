@@ -29,6 +29,7 @@ The ``/mcp`` endpoint is NOT included -- it is mounted by the transport layer.
 The upstream tokens are passed to ``on_token_received`` ONLY; they are never
 persisted by this module. Storage is the consumer's responsibility.
 """
+
 from __future__ import annotations
 from contextlib import asynccontextmanager
 
@@ -784,8 +785,6 @@ def create_delegated_oauth_app(
     ]
     if flow == "redirect":
         routes.append(Route(upstream.callback_path, _callback, methods=["GET"]))
-
-
 
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
