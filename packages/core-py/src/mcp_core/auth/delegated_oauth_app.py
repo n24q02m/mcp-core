@@ -1,5 +1,3 @@
-from __future__ import annotations
-from contextlib import asynccontextmanager
 """Delegated OAuth 2.1 Authorization Server as a Starlette ASGI app.
 
 Unified abstraction for upstream OAuth providers. Fronts two upstream flows
@@ -31,6 +29,8 @@ The ``/mcp`` endpoint is NOT included -- it is mounted by the transport layer.
 The upstream tokens are passed to ``on_token_received`` ONLY; they are never
 persisted by this module. Storage is the consumer's responsibility.
 """
+from __future__ import annotations
+from contextlib import asynccontextmanager
 
 
 import asyncio
@@ -40,7 +40,7 @@ import inspect
 import os
 import secrets
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Union
 
