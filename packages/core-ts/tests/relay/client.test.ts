@@ -66,6 +66,37 @@ describe('generatePassphrase', () => {
     // With ~52 bits entropy per passphrase, collisions are vanishingly rare
     expect(results.size).toBeGreaterThan(1)
   })
+
+  it('should handle rejection sampling', () => {
+    const max = Math.floor(0x10000 / WORDLIST.length) * WORDLIST.length
+
+    let fallbackCalls = 0
+    const spy = vi.spyOn(crypto, 'getRandomValues').mockImplementation((buf) => {
+      if (buf instanceof Uint16Array) {
+        if (buf.length === 4) {
+          // Initial batch: 3 valid, 1 invalid
+          buf[0] = 0
+          buf[1] = 1
+          buf[2] = 2
+          buf[3] = max + 1
+        } else if (buf.length === 1) {
+          // Re-sampling
+          fallbackCalls++
+          if (fallbackCalls === 1) {
+            buf[0] = max + 2 // Still invalid
+          } else {
+            buf[0] = 3 // Now valid
+          }
+        }
+      }
+      return buf
+    })
+
+    const passphrase = generatePassphrase(4)
+    expect(passphrase).toBe(`${WORDLIST[0]}-${WORDLIST[1]}-${WORDLIST[2]}-${WORDLIST[3]}`)
+    expect(fallbackCalls).toBe(2)
+    spy.mockRestore()
+  })
 })
 
 describe('createSession', () => {
