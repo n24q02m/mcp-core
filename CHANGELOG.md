@@ -2,6 +2,45 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.1 (2026-06-10)
+
+### Bug Fixes
+
+- Harden mcp_core.http SSRF guard (unspecified-address block + single-hop async DNS)
+  ([#433](https://github.com/n24q02m/mcp-core/pull/433),
+  [`fb8aee8`](https://github.com/n24q02m/mcp-core/commit/fb8aee8f5ea668b865e965e42a3e9cab3cf6b015))
+
+- Harden mcp_core.llm.catalog (mode-less registry entries + empty-hints message)
+  ([#433](https://github.com/n24q02m/mcp-core/pull/433),
+  [`fb8aee8`](https://github.com/n24q02m/mcp-core/commit/fb8aee8f5ea668b865e965e42a3e9cab3cf6b015))
+
+- Omit None credentials from litellm kwargs (env-fallback suppression) + sync wrapper warnings
+  ([#433](https://github.com/n24q02m/mcp-core/pull/433),
+  [`fb8aee8`](https://github.com/n24q02m/mcp-core/commit/fb8aee8f5ea668b865e965e42a3e9cab3cf6b015))
+
+### Features
+
+- Add mcp_core.http SSRF guard (DNS-pinned transport + api_base policy)
+  ([#433](https://github.com/n24q02m/mcp-core/pull/433),
+  [`fb8aee8`](https://github.com/n24q02m/mcp-core/commit/fb8aee8f5ea668b865e965e42a3e9cab3cf6b015))
+
+- Add mcp_core.llm dispatch passthrough wrappers (async + sync mirrors)
+  ([#433](https://github.com/n24q02m/mcp-core/pull/433),
+  [`fb8aee8`](https://github.com/n24q02m/mcp-core/commit/fb8aee8f5ea668b865e965e42a3e9cab3cf6b015))
+
+- Add mcp_core.llm.catalog (capability check + model listing, graceful-on-missing)
+  ([#433](https://github.com/n24q02m/mcp-core/pull/433),
+  [`fb8aee8`](https://github.com/n24q02m/mcp-core/commit/fb8aee8f5ea668b865e965e42a3e9cab3cf6b015))
+
+- Mcp_core.llm passthrough primitive + mcp_core.http SSRF guard
+  ([#433](https://github.com/n24q02m/mcp-core/pull/433),
+  [`fb8aee8`](https://github.com/n24q02m/mcp-core/commit/fb8aee8f5ea668b865e965e42a3e9cab3cf6b015))
+
+- Wire mcp-core[llm] optional extra + CI extras legs
+  ([#433](https://github.com/n24q02m/mcp-core/pull/433),
+  [`fb8aee8`](https://github.com/n24q02m/mcp-core/commit/fb8aee8f5ea668b865e965e42a3e9cab3cf6b015))
+
+
 ## v1.17.5-beta.3 (2026-06-10)
 
 ### Bug Fixes
