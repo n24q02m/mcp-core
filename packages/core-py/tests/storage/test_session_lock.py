@@ -2,6 +2,7 @@
 
 import json
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -11,6 +12,8 @@ from mcp_core.storage.session_lock import (
     release_session_lock,
     set_lock_dir,
     write_session_lock,
+    _get_lock_dir,
+    _CONFIG_DIR,
 )
 
 
@@ -19,6 +22,16 @@ def _temp_lock_dir(tmp_path):
     set_lock_dir(str(tmp_path))
     yield tmp_path
     set_lock_dir(None)
+
+
+class TestInternalHelpers:
+    def test_get_lock_dir_default(self):
+        set_lock_dir(None)
+        try:
+            assert _get_lock_dir() == _CONFIG_DIR
+        finally:
+            # Restore for other tests (though _temp_lock_dir fixture does it too)
+            pass
 
 
 class TestAcquireSessionLock:
@@ -94,6 +107,16 @@ class TestAcquireSessionLock:
 
         result = await acquire_session_lock("test-server")
         assert result is None
+
+    async def test_acquire_session_lock_cleanup_failure(self, _temp_lock_dir):
+        """Test acquire_session_lock handles release failure (lines 106-107)."""
+        lock_file = _temp_lock_dir / "relay-session-test-server.lock"
+        lock_file.write_text("corrupt", encoding="utf-8")
+
+        # Mock release_session_lock to raise OSError
+        with patch("mcp_core.storage.session_lock.release_session_lock", side_effect=OSError("Disk full")):
+            result = await acquire_session_lock("test-server")
+            assert result is None
 
 
 class TestWriteSessionLock:
@@ -192,3 +215,10 @@ class TestReleaseSessionLock:
         result = await acquire_session_lock("server-b")
         assert result is not None
         assert result.session_id == "server-b"
+
+    async def test_release_session_lock_failure(self):
+        """Test release_session_lock handles unlink failure (lines 149-150)."""
+        # Mock pathlib.Path.unlink to raise OSError
+        with patch("pathlib.Path.unlink", side_effect=OSError("Permission denied")):
+            # Should not raise
+            await release_session_lock("some-server")
