@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.17.5-beta.3 (2026-06-10)
+
+### Bug Fixes
+
+- Add path traversal protection to PerPluginStore
+  ([#429](https://github.com/n24q02m/mcp-core/pull/429),
+  [`8a58836`](https://github.com/n24q02m/mcp-core/commit/8a58836cbe52d1ad67f0fc8161a265add1911dfc))
+
+- Sanitize cache filenames to prevent path traversal
+  ([#427](https://github.com/n24q02m/mcp-core/pull/427),
+  [`1773e8a`](https://github.com/n24q02m/mcp-core/commit/1773e8a5aff9086584296548a937daa39446e750))
+
+- Secure JWT private keys by disabling memory extraction
+  ([#428](https://github.com/n24q02m/mcp-core/pull/428),
+  [`caddcfd`](https://github.com/n24q02m/mcp-core/commit/caddcfd60715615c54203ef51e76dc8df822b5e3))
+
+
 ## v1.17.5-beta.2 (2026-06-10)
 
 ### Bug Fixes
