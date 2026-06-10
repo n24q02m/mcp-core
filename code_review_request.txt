@@ -1,0 +1,37 @@
+I have optimized the object iteration in `packages/core-ts/src/storage/machine-id.ts`.
+The change replaces a `for...in` loop with a manual `for` loop over `Object.values(nics)`.
+This avoids property lookups within the loop, which is slightly more efficient in Bun.
+
+Diff:
+<<<<<<< SEARCH
+  for (const key in nics) {
+    const ifaces = nics[key]
+    if (ifaces) {
+      for (let i = 0; i < ifaces.length; i++) {
+        const n = ifaces[i]
+        if (n && !n.internal && n.mac !== '00:00:00:00:00:00') {
+          mac = n.mac
+          break
+        }
+      }
+    }
+    if (mac) break
+  }
+=======
+  const groups = Object.values(nics)
+  for (let i = 0; i < groups.length; i++) {
+    const ifaces = groups[i]
+    if (ifaces) {
+      for (let j = 0; j < ifaces.length; j++) {
+        const n = ifaces[j]
+        if (n && !n.internal && n.mac !== '00:00:00:00:00:00') {
+          mac = n.mac
+          break
+        }
+      }
+    }
+    if (mac) break
+  }
+>>>>>>> REPLACE
+
+Tests passed, linting is clean.

@@ -50,11 +50,12 @@ export async function getMachineId(): Promise<string> {
   // Optimization: Manual loops are significantly faster than .flat().find() in Bun
   // as they avoid intermediate memory allocations and functional iteration overhead.
   let mac: string | undefined
-  for (const key in nics) {
-    const ifaces = nics[key]
+  const groups = Object.values(nics)
+  for (let i = 0; i < groups.length; i++) {
+    const ifaces = groups[i]
     if (ifaces) {
-      for (let i = 0; i < ifaces.length; i++) {
-        const n = ifaces[i]
+      for (let j = 0; j < ifaces.length; j++) {
+        const n = ifaces[j]
         if (n && !n.internal && n.mac !== '00:00:00:00:00:00') {
           mac = n.mac
           break
