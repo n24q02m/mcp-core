@@ -63,3 +63,12 @@ def test_persist_silent_on_oserror(tmp_path, monkeypatch, caplog):
     assert "Failed to persist capabilities cache for wet-mcp: Windows access denied" in caplog.text
     # And cache stays absent (load returns None)
     assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
+
+
+def test_persist_then_load_empty_tools(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
+
+    tools = []
+    persist_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0", tools=tools)
+    loaded = load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
+    assert loaded == []
