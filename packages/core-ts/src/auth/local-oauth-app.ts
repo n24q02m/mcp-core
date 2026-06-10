@@ -664,6 +664,9 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     let stepData: Record<string, string>
     try {
       stepData = await parseJsonBody<Record<string, string>>(req)
+      for (const k in stepData) {
+        stepData[k] = String(stepData[k] ?? '').substring(0, 1024)
+      }
     } catch {
       jsonResponse(res, 400, {
         error: 'invalid_request',

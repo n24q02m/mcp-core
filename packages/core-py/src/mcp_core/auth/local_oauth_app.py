@@ -575,6 +575,7 @@ def create_local_oauth_app(
         # should not consume the user's retry quota nor clear the session.
         try:
             step_data: dict[str, str] = await request.json()
+            step_data = {k: str(v)[:1024] for k, v in step_data.items()}
         except Exception:
             return JSONResponse(
                 {"error": "invalid_request", "error_description": "Invalid JSON body"},

@@ -198,3 +198,30 @@ describe('relay-login', () => {
     expect(stub6.retryAfter()).not.toBeNull()
   })
 })
+
+it('truncates extremely long password to 1024 chars', async () => {
+  const longPassword = 'a'.repeat(2000)
+  configureRelayLogin('a'.repeat(1024))
+  const req: RelayLoginRequest = {
+    body: { password: longPassword, next: '/authorize' },
+    ip: '1.2.3.6'
+  }
+  const stub = makeResponseStub()
+  await loginPostHandler(req, stub.res)
+  // If it was truncated to 1024, it should match the configured password.
+  expect(stub.status()).not.toBe(401)
+  expect(stub.redirect()).toBe('/authorize')
+})
+
+it('truncates extremely long next param to 2048 chars', async () => {
+  configureRelayLogin('secret123')
+  const longNext = '/' + 'b'.repeat(3000)
+  const req: RelayLoginRequest = {
+    body: { password: 'secret123', next: longNext },
+    ip: '1.2.3.7'
+  }
+  const stub = makeResponseStub()
+  await loginPostHandler(req, stub.res)
+  expect(stub.redirect()?.length).toBe(2048)
+  expect(stub.redirect()).toBe(longNext.substring(0, 2048))
+})

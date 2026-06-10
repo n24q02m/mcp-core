@@ -72,7 +72,7 @@ def _get_safe_next(input_val: Any) -> str:
     ``\\``, or any whitespace/control character that some browsers might
     normalize into a protocol-relative URL.
     """
-    next_ = str(input_val or "/authorize")
+    next_ = str(input_val or "/authorize")[:2048]
     if not next_.startswith("/") or next_.startswith("//") or next_.startswith("/\\") or next_.startswith("\\\\"):
         return "/authorize"
     # Block cases like "/ google.com" or "/\tgoogle.com" (ASCII <= 32).
@@ -162,7 +162,7 @@ async def login_post_handler(form: dict, ip: str) -> Response:
             status_code=429,
             headers={"Retry-After": str(retry_after)},
         )
-    password = str(form.get("password", ""))
+    password = str(form.get("password", ""))[:1024]
     next_ = _get_safe_next(form.get("next"))
     if not _configured_password or not hmac.compare_digest(password.encode(), _configured_password.encode()):
         _bump_fail(ip)

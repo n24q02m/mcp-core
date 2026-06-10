@@ -107,3 +107,21 @@ async def test_brute_force_6th_attempt_429() -> None:
     result = await login_post_handler({"password": "wrong", "next": "/"}, ip="3.3.3.3")
     assert result.status_code == 429
     assert "retry-after" in {k.lower() for k in result.headers.keys()}
+
+async def test_truncates_long_password():
+    # Enforce a 1024-char limit.
+    configure_relay_login("a" * 1024)
+    # Submission is longer.
+    form = {"password": "a" * 2000, "next": "/"}
+    res = await login_post_handler(form, "1.2.3.4")
+    # If truncated, it matches "a" * 1024 and succeeds (302).
+    assert res.status_code == 302
+
+async def test_truncates_long_next():
+    configure_relay_login("secret")
+    long_next = "/" + "b" * 3000
+    form = {"password": "secret", "next": long_next}
+    res = await login_post_handler(form, "1.2.3.4")
+    # Redirect URL should be truncated to 2048.
+    assert len(res.headers["location"]) == 2048
+    assert res.headers["location"] == long_next[:2048]
