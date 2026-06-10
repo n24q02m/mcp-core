@@ -1,0 +1,141 @@
+"""Model catalog helpers on top of litellm.model_cost (spec D3/D6).
+
+Registry coverage is INCOMPLETE by design — models like
+``jina_ai/jina-embeddings-v5-text-small`` or ``xai/grok-4-fast`` are valid yet
+absent. Every check here must therefore be graceful-on-missing: unknown model
+=> allow passthrough.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from loguru import logger
+
+
+class ModelCapabilityError(ValueError):
+    """Model exists in the litellm registry but has an incompatible mode."""
+
+
+def _get_litellm() -> Any:
+    try:
+        import litellm
+    except ImportError as e:  # pragma: no cover - exercised in no-extra CI leg
+        raise RuntimeError("LLM features require the optional extra: pip install 'n24q02m-mcp-core[llm]'") from e
+    # Idempotent hardening: never log prompts/keys from inside litellm.
+    # Upstream declares `suppress_debug_info = False` unannotated, so ty
+    # infers Literal[False]; the assignment is valid at runtime.
+    litellm.suppress_debug_info = True  # ty: ignore[invalid-assignment]
+    litellm.turn_off_message_logging = True
+    return litellm
+
+
+# Env-key -> litellm provider prefix (for configured_only filtering).
+# Intentionally covers only the provider set used by the n24q02m servers
+# (gemini/openai/xai/anthropic/cohere/jina_ai), NOT all ~30 litellm providers.
+# Passthrough still works for ANY provider; this map only affects
+# listing/suggestions.
+_PROVIDER_ENV_KEYS: dict[str, str] = {
+    "GEMINI_API_KEY": "gemini",
+    "GOOGLE_API_KEY": "gemini",
+    "OPENAI_API_KEY": "openai",
+    "XAI_API_KEY": "xai",
+    "ANTHROPIC_API_KEY": "anthropic",
+    "COHERE_API_KEY": "cohere",
+    "CO_API_KEY": "cohere",
+    "JINA_AI_API_KEY": "jina_ai",
+}
+
+
+def _registry_entry(model: str) -> dict | None:
+    cost = _get_litellm().model_cost
+    entry = cost.get(model)
+    if entry is not None:
+        return entry
+    if "/" in model:
+        # Registry keys some providers (e.g. anthropic, openai) without prefix.
+        # The bare-name fallback is intentionally provider-agnostic: any
+        # "<provider>/" prefix falls back to the bare key.
+        return cost.get(model.split("/", 1)[1])
+    return None
+
+
+def check_capability(model: str, expected_modes: tuple[str, ...]) -> None:
+    """Raise ModelCapabilityError on a KNOWN model with the wrong mode.
+
+    Unknown model => debug log + pass (open passthrough, spec D3).
+    """
+    entry = _registry_entry(model)
+    if entry is None:
+        logger.debug(f"model {model!r} not in litellm registry; passthrough")
+        return
+    mode = entry.get("mode")
+    if mode is None:
+        # Registry metadata entries (e.g. fireworks-ai-* pricing tiers) are
+        # dicts without a "mode" key — treat like unknown models.
+        logger.debug(f"model {model!r} has no mode in registry; passthrough")
+        return
+    if mode not in expected_modes:
+        hints = suggest_models(expected_modes, limit=5)
+        hints_part = f" Compatible examples: {', '.join(hints)}" if hints else ""
+        raise ModelCapabilityError(f"model {model!r} has mode={mode!r}, expected one of {expected_modes}.{hints_part}")
+
+
+def supports_vision(model: str) -> bool | None:
+    """True/False from registry; None when the model is unknown."""
+    entry = _registry_entry(model)
+    if entry is None:
+        return None
+    return bool(entry.get("supports_vision", False))
+
+
+def _configured_providers() -> set[str]:
+    return {provider for env_key, provider in _PROVIDER_ENV_KEYS.items() if os.environ.get(env_key)}
+
+
+def _provider_of(model_key: str, entry: dict) -> str:
+    provider = entry.get("litellm_provider", "")
+    if provider:
+        return str(provider)
+    if "/" in model_key:
+        return model_key.split("/", 1)[0]
+    return "openai"
+
+
+def list_models(
+    *,
+    modes: tuple[str, ...] | None = None,
+    configured_only: bool = True,
+    limit: int = 200,
+) -> list[dict]:
+    """List registry models, filtered by mode + configured provider keys."""
+    configured = _configured_providers() if configured_only else None
+    out: list[dict] = []
+    for key, entry in _get_litellm().model_cost.items():
+        if not isinstance(entry, dict):
+            continue
+        mode = entry.get("mode")
+        if modes is not None and mode not in modes:
+            continue
+        provider = _provider_of(key, entry)
+        if configured is not None and provider not in configured:
+            continue
+        out.append(
+            {
+                "model": key,
+                "provider": provider,
+                "mode": mode,
+                "supports_vision": bool(entry.get("supports_vision", False)),
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+def suggest_models(modes: tuple[str, ...], limit: int = 5) -> list[str]:
+    """Example model names for error messages (configured providers first)."""
+    preferred = list_models(modes=modes, configured_only=True, limit=limit)
+    pool = preferred or list_models(modes=modes, configured_only=False, limit=limit)
+    return [m["model"] for m in pool[:limit]]

@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
     "fastmcp>=3.4.2",
     "httpx>=0.28.1",
+    "httpcore>=1.0.0",
     "cryptography>=48.0.0",
     "authlib>=1.7.2",
     "starlette>=1.2.1",
@@ -38,6 +39,11 @@ dependencies = [
     "tomli-w>=1.2.0",
     "filelock>=3.29.1",
 ]
+
+[project.optional-dependencies]
+# litellm>=1.83.0: CVE-2026-35030 fixed in 1.83.0; 1.82.7-1.82.8 were removed
+# from PyPI (supply-chain incident). Library mode only — NEVER litellm[proxy].
+llm = ["litellm>=1.83.0"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
