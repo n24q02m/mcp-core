@@ -352,19 +352,21 @@ export async function runHttpServer(
   // Sweep stale locks for our server name BEFORE writing our own. Without
   // this, abnormal-exit residue (Windows OOM, taskkill, signal) can pile up
   // dozens of `<server>-<port>.lock` files — see 2026-04-28 wet-mcp 11-stale-lock incident.
-  const swept = sweepStaleLocks(options.serverName)
+  const swept = await sweepStaleLocks(options.serverName)
   if (swept > 0) {
     console.error(`[runHttpServer] cleaned ${swept} stale lock(s) for ${options.serverName}`)
   }
 
   const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
   const lockDirPath = path.join(os.homedir(), '.config', 'mcp', 'locks')
-  fs.mkdirSync(lockDirPath, { recursive: true, mode: 0o700 })
-  const lockFile = writeLockFile(options.serverName, actualPort, proxyToken, lockDirPath)
+  await fs.promises.mkdir(lockDirPath, { recursive: true, mode: 0o700 })
+  const lockFile = await writeLockFile(options.serverName, actualPort, proxyToken, lockDirPath)
 
   // Refresh the lock timestamp hourly so the 24h TTL sweep does not kill
   // long-running daemons. Cancelled in `close()`.
-  const lockRefreshInterval = setInterval(() => refreshLockTimestamp(lockFile), 3600 * 1000)
+  const lockRefreshInterval = setInterval(() => {
+    refreshLockTimestamp(lockFile).catch(() => {})
+  }, 3600 * 1000)
   if (typeof lockRefreshInterval.unref === 'function') {
     lockRefreshInterval.unref()
   }
