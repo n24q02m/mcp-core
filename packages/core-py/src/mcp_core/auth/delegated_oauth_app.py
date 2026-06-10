@@ -1,3 +1,5 @@
+from __future__ import annotations
+from contextlib import asynccontextmanager
 """Delegated OAuth 2.1 Authorization Server as a Starlette ASGI app.
 
 Unified abstraction for upstream OAuth providers. Fronts two upstream flows
@@ -30,7 +32,6 @@ The upstream tokens are passed to ``on_token_received`` ONLY; they are never
 persisted by this module. Storage is the consumer's responsibility.
 """
 
-from __future__ import annotations
 
 import asyncio
 import base64
@@ -39,7 +40,7 @@ import inspect
 import os
 import secrets
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Union
 
@@ -49,6 +50,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
+from mcp_core.relay.client import _maybe_client
 
 from mcp_core.auth.relay_login import (
     configure_relay_login,
@@ -198,6 +200,7 @@ def create_delegated_oauth_app(
     upstream: UpstreamOAuthConfig,
     on_token_received: TokenCallback,
     jwt_issuer: JWTIssuer | None = None,
+    client: httpx.AsyncClient | None = None,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create a delegated OAuth 2.1 Authorization Server Starlette app.
 
@@ -354,8 +357,8 @@ def create_delegated_oauth_app(
         auth_headers = _build_client_auth(form_data, upstream)
 
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
+            async with _maybe_client(client) as req_client:
+                resp = await req_client.post(
                     upstream.token_url,
                     data=form_data,
                     headers={"Accept": "application/json", **auth_headers},
@@ -409,6 +412,7 @@ def create_delegated_oauth_app(
         device_code: str,
         interval_ms: int,
         auth_code: str,
+        client: httpx.AsyncClient | None = None,
     ) -> None:
         """Background task: poll upstream token endpoint until granted or error.
 
@@ -423,11 +427,11 @@ def create_delegated_oauth_app(
         auth_headers = _build_client_auth(form_data, upstream)
 
         try:
-            async with httpx.AsyncClient() as client:
+            async with _maybe_client(client) as req_client:
                 while True:
                     await asyncio.sleep(interval)
                     try:
-                        resp = await client.post(
+                        resp = await req_client.post(
                             upstream.token_url,
                             data=form_data,
                             headers={"Accept": "application/json", **auth_headers},
@@ -493,8 +497,8 @@ def create_delegated_oauth_app(
 
         try:
             assert upstream.device_auth_url is not None
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(upstream.device_auth_url, data=device_form)
+            async with _maybe_client(client) as req_client:
+                resp = await req_client.post(upstream.device_auth_url, data=device_form)
         except Exception:  # noqa: BLE001
             logger.exception("Upstream device_auth request failed")
             return JSONResponse(
@@ -549,6 +553,7 @@ def create_delegated_oauth_app(
                 device_code=device_code,
                 interval_ms=interval_secs * 1000,
                 auth_code=auth_code,
+                client=client,
             )
         )
         _poll_tasks.add(task)
@@ -780,7 +785,7 @@ def create_delegated_oauth_app(
     if flow == "redirect":
         routes.append(Route(upstream.callback_path, _callback, methods=["GET"]))
 
-    from contextlib import asynccontextmanager
+
 
     @asynccontextmanager
     async def _lifespan(_app: Starlette):
