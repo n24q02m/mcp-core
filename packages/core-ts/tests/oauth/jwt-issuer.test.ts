@@ -191,4 +191,20 @@ describe('JWTIssuer refresh tokens (issue #261)', () => {
     expect(payload.sub).toBe('legacy-user')
     expect(payload.typ).toBeUndefined()
   })
+
+  it('private key is not extractable in memory', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+    // @ts-expect-error accessing private property for testing
+    const priv = issuer.privateKey as jose.CryptoKey
+    expect(priv.extractable).toBe(false)
+  })
+
+  it('public key is extractable in memory (required for JWKS export)', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+    // @ts-expect-error accessing private property for testing
+    const pub = issuer.publicKey as jose.CryptoKey
+    expect(pub.extractable).toBe(true)
+  })
 })
