@@ -1,0 +1,18 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90m/app/packages/core-ts[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+ [32m✓[39m tests/auth/delegated-oauth-app.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1243[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m16 passed[39m[22m[90m (16)[39m
+[2m   Start at [22m 05:45:18
+[2m   Duration [22m 1.83s[2m (transform 175ms, setup 0ms, import 281ms, tests 1.24s, environment 0ms)[22m
+
+[34m % [39m[2mCoverage report from [22m[33mv8[39m
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+-------------------|---------|----------|---------|---------|-------------------
+All files          |   60.76 |    52.21 |   60.86 |    62.6 |
+ ...d-oauth-app.ts |   60.76 |    52.21 |   60.86 |    62.6 | ...55-956,963-989
+-------------------|---------|----------|---------|---------|-------------------
