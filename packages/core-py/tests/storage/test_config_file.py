@@ -7,15 +7,18 @@ import pytest
 from cryptography.exceptions import InvalidTag
 
 from mcp_core.storage.config_file import (
+    _get_config_path,
     _with_retry,
     clear_key_cache_for_testing,
     delete_config,
     export_config,
     import_config,
     list_configs,
+    mark_setup_complete,
     read_config,
     set_config_path,
     write_config,
+    SETUP_COMPLETE_KEY,
 )
 from mcp_core.storage.encryption import (
     LEGACY_PBKDF2_ITERATIONS,
@@ -251,3 +254,61 @@ class TestMigration:
         current_key = derive_file_key(machine_id, username, salt, PBKDF2_ITERATIONS)
         decrypted = decrypt_data(current_key, payload)
         assert json.loads(decrypted) == store
+
+
+class TestInternalDetails:
+    def test_get_config_path_no_override(self):
+        set_config_path(None)
+        path = _get_config_path()
+        assert "mcp" in str(path).lower()
+
+    def test_load_store_garbage_data_raises(self, _temp_config):
+        config_path = _temp_config / "config.enc"
+        config_path.write_bytes(b"garbage" * 10)
+        # This should trigger the double legacy failure branch
+        with pytest.raises(Exception):
+            read_config("any")
+
+
+class TestMarkSetupComplete:
+    def test_sets_flag_on_existing_config(self):
+        write_config("test", {"key": "val"})
+        mark_setup_complete("test")
+        config = read_config("test")
+        assert config["key"] == "val"
+        assert config[SETUP_COMPLETE_KEY] == "true"
+
+    def test_sets_flag_on_new_config(self):
+        mark_setup_complete("new")
+        config = read_config("new")
+        assert config == {SETUP_COMPLETE_KEY: "true"}
+
+
+class TestScheduleReloadExit:
+    def test_schedule_reload_exit(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with patch("threading.Thread") as mock_thread:
+                from mcp_core.storage.config_file import schedule_reload_exit
+
+                schedule_reload_exit()
+                mock_thread.assert_called_once()
+
+                # Test the _exit closure
+                target = mock_thread.call_args.kwargs["target"]
+                with patch("time.sleep"):
+                    with patch("os._exit") as mock_os_exit:
+                        target()
+                        mock_os_exit.assert_called_once_with(0)
+
+
+class TestWriteRetryLogic:
+    def test_write_config_retries_on_busy(self):
+        import pathlib
+
+        with patch.object(pathlib.Path, "write_bytes") as mock_write:
+            mock_write.side_effect = [OSError(11, "EAGAIN"), None]
+            with patch("time.sleep") as mock_sleep:
+                with patch("os.chmod"):
+                    write_config("test", {"k": "v"})
+                    assert mock_write.call_count == 2
+                    mock_sleep.assert_called_once()
