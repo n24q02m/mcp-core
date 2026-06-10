@@ -66,6 +66,34 @@ describe('generatePassphrase', () => {
     // With ~52 bits entropy per passphrase, collisions are vanishingly rare
     expect(results.size).toBeGreaterThan(1)
   })
+
+  it('should handle rejection sampling by exhausting the primary buffer and using the fallback buffer', () => {
+    // max threshold is 62208 (0xF300)
+    const getRandomValuesSpy = vi.spyOn(crypto, 'getRandomValues').mockImplementation((buffer) => {
+      const typedBuffer = buffer as Uint16Array
+      if (typedBuffer.length === 16) {
+        // Fallback buffer refill
+        typedBuffer.fill(2000) // All valid
+      } else {
+        // Primary buffer or others
+        typedBuffer.fill(65000) // All rejected
+      }
+      return buffer
+    })
+
+    // To ensure we definitely trigger a refill of the fallback buffer (size 16),
+    // we generate more than 16 words in total.
+    // Each word will be rejected in the primary buffer, then pull from the fallback.
+    const passphrase = generatePassphrase(20)
+    const words = passphrase.split('-')
+
+    expect(words).toHaveLength(20)
+    // At least the last few words MUST be index 2000 because we forced multiple refills
+    // and the fallback buffer is filled with 2000.
+    expect(words[19]).toBe(WORDLIST[2000])
+
+    getRandomValuesSpy.mockRestore()
+  })
 })
 
 describe('createSession', () => {
