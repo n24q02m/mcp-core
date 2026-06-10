@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.17.5-beta.2 (2026-06-10)
+
+### Bug Fixes
+
+- Align mcp-core docs/config with library reality
+  ([#401](https://github.com/n24q02m/mcp-core/pull/401),
+  [`e9788a7`](https://github.com/n24q02m/mcp-core/commit/e9788a7555fa4b98ef81b16d50c975a87179f2d7))
+
+
 ## v1.17.5-beta.1 (2026-06-10)
 
 ### Bug Fixes
