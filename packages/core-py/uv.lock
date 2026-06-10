@@ -611,13 +611,14 @@ wheels = [
 
 [[package]]
 name = "n24q02m-mcp-core"
-version = "1.17.5b2"
+version = "1.17.5b3"
 source = { editable = "." }
 dependencies = [
     { name = "authlib" },
     { name = "cryptography" },
     { name = "fastmcp" },
     { name = "filelock" },
+    { name = "httpcore" },
     { name = "httpx" },
     { name = "loguru" },
     { name = "platformdirs" },
@@ -642,6 +643,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=48.0.0" },
     { name = "fastmcp", specifier = ">=3.4.2" },
     { name = "filelock", specifier = ">=3.29.1" },
+    { name = "httpcore", specifier = ">=1.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "platformdirs", specifier = ">=4.10.0" },
