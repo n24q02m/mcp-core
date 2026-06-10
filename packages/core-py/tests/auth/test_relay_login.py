@@ -108,6 +108,7 @@ async def test_brute_force_6th_attempt_429() -> None:
     assert result.status_code == 429
     assert "retry-after" in {k.lower() for k in result.headers.keys()}
 
+
 async def test_truncates_long_password():
     # Enforce a 1024-char limit.
     configure_relay_login("a" * 1024)
@@ -116,6 +117,7 @@ async def test_truncates_long_password():
     res = await login_post_handler(form, "1.2.3.4")
     # If truncated, it matches "a" * 1024 and succeeds (302).
     assert res.status_code == 302
+
 
 async def test_truncates_long_next():
     configure_relay_login("secret")
