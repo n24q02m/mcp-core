@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -27,7 +28,10 @@ def _cache_dir() -> Path:
 
 
 def cache_filename(server_name: str, port: int, srv_version: str, core_version: str) -> str:
-    return f"{server_name}-{port}-{srv_version}-{core_version}.tools.json"
+    safe_name = re.sub(r"[^a-zA-Z0-9.-]", "_", server_name)
+    safe_srv_version = re.sub(r"[^a-zA-Z0-9.-]", "_", srv_version)
+    safe_core_version = re.sub(r"[^a-zA-Z0-9.-]", "_", core_version)
+    return f"{safe_name}-{port}-{safe_srv_version}-{safe_core_version}.tools.json"
 
 
 def _atomic_write(path: Path, content: str) -> None:

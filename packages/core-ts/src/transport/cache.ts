@@ -25,7 +25,10 @@ export function cacheDir(): string {
 }
 
 export function cacheFilename(serverName: string, port: number, srvVersion: string, coreVersion: string): string {
-  return `${serverName}-${port}-${srvVersion}-${coreVersion}.tools.json`
+  const safeName = serverName.replace(/[^a-zA-Z0-9.-]/g, '_')
+  const safeSrvVersion = srvVersion.replace(/[^a-zA-Z0-9.-]/g, '_')
+  const safeCoreVersion = coreVersion.replace(/[^a-zA-Z0-9.-]/g, '_')
+  return `${safeName}-${port}-${safeSrvVersion}-${safeCoreVersion}.tools.json`
 }
 
 export function atomicWrite(path: string, content: string): void {
