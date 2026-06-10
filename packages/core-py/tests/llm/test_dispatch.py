@@ -81,6 +81,33 @@ async def test_acompletion_allows_loopback_api_base_single_user(monkeypatch):
     assert result == {"ok": True}
 
 
+async def test_acompletion_forwards_api_key_and_api_base(monkeypatch):
+    mock = AsyncMock(return_value={"ok": True})
+    monkeypatch.setattr(litellm, "acompletion", mock)
+    monkeypatch.delenv("PUBLIC_URL", raising=False)
+    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
+    await acompletion(
+        model="openai/custom",
+        messages=[{"role": "user", "content": "hi"}],
+        api_base="https://example.com/v1",
+        api_key="sk-test",
+    )
+    kw = mock.call_args.kwargs
+    assert kw["api_key"] == "sk-test"
+    assert kw["api_base"] == "https://example.com/v1"
+
+
+async def test_arerank_omits_none_credentials(monkeypatch):
+    # Explicit api_key=None/api_base=None through litellm's **kwargs path is
+    # Pydantic field-SET (survives exclude_unset) and suppresses env fallback.
+    mock = AsyncMock(return_value={"results": []})
+    monkeypatch.setattr(litellm, "arerank", mock)
+    await arerank(model="jina_ai/jina-reranker-v3", query="q", documents=["a"])
+    kw = mock.call_args.kwargs
+    assert "api_key" not in kw
+    assert "api_base" not in kw
+
+
 async def test_aembedding_passthrough(monkeypatch):
     mock = AsyncMock(return_value={"data": []})
     monkeypatch.setattr(litellm, "aembedding", mock)

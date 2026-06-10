@@ -26,6 +26,21 @@ def _prep_api_base(api_base: str | None) -> str | None:
     return None
 
 
+def _opt(api_base: str | None, api_key: str | None) -> dict[str, Any]:
+    """Only forward api_base/api_key when the caller actually supplied them.
+
+    Explicit None through litellm's **kwargs path is treated by Pydantic
+    (GenericLiteLLMParams) as field-SET — it survives
+    ``model_dump(exclude_unset=True)`` and suppresses provider env fallback.
+    """
+    out: dict[str, Any] = {}
+    if api_base is not None:
+        out["api_base"] = api_base
+    if api_key is not None:
+        out["api_key"] = api_key
+    return out
+
+
 async def acompletion(
     *,
     model: str,
@@ -37,13 +52,7 @@ async def acompletion(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, _CHAT_MODES)
-    return await litellm.acompletion(
-        model=model,
-        messages=messages,
-        api_base=api_base,
-        api_key=api_key,
-        **kwargs,
-    )
+    return await litellm.acompletion(model=model, messages=messages, **_opt(api_base, api_key), **kwargs)
 
 
 async def aembedding(
@@ -57,7 +66,7 @@ async def aembedding(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("embedding",))
-    return await litellm.aembedding(model=model, input=input, api_base=api_base, api_key=api_key, **kwargs)
+    return await litellm.aembedding(model=model, input=input, **_opt(api_base, api_key), **kwargs)
 
 
 async def arerank(
@@ -72,14 +81,7 @@ async def arerank(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("rerank",))
-    return await litellm.arerank(
-        model=model,
-        query=query,
-        documents=documents,
-        api_base=api_base,
-        api_key=api_key,
-        **kwargs,
-    )
+    return await litellm.arerank(model=model, query=query, documents=documents, **_opt(api_base, api_key), **kwargs)
 
 
 async def aimage_generation(
@@ -93,7 +95,7 @@ async def aimage_generation(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("image_generation", "image_edit"))
-    return await litellm.aimage_generation(model=model, prompt=prompt, api_base=api_base, api_key=api_key, **kwargs)
+    return await litellm.aimage_generation(model=model, prompt=prompt, **_opt(api_base, api_key), **kwargs)
 
 
 async def avideo_generation(
@@ -107,15 +109,15 @@ async def avideo_generation(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("video_generation",))
-    return await litellm.avideo_generation(model=model, prompt=prompt, api_base=api_base, api_key=api_key, **kwargs)
+    return await litellm.avideo_generation(model=model, prompt=prompt, **_opt(api_base, api_key), **kwargs)
 
 
 async def avideo_status(*, video_id: str, api_key: str | None = None, **kwargs: Any) -> Any:
-    return await _get_litellm().avideo_status(video_id=video_id, api_key=api_key, **kwargs)
+    return await _get_litellm().avideo_status(video_id=video_id, **_opt(None, api_key), **kwargs)
 
 
 async def avideo_content(*, video_id: str, api_key: str | None = None, **kwargs: Any) -> Any:
-    return await _get_litellm().avideo_content(video_id=video_id, api_key=api_key, **kwargs)
+    return await _get_litellm().avideo_content(video_id=video_id, **_opt(None, api_key), **kwargs)
 
 
 # --- Sync mirrors (crg embeddings/summarizer run in sync contexts — spec D9) ---
@@ -129,10 +131,11 @@ def completion(
     api_key: str | None = None,
     **kwargs: Any,
 ) -> Any:
+    """Sync completion. Do NOT call from an async context — blocks the event loop."""
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, _CHAT_MODES)
-    return litellm.completion(model=model, messages=messages, api_base=api_base, api_key=api_key, **kwargs)
+    return litellm.completion(model=model, messages=messages, **_opt(api_base, api_key), **kwargs)
 
 
 def embedding(
@@ -143,10 +146,11 @@ def embedding(
     api_key: str | None = None,
     **kwargs: Any,
 ) -> Any:
+    """Sync embedding. Do NOT call from an async context — blocks the event loop."""
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("embedding",))
-    return litellm.embedding(model=model, input=input, api_base=api_base, api_key=api_key, **kwargs)
+    return litellm.embedding(model=model, input=input, **_opt(api_base, api_key), **kwargs)
 
 
 def rerank(
@@ -158,14 +162,8 @@ def rerank(
     api_key: str | None = None,
     **kwargs: Any,
 ) -> Any:
+    """Sync rerank. Do NOT call from an async context — blocks the event loop."""
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("rerank",))
-    return litellm.rerank(
-        model=model,
-        query=query,
-        documents=documents,
-        api_base=api_base,
-        api_key=api_key,
-        **kwargs,
-    )
+    return litellm.rerank(model=model, query=query, documents=documents, **_opt(api_base, api_key), **kwargs)
