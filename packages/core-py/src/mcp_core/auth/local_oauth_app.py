@@ -33,7 +33,7 @@ from typing import Any, Union, cast
 from loguru import logger
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
 from mcp_core.auth.credential_form import is_oauth_field, is_secret_field, render_credential_form
@@ -70,7 +70,7 @@ _OTP_MAX_ATTEMPTS = 5
 # loop.run_until_complete() on a running event loop.
 #
 # ``on_credentials_saved`` receives the submitted credentials AND a
-# per-authorize-session ``SubjectContext`` (``{"sub": "<uuid>"}``). The sub is
+# per-authorize-session ``SubjectContext`` (``{"sub": "<uuid>"}`\"). The sub is
 # generated fresh when GET /authorize renders the form, threaded through POST
 # /authorize, and stamped onto the JWT issued at /token — so consumers that
 # persist credentials keyed by ``sub`` (remote-relay multi-user mode) can
@@ -96,6 +96,39 @@ def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
     digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
     computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     return secrets.compare_digest(computed, code_challenge)
+
+
+class _SetupStatusManager:
+    """Manages in-memory setup status for background tasks (e.g. GDrive auth)."""
+
+    def __init__(self) -> None:
+        self._status: dict[str, str] = {"gdrive": "idle"}
+
+    def reset_all(self) -> None:
+        """Reset all keys to "idle" to prevent stale state across submits."""
+        for key in list(self._status.keys()):
+            self._status[key] = "idle"
+
+    def mark_complete(self, key: str = "gdrive") -> None:
+        """Mark a background setup step as complete (called externally)."""
+        self._status[key] = "complete"
+
+    def mark_failed(self, key: str = "gdrive", error: Any = "unknown error") -> None:
+        """Mark a background setup step as failed with a sanitized message.
+
+        The status is encoded as ``"error:<message>"`` so the frontend poll
+        handler can detect failure and surface the message to the user.
+        """
+        import re
+
+        # Sanitize: collapse whitespace, strip redundant "error:" prefix
+        msg = re.sub(r"\s+", " ", str(error)).strip() or "unknown error"
+        msg = msg.removeprefix("error:").strip()
+        self._status[key] = f"error:{msg}"
+
+    def get_all(self) -> dict[str, str]:
+        """Return a copy of the current status mapping."""
+        return dict(self._status)
 
 
 def create_local_oauth_app(
@@ -200,6 +233,10 @@ def create_local_oauth_app(
         for k in expired:
             del store[k]
 
+    # In-memory setup status (set by background tasks via mark_setup_complete
+    # or mark_setup_failed). Values: "idle", "complete", or "error:<message>".
+    _setup_status_manager = _SetupStatusManager()
+
     # ------------------------------------------------------------------
     # Route handlers
     # ------------------------------------------------------------------
@@ -292,7 +329,7 @@ def create_local_oauth_app(
             )
 
         # Reset stale completion markers from previous authorize submits.
-        # _setup_status is closure-scoped, so a key flipped to "complete"
+        # setupStatus is closure-scoped, so a key flipped to "complete"
         # by a prior background poll (e.g. Outlook device code finished
         # on the first attempt) would otherwise persist into the next
         # form submit. The frontend renders a fresh oauth_device_code UI
@@ -300,8 +337,7 @@ def create_local_oauth_app(
         # "complete" within a few seconds and triggers a premature
         # redirect. Reset all keys to "idle" so each submit starts from
         # a clean state.
-        for _k in list(_setup_status.keys()):
-            _setup_status[_k] = "idle"
+        _setup_status_manager.reset_all()
 
         # Save credentials via callback. Callback may return a dict with
         # next_step info (e.g., GDrive OAuth device code to show in the form).
@@ -345,8 +381,11 @@ def create_local_oauth_app(
             except Exception:  # noqa: BLE001
                 logger.opt(exception=True).warning("Failed to mark _setup_complete=true for {}", server_name)
 
-        # Generate auth code. Copy ``sub`` so /token issues the JWT with the
-        # same subject the credentials were saved under.
+        if is_multi_step:
+            _mark_pending_step(session["sub"])
+            return JSONResponse({"ok": True, "next_step": next_step})
+
+        # Issue authorization code for single-step flow.
         auth_code = secrets.token_urlsafe(32)
         auth_codes[auth_code] = {
             "code_challenge": session["code_challenge"],
@@ -355,117 +394,90 @@ def create_local_oauth_app(
             "sub": session["sub"],
         }
 
-        _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
+        from urllib.parse import urlencode
 
-        redirect_uri = session["redirect_uri"]
-        state = session["state"]
-        separator = "&" if "?" in redirect_uri else "?"
-        redirect_url = f"{redirect_uri}{separator}code={auth_code}&state={state}"
+        redirect_url = f"{session['redirect_uri']}?{urlencode({'code': auth_code, 'state': session['state']})}"
+        return JSONResponse({"ok": True, "redirect_url": redirect_url})
 
-        response_body: dict = {"ok": True, "redirect_url": redirect_url}
-        if next_step:
-            response_body["next_step"] = next_step
-            # Nếu next_step yêu cầu input thêm (OTP hoặc 2FA password),
-            # activate pending step session để /otp endpoint chấp nhận input.
-            # Capture the authorize-session sub so /otp can thread the correct
-            # SubjectContext into on_step_submitted — the browser POSTs step
-            # data without a sub, so this field is the only binding.
-            if next_step.get("type") in ("otp_required", "password_required"):
-                _mark_pending_step(session["sub"])
+    async def authorize_prefill(request: Request) -> JSONResponse:
+        """POST /authorize/prefill -- server-side credential stashing.
 
-        return JSONResponse(response_body)
-
-    async def authorize(request: Request):
-        """Dispatch GET/POST on /authorize.
-
-        When ``MCP_RELAY_PASSWORD`` is set, requests without a valid
-        ``mcp_relay_session`` cookie are redirected to ``/login`` (handled
-        inside ``require_relay_session``).
+        Called by E2E drivers to populate form fields (e.g. TELEGRAM_PHONE)
+        before the user opens the URL. Returns 204 No Content.
         """
         if _relay_password:
             gated = await require_relay_session(
-                dict(request.cookies), str(request.url.path) + (f"?{request.url.query}" if request.url.query else "")
+                dict(request.cookies),
+                str(request.url.path),
+                _relay_password,
             )
-            if gated is not None:
-                return gated
+            if gated:
+                return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+        try:
+            body: dict[str, Any] = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Invalid JSON body"},
+                status_code=400,
+            )
+
+        state = body.get("state")
+        data = body.get("data")
+        if not state or not isinstance(data, dict):
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Missing state or data"},
+                status_code=400,
+            )
+
+        pending_prefills[str(state)] = {"data": data, "created_at": time.monotonic()}
+        return JSONResponse(None, status_code=204)
+
+    async def authorize(request: Request) -> HTMLResponse | JSONResponse | RedirectResponse:
         if request.method == "GET":
+            if _relay_password:
+                gated = await require_relay_session(
+                    dict(request.cookies),
+                    str(request.url.path) + (f"?{request.url.query}" if request.url.query else ""),
+                    _relay_password,
+                )
+                if gated:
+                    return gated
             return await authorize_get(request)
         return await authorize_post(request)
 
-    async def authorize_prefill(request: Request):
-        """POST /authorize/prefill -- driver-only side channel for form prefill.
-
-        Stores form prefill values keyed by the OAuth ``state`` token chosen by
-        the client. ``GET /authorize?state=<X>`` then hydrates the form on
-        render — credentials never appear in the URL the user opens.
-
-        Gated by the same relay-password cookie as ``/authorize`` itself when
-        ``MCP_RELAY_PASSWORD`` is set.
-        """
-        if _relay_password:
-            gated = await require_relay_session(
-                dict(request.cookies), str(request.url.path) + (f"?{request.url.query}" if request.url.query else "")
-            )
-            if gated is not None:
-                return gated
-        state = request.query_params.get("state")
-        if not state:
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Missing state"},
-                status_code=400,
-            )
-        try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Body must be JSON object"},
-                status_code=400,
-            )
-        if not isinstance(body, dict):
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Body must be JSON object"},
-                status_code=400,
-            )
-        # Coerce all values to string + drop empties so blank ``value=""`` attrs
-        # don't shadow placeholder text in the rendered form.
-        data: dict[str, str] = {}
-        for k, v in body.items():
-            if v is not None and len(str(v)) > 0:
-                data[str(k)] = str(v)
-        pending_prefills[state] = {"data": data, "created_at": time.monotonic()}
-        _prune_expired(pending_prefills, _PREFILL_TTL_S)
-        return JSONResponse({}, status_code=204)
-
-    def _issue_token_response(sub: str) -> JSONResponse:
-        """Build the standard /token success body for *sub*.
-
-        Issues a fresh access token AND a fresh refresh token. The refresh
-        token lets long-running MCP clients renew the 1h access token without
-        re-running the browser PKCE flow (issue #261). ``scope`` advertises
-        ``offline_access`` so clients know a refresh token was granted.
-        """
-        access_token = jwt_issuer.issue_access_token(sub=sub)
-        refresh_token = jwt_issuer.issue_refresh_token(sub=sub)
-        return JSONResponse(
-            {
-                "access_token": access_token,
-                "token_type": "Bearer",
-                "expires_in": 3600,
-                "refresh_token": refresh_token,
-                "scope": "offline_access",
-            }
-        )
-
     async def token(request: Request) -> JSONResponse:
-        """POST /token -- authorization_code exchange or refresh_token rotation."""
+        """POST /token -- exchange auth code for JWT."""
         try:
             form = await request.form()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return JSONResponse({"error": "invalid_request"}, status_code=400)
 
         grant_type = form.get("grant_type")
         if grant_type == "refresh_token":
-            return _handle_refresh_token(form)
+            # Handle grant_type=refresh_token (RFC 6749 §6) statelessly.
+            refresh_token = form.get("refresh_token")
+            if not refresh_token:
+                return JSONResponse(
+                    {"error": "invalid_request", "error_description": "Missing refresh_token"},
+                    status_code=400,
+                )
+            try:
+                claims = jwt_issuer.verify_refresh_token(str(refresh_token))
+            except Exception:  # noqa: BLE001
+                return JSONResponse({"error": "invalid_grant"}, status_code=400)
+
+            sub = str(claims["sub"])
+            return JSONResponse(
+                {
+                    "access_token": jwt_issuer.issue_access_token(sub=sub),
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                    "refresh_token": jwt_issuer.issue_refresh_token(sub=sub),
+                    "scope": "offline_access",
+                }
+            )
+
         if grant_type != "authorization_code":
             return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
 
@@ -481,55 +493,32 @@ def create_local_oauth_app(
         code = str(code)
         code_verifier = str(code_verifier)
 
-        # Look up auth code
-        entry = auth_codes.pop(code, None)
-        if entry is None:
+        if code not in auth_codes:
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
+
+        entry = auth_codes.pop(code)
 
         # Check TTL
         if time.monotonic() - entry["created_at"] > _AUTH_CODE_TTL_S:
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
 
         # Verify PKCE
-        method = entry["code_challenge_method"]
-        if method != "S256":
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Only S256 is supported"},
-                status_code=400,
-            )
-
         if not _s256_verify(code_verifier, entry["code_challenge"]):
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
 
-        # Issue JWT with the subject bound to this authorize session. Previously
-        # this was the static string "local-user", which collapsed every browser
-        # session into one subject and defeated any per-user credential scoping
-        # attempted by remote-relay consumers. The new flow mints a fresh sub in
-        # authorize_get, carries it through on_credentials_saved via
-        # SubjectContext, and stamps it onto the JWT here.
-        return _issue_token_response(entry["sub"])
+        sub = entry["sub"]
+        access_token = jwt_issuer.issue_access_token(sub=sub)
+        refresh_token = jwt_issuer.issue_refresh_token(sub=sub)
 
-    def _handle_refresh_token(form: Any) -> JSONResponse:
-        """Handle ``grant_type=refresh_token`` (RFC 6749 §6) statelessly.
-
-        Verifies the presented refresh token's signature / iss / aud / exp /
-        ``typ`` via the JWT issuer (no server-side store), extracts ``sub``,
-        and issues a NEW access token AND a NEW refresh token (rotation). The
-        refresh token is self-contained, so rotation here is stateless: the
-        old refresh token simply expires on its own 30-day clock; clients are
-        expected to replace it with the rotated one returned below.
-        """
-        refresh_token = form.get("refresh_token")
-        if not refresh_token:
-            return JSONResponse(
-                {"error": "invalid_request", "error_description": "Missing refresh_token"},
-                status_code=400,
-            )
-        try:
-            claims = jwt_issuer.verify_refresh_token(str(refresh_token))
-        except Exception:
-            return JSONResponse({"error": "invalid_grant"}, status_code=400)
-        return _issue_token_response(str(claims["sub"]))
+        return JSONResponse(
+            {
+                "access_token": access_token,
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "refresh_token": refresh_token,
+                "scope": "offline_access",
+            }
+        )
 
     async def otp_handler(request: Request) -> JSONResponse:
         """POST /otp -- receive multi-step auth input (OTP code or 2FA password).
@@ -651,62 +640,12 @@ def create_local_oauth_app(
     async def well_known_pr(request: Request) -> JSONResponse:
         """GET /.well-known/oauth-protected-resource -- RFC 9728."""
         base = derive_base_url(request)
-        return JSONResponse(
-            protected_resource_metadata(
-                resource=base,
-                authorization_servers=[base],
-            )
-        )
+        return JSONResponse(protected_resource_metadata(resource=base, authorization_servers=[base]))
 
-    # In-memory setup status (set by background tasks via mark_setup_complete
-    # or mark_setup_failed). Values: "idle", "complete", or "error:<message>".
-    _setup_status: dict[str, str] = {"gdrive": "idle"}
-
-    def mark_setup_complete(key: str = "gdrive") -> None:
-        """Mark a background setup step as complete (called externally)."""
-        _setup_status[key] = "complete"
-
-    def mark_setup_failed(key: str = "gdrive", error: str = "unknown error") -> None:
-        """Mark a background setup step as failed (called externally).
-
-        The status is encoded as ``"error:<message>"`` so the frontend poll
-        handler can detect failure and surface the message to the user,
-        stopping the spinner that would otherwise wait forever.
-        """
-        # Sanitize: collapse whitespace so the error string is single-line
-        # (the frontend inlines it). Strip colons in the user-visible part
-        # only by replacing the rare ``error:`` prefix in callback text, to
-        # avoid double-prefixing.
-        message = " ".join(str(error).split()) or "unknown error"
-        _setup_status[key] = f"error:{message}"
-
-    async def setup_status(request: Request) -> JSONResponse:
-        """GET /setup-status -- polled by the form to detect GDrive auth completion."""
-        return JSONResponse(_setup_status)
-
-    async def root(request: Request):
-        """GET / -- auto-generate PKCE and redirect to /authorize.
-
-        The ``/authorize`` endpoint requires 4 PKCE parameters (``client_id``,
-        ``redirect_uri``, ``state``, ``code_challenge``). Users arriving from
-        a log line or bookmark have no way to construct those parameters
-        themselves, so the server bootstraps a default ``local-browser``
-        client here: generate random state + S256 challenge, redirect to
-        ``/authorize`` with valid params, and on success return to
-        ``/callback-done`` for a friendly close message.
-
-        This keeps the one-URL UX ("open http://... in browser") working
-        without exposing the raw OAuth machinery to end users.
-        """
-        from starlette.responses import RedirectResponse
-
+    async def root(request: Request) -> RedirectResponse:
+        """GET / -- auto-generate PKCE and redirect to /authorize."""
         base = derive_base_url(request)
-
-        # Generate PKCE pair for this bootstrap session.
-        # We reuse the ``pending_sessions`` store keyed by nonce so the
-        # normal ``authorize_get`` path can consume it. But ``authorize_get``
-        # itself generates the nonce + session, so we just build the
-        # redirect URL with fresh PKCE params.
+        # Auth code bootstrapped from / starts with fresh PKCE params.
         _code_verifier = secrets.token_urlsafe(64)
         _challenge_digest = hashlib.sha256(_code_verifier.encode("ascii")).digest()
         code_challenge = base64.urlsafe_b64encode(_challenge_digest).rstrip(b"=").decode("ascii")
@@ -794,6 +733,10 @@ def create_local_oauth_app(
         ip = request.client.host if request.client else "unknown"
         return await login_post_handler(dict(form), ip=ip)
 
+    async def setup_status(request: Request) -> JSONResponse:
+        """GET /setup-status -- poll background setup completion."""
+        return JSONResponse(_setup_status_manager.get_all())
+
     routes = [
         Route("/", root, methods=["GET"]),
         Route("/login", login_get, methods=["GET"]),
@@ -813,8 +756,8 @@ def create_local_oauth_app(
 
     # Expose mark_setup_complete / mark_setup_failed on the app for
     # external callers (see transport/local_server.py for wiring).
-    app.state.mark_setup_complete = mark_setup_complete  # type: ignore[attr-defined]
-    app.state.mark_setup_failed = mark_setup_failed  # type: ignore[attr-defined]
+    app.state.mark_setup_complete = _setup_status_manager.mark_complete  # type: ignore[attr-defined]
+    app.state.mark_setup_failed = _setup_status_manager.mark_failed  # type: ignore[attr-defined]
 
     return app, jwt_issuer
 
