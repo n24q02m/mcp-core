@@ -101,3 +101,21 @@ def test_session_expires_exactly_at_limit(monkeypatch):
     )
     assert is_session_active() is False
     assert validate_session_token(info.token) is False
+
+
+def test_release_session_idempotent():
+    # Ensure no session is active
+    release_session()
+    assert get_active_session() is None
+
+    # Release again - should be safe
+    release_session()
+    assert get_active_session() is None
+
+    # Claim and release twice
+    claim_session(client_id="bridge-1")
+    assert get_active_session() is not None
+    release_session()
+    assert get_active_session() is None
+    release_session()
+    assert get_active_session() is None
