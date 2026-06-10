@@ -32,6 +32,10 @@ def _get_litellm() -> Any:
 
 
 # Env-key -> litellm provider prefix (for configured_only filtering).
+# Intentionally covers only the provider set used by the n24q02m servers
+# (gemini/openai/xai/anthropic/cohere/jina_ai), NOT all ~30 litellm providers.
+# Passthrough still works for ANY provider; this map only affects
+# listing/suggestions.
 _PROVIDER_ENV_KEYS: dict[str, str] = {
     "GEMINI_API_KEY": "gemini",
     "GOOGLE_API_KEY": "gemini",
@@ -51,6 +55,8 @@ def _registry_entry(model: str) -> dict | None:
         return entry
     if "/" in model:
         # Registry keys some providers (e.g. anthropic, openai) without prefix.
+        # The bare-name fallback is intentionally provider-agnostic: any
+        # "<provider>/" prefix falls back to the bare key.
         return cost.get(model.split("/", 1)[1])
     return None
 
@@ -65,12 +71,15 @@ def check_capability(model: str, expected_modes: tuple[str, ...]) -> None:
         logger.debug(f"model {model!r} not in litellm registry; passthrough")
         return
     mode = entry.get("mode")
+    if mode is None:
+        # Registry metadata entries (e.g. fireworks-ai-* pricing tiers) are
+        # dicts without a "mode" key — treat like unknown models.
+        logger.debug(f"model {model!r} has no mode in registry; passthrough")
+        return
     if mode not in expected_modes:
         hints = suggest_models(expected_modes, limit=5)
-        raise ModelCapabilityError(
-            f"model {model!r} has mode={mode!r}, expected one of {expected_modes}. "
-            f"Compatible examples: {', '.join(hints)}"
-        )
+        hints_part = f" Compatible examples: {', '.join(hints)}" if hints else ""
+        raise ModelCapabilityError(f"model {model!r} has mode={mode!r}, expected one of {expected_modes}.{hints_part}")
 
 
 def supports_vision(model: str) -> bool | None:
