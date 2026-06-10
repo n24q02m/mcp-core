@@ -2,6 +2,7 @@
 
 import json
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -11,6 +12,7 @@ from mcp_core.storage.session_lock import (
     release_session_lock,
     set_lock_dir,
     write_session_lock,
+    _lock_path,
 )
 
 
@@ -94,6 +96,20 @@ class TestAcquireSessionLock:
 
         result = await acquire_session_lock("test-server")
         assert result is None
+
+    async def test_acquire_session_lock_release_error(self, _temp_lock_dir):
+        """Cover lines 106-107."""
+        lock_file = _temp_lock_dir / "relay-session-test-server.lock"
+        lock_file.write_text("not json", encoding="utf-8")
+
+        # We need to mock release_session_lock to RAISE OSError
+        # to reach the catch block in acquire_session_lock
+        with patch("mcp_core.storage.session_lock.release_session_lock") as mock_release:
+            mock_release.side_effect = OSError("Internal failure")
+
+            result = await acquire_session_lock("test-server")
+            assert result is None
+            mock_release.assert_called_once()
 
 
 class TestWriteSessionLock:
@@ -192,3 +208,18 @@ class TestReleaseSessionLock:
         result = await acquire_session_lock("server-b")
         assert result is not None
         assert result.session_id == "server-b"
+
+    async def test_release_session_lock_os_error(self, _temp_lock_dir):
+        """Cover lines 149-150."""
+        with patch("pathlib.Path.unlink") as mock_unlink:
+            mock_unlink.side_effect = OSError("Access denied")
+            # Should not raise because release_session_lock catches it
+            await release_session_lock("test-server")
+            mock_unlink.assert_called_once()
+
+
+def test_get_lock_dir_default():
+    """Cover line 37 by calling _lock_path with no override."""
+    set_lock_dir(None)
+    path = _lock_path("test")
+    assert "mcp" in str(path)
