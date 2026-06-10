@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.17.5-beta.1 (2026-06-10)
+
+### Bug Fixes
+
+- Ruff-format e2e oauth client hardening test (downstream vendor CI)
+  ([`293db81`](https://github.com/n24q02m/mcp-core/commit/293db81328555c733a94ce85751709c9fc73c8fa))
+
+
 ## v1.17.4 (2026-06-09)
 
 
