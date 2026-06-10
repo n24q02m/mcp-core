@@ -141,7 +141,7 @@ await http.connect()
 
 ## Documentation
 
-Full docs at **[mcp.n24q02m.com/servers/mcp-core/](https://mcp.n24q02m.com/servers/mcp-core/)** (Foundation library section in the MCP n24q02m unified docs site):
+Full docs at **[mcp.n24q02m.com/servers/mcp-core/architecture/](https://mcp.n24q02m.com/servers/mcp-core/architecture/)** (Foundation library section in the MCP n24q02m unified docs site):
 
 - [Architecture](https://mcp.n24q02m.com/servers/mcp-core/architecture/) -- transport, OAuth AS, lifecycle, multi-user primitives
 - [Trust model](https://mcp.n24q02m.com/servers/mcp-core/trust-model/) -- threat model + key-handling guarantees

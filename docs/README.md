@@ -1,6 +1,6 @@
 # mcp-core docs
 
-Documentation moved to **[mcp.n24q02m.com/servers/mcp-core/](https://mcp.n24q02m.com/servers/mcp-core/)**.
+Documentation moved to **[mcp.n24q02m.com/servers/mcp-core/architecture/](https://mcp.n24q02m.com/servers/mcp-core/architecture/)**.
 
 This folder is intentionally minimal. Source of truth for mcp-core architecture, trust model, migration, and shared services lives in:
 

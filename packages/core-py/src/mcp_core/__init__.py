@@ -1,6 +1,11 @@
 """Zero-env-config credential relay for MCP servers."""
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("n24q02m-mcp-core")
+except PackageNotFoundError:  # package not installed (e.g. running from source tree)
+    __version__ = "0.0.0+unknown"
 
 from mcp_core.crypto.aes import decrypt, encrypt
 from mcp_core.crypto.ecdh import (
