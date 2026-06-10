@@ -89,11 +89,18 @@ class StreamableHTTPServer:
         Acquires the lifecycle lock BEFORE binding the port, then hands the
         configured Starlette app to uvicorn. Releases the lock on shutdown.
         """
-        import uvicorn
+        import asyncio
 
-        from mcp_core.lifecycle.lock import LifecycleLock
+        async def _run_async() -> None:
+            import uvicorn
 
-        lock = self._lock or LifecycleLock(name=self._mcp.name, port=self._port)
-        with lock:
-            app = self.build_app()
-            uvicorn.run(app, host=self._host, port=self._port, log_level="info")
+            from mcp_core.lifecycle.lock import LifecycleLock
+
+            lock = self._lock or LifecycleLock(name=self._mcp.name, port=self._port)
+            async with lock:
+                app = self.build_app()
+                config = uvicorn.Config(app, host=self._host, port=self._port, log_level="info")
+                server = uvicorn.Server(config)
+                await server.serve()
+
+        asyncio.run(_run_async())

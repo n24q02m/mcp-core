@@ -343,7 +343,7 @@ async def _refresh_lock_timestamp_loop(lock_path: Path, interval_seconds: float 
         except _asyncio.CancelledError:
             return
         try:
-            refresh_lock_timestamp(lock_path)
+            await refresh_lock_timestamp(lock_path)
         except Exception:  # noqa: BLE001
             logger.opt(exception=True).debug("Failed to refresh lock timestamp at {}", lock_path)
 
@@ -556,7 +556,7 @@ async def run_http_server(
     # — see 2026-04-28 wet-mcp 11-stale-lock pile-up.
     from mcp_core.lifecycle.lock import sweep_stale_locks
 
-    swept = sweep_stale_locks(server_name)
+    swept = await sweep_stale_locks(server_name)
     if swept:
         logger.info("Cleaned up {} stale lock file(s) for {}", swept, server_name)
 
@@ -572,7 +572,7 @@ async def run_http_server(
     # by server_name when the credential-save hook fires.
     _mcp_registry[server_name] = mcp
 
-    with lock:
+    async with lock:
         # Decide whether to auto-open the relay form. Use schema-completeness
         # (is_schema_complete) instead of "config is None" so peer-share paths
         # writing partial entries (e.g. wet-mcp inheriting CRG cloud keys) do

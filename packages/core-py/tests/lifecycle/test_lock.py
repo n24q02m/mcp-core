@@ -199,3 +199,14 @@ class TestContention:
         reacquired = LifecycleLock(name=unique_name, port=9000, root=lock_root)
         with reacquired:
             pass  # must not raise
+
+
+class TestAsyncAcquireAndRelease:
+    async def test_async_acquires_and_releases(self, lock_root: Path, unique_name: str) -> None:
+        lock = LifecycleLock(name=unique_name, port=9000, root=lock_root)
+        lock_file = lock_root / f"{unique_name}-9000.lock"
+
+        async with lock:
+            assert lock_file.exists(), "lock file must exist while held"
+
+        assert not lock_file.exists(), "lock file must be removed after release"

@@ -398,6 +398,8 @@ class TestRunLocalServer:
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
             mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__aenter__ = AsyncMock(return_value=mock_lock.return_value)
+            mock_lock.return_value.__aexit__ = AsyncMock()
             mock_lock.return_value.__exit__ = lambda self, *a: None
 
             import asyncio
@@ -423,6 +425,8 @@ class TestRunLocalServer:
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
             mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__aenter__ = AsyncMock(return_value=mock_lock.return_value)
+            mock_lock.return_value.__aexit__ = AsyncMock()
             mock_lock.return_value.__exit__ = lambda self, *a: None
 
             import asyncio
@@ -462,6 +466,8 @@ class TestRunLocalServer:
             patch("mcp_core.transport.local_server.build_local_app", side_effect=spy_build) as mock_build,
         ):
             mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__aenter__ = AsyncMock(return_value=mock_lock.return_value)
+            mock_lock.return_value.__aexit__ = AsyncMock()
             mock_lock.return_value.__exit__ = lambda self, *a: None
 
             import asyncio
@@ -492,6 +498,8 @@ class TestRunLocalServer:
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
             mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__aenter__ = AsyncMock(return_value=mock_lock.return_value)
+            mock_lock.return_value.__aexit__ = AsyncMock()
             mock_lock.return_value.__exit__ = lambda self, *a: None
 
             import asyncio
@@ -666,6 +674,8 @@ class TestSetupCompleteHookArity:
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
             mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__aenter__ = AsyncMock(return_value=mock_lock.return_value)
+            mock_lock.return_value.__aexit__ = AsyncMock()
             mock_lock.return_value.__exit__ = lambda self, *a: None
 
             import asyncio
@@ -701,6 +711,8 @@ class TestSetupCompleteHookArity:
             patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
         ):
             mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__aenter__ = AsyncMock(return_value=mock_lock.return_value)
+            mock_lock.return_value.__aexit__ = AsyncMock()
             mock_lock.return_value.__exit__ = lambda self, *a: None
 
             import asyncio

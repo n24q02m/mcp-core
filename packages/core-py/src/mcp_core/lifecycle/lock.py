@@ -89,35 +89,40 @@ def _lock_dir() -> Path:
     return _locks_dir(None)
 
 
-def refresh_lock_timestamp(path: Path) -> None:
+async def refresh_lock_timestamp(path: Path) -> None:
     """Rewrite the ``spawned_at`` field of an existing lock file in place.
 
     Called by long-running HTTP servers to keep their lock outside the TTL
     sweep window. No-ops silently if the file is missing / malformed so
     callers don't have to wrap in try/except.
     """
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except OSError:
-        return
-    md = _parse_lock_text(raw)
-    if md is None:
-        return
-    now = datetime.now(timezone.utc)
-    payload = f"{md.pid}\n{md.port}\n{md.token}\n{now.isoformat()}\n"
-    try:
-        # Preserve fixed-width padding so the on-disk size never shrinks
-        # while a Windows byte-range lock is held past the metadata region.
-        with open(path, "r+", encoding="utf-8") as fh:
-            fh.seek(0)
-            fh.write(payload.ljust(512, " "))
-            fh.flush()
-    except OSError:
-        # Best-effort; server stays alive even if refresh fails.
-        return
+    import asyncio as _asyncio
+
+    def _sync_refresh() -> None:
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError:
+            return
+        md = _parse_lock_text(raw)
+        if md is None:
+            return
+        now = datetime.now(timezone.utc)
+        payload = f"{md.pid}\n{md.port}\n{md.token}\n{now.isoformat()}\n"
+        try:
+            # Preserve fixed-width padding so the on-disk size never shrinks
+            # while a Windows byte-range lock is held past the metadata region.
+            with open(path, "r+", encoding="utf-8") as fh:
+                fh.seek(0)
+                fh.write(payload.ljust(512, " "))
+                fh.flush()
+        except OSError:
+            # Best-effort; server stays alive even if refresh fails.
+            return
+
+    await _asyncio.to_thread(_sync_refresh)
 
 
-def sweep_stale_locks(
+async def sweep_stale_locks(
     server_name: str,
     ttl_hours: int = DEFAULT_LOCK_TTL_HOURS,
     root: Path | None = None,
@@ -130,41 +135,46 @@ def sweep_stale_locks(
 
     Called by the HTTP server at startup before acquiring its own lock.
     """
-    if root is not None:
-        locks_dir = root
-    else:
-        locks_dir = _lock_dir()
-    if not locks_dir.exists():
-        return 0
+    import asyncio as _asyncio
 
-    removed = 0
-    now = datetime.now(timezone.utc)
-    ttl = timedelta(hours=ttl_hours)
-    for path in locks_dir.glob(f"{server_name}-*.lock"):
-        try:
-            raw = path.read_text(encoding="utf-8")
-        except OSError:
+    def _sync_sweep() -> int:
+        if root is not None:
+            locks_dir = root
+        else:
+            locks_dir = _lock_dir()
+        if not locks_dir.exists():
+            return 0
+
+        removed = 0
+        now = datetime.now(timezone.utc)
+        ttl = timedelta(hours=ttl_hours)
+        for path in locks_dir.glob(f"{server_name}-*.lock"):
             try:
-                path.unlink()
-                removed += 1
+                raw = path.read_text(encoding="utf-8")
             except OSError:
-                pass
-            continue
-        meta = _parse_lock_text(raw)
-        if meta is None:
-            try:
-                path.unlink()
-                removed += 1
-            except OSError:
-                pass
-            continue
-        if (now - meta.spawned_at) > ttl:
-            try:
-                path.unlink()
-                removed += 1
-            except OSError:
-                pass
-    return removed
+                try:
+                    path.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+                continue
+            meta = _parse_lock_text(raw)
+            if meta is None:
+                try:
+                    path.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+                continue
+            if (now - meta.spawned_at) > ttl:
+                try:
+                    path.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+        return removed
+
+    return await _asyncio.to_thread(_sync_sweep)
 
 
 class LifecycleLock:
@@ -196,6 +206,21 @@ class LifecycleLock:
     def path(self) -> Path:
         """Location of the lock file on disk."""
         return self._lock_file
+
+    async def __aenter__(self) -> "LifecycleLock":
+        import asyncio as _asyncio
+
+        return await _asyncio.to_thread(self.__enter__)
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        import asyncio as _asyncio
+
+        await _asyncio.to_thread(self.__exit__, exc_type, exc, tb)
 
     def __enter__(self) -> "LifecycleLock":
         # Open in read+write without truncation so concurrent openers never
