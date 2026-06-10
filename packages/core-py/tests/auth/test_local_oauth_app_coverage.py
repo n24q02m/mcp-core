@@ -92,3 +92,73 @@ def test_authorize_post_invalid_json():
     assert resp.status_code == 400
     assert resp.json()["error"] == "invalid_request"
     assert "Invalid JSON" in resp.json()["error_description"]
+
+
+def test_authorize_prefill_invalid_json():
+    app, _ = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+    )
+    client = TestClient(app, base_url="http://localhost")
+
+    # 1. Malformed JSON
+    resp = client.post(
+        "/authorize/prefill?state=state123", content="not json", headers={"Content-Type": "application/json"}
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+    assert "Body must be JSON object" in resp.json()["error_description"]
+
+    # 2. JSON but not an object (e.g., a list)
+    resp = client.post("/authorize/prefill?state=state123", json=["not", "an", "object"])
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+    assert "Body must be JSON object" in resp.json()["error_description"]
+
+
+def test_otp_handler_invalid_json():
+    def on_saved(creds, context):
+        return {"type": "otp_required", "text": "Enter OTP", "key": "otp_code"}
+
+    app, _ = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=on_saved,
+    )
+    client = TestClient(app, base_url="http://localhost")
+
+    _v, challenge = _pkce_pair()
+    resp = client.get(
+        f"/authorize?client_id=local-browser&response_type=code&"
+        f"code_challenge={challenge}&code_challenge_method=S256&state=state123&"
+        f"redirect_uri=http://localhost/callback"
+    )
+    match = re.search(r"nonce=([a-zA-Z0-9_-]+)", resp.text)
+    nonce = match.group(1)
+
+    # First submit to trigger OTP requirement
+    client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+
+    # Now call /otp with invalid JSON
+    resp = client.post("/otp", content="not json", headers={"Content-Type": "application/json"})
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+    assert "Invalid JSON body" in resp.json()["error_description"]
+
+
+def test_register_handler_invalid_json():
+    app, _ = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+    )
+    client = TestClient(app, base_url="http://localhost")
+
+    # 1. Malformed JSON should default to empty body
+    resp = client.post("/register", content="not json", headers={"Content-Type": "application/json"})
+    assert resp.status_code == 201
+    assert resp.json()["client_id"] == "local-browser"
+
+    # 2. JSON but not an object should also default to empty body
+    resp = client.post("/register", json=["not", "an", "object"])
+    assert resp.status_code == 201
+    assert resp.json()["client_id"] == "local-browser"
