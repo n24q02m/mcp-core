@@ -26,6 +26,8 @@ def test_sqlite_user_store_init_empty_path(master_key: bytes):
 
 
 def test_sqlite_user_store_init_chmod_failure(tmp_path: Path, master_key: bytes):
+    if os.name == "nt":
+        pytest.skip("SqliteUserStore skips chmod on Windows")
     db_path = tmp_path / "dir" / "users.db"
     with patch("pathlib.Path.chmod") as mock_chmod:
         mock_chmod.side_effect = PermissionError("Permission denied")
