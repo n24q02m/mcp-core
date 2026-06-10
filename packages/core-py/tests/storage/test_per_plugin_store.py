@@ -3,7 +3,7 @@
 import os
 import pytest
 
-from mcp_core.storage.per_plugin_store import PerPluginStore
+from mcp_core.storage.per_plugin_store import PerPluginStore, _cred_path
 
 
 @pytest.fixture
@@ -35,6 +35,17 @@ def test_path_layout(tmp_path, monkeypatch):
     store_multi = PerPluginStore("foo", sub="abc-123")
     assert store_stdio.cred_path == tmp_path / ".foo-mcp" / "config.json"
     assert store_multi.cred_path == tmp_path / ".foo-mcp" / "subs" / "abc-123" / "config.json"
+
+
+def test_path_traversal_protection():
+    with pytest.raises(ValueError, match="Invalid plugin_name"):
+        _cred_path("../evil", None)
+    with pytest.raises(ValueError, match="Invalid sub"):
+        _cred_path("plugin", "../../evil")
+    with pytest.raises(ValueError, match="Invalid plugin_name"):
+        _cred_path("", None)
+    with pytest.raises(ValueError, match="Invalid sub"):
+        _cred_path("plugin", "")
 
 
 def test_clear(store_factory):

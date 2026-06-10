@@ -33,6 +33,13 @@ function getHomeDir(): string {
 }
 
 export function credPath(pluginName: string, sub: string | null): string {
+  const unsafe = /[^a-zA-Z0-9.-]/g
+  if (!pluginName || unsafe.test(pluginName) || pluginName.includes('..')) {
+    throw new Error('Invalid pluginName')
+  }
+  if (sub !== null && (!sub || unsafe.test(sub) || sub.includes('..'))) {
+    throw new Error('Invalid sub')
+  }
   const base = join(getHomeDir(), `.${pluginName}-mcp`)
   return sub ? join(base, 'subs', sub, 'config.json') : join(base, 'config.json')
 }
