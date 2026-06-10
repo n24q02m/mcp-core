@@ -51,7 +51,7 @@ mise run setup                 # Install tools + deps + pre-commit hooks
 - Pipeline: PSR v10 -> npm publish (core-ts) + PyPI publish (core-py, embedding-daemon)
 - Tất cả packages share cùng version. PSR bumps `packages/core-py/pyproject.toml`, `packages/embedding-daemon/pyproject.toml` (version_toml). CD injects version vào `packages/core-ts/package.json` trước khi npm publish.
 - Publishing: PyPI trusted publishers (pending publisher đã config cho 2 packages) + npm trusted publisher (sau lần publish đầu với NPM OIDC).
-- Docker: `Dockerfile` multi-target (`:stdio` + `:http`) build core-ts CLI; chưa có bước publish image trong CD.
+- Docker: không có image. mcp-core là library (core-py / core-ts / embedding-daemon) — consume qua PyPI/npm bởi downstream MCP servers, không ship CLI/daemon runnable riêng.
 
 ## Secrets (skret + AWS SSM)
 

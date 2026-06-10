@@ -14,6 +14,8 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 
+from mcp_embedding_daemon import __version__
+
 
 class EmbedRequest(BaseModel):
     model: str = "qwen3-0.6b"
@@ -43,8 +45,6 @@ class HealthResponse(BaseModel):
     status: str
     version: str
 
-
-__version__ = "0.1.0"
 
 app = FastAPI(title="mcp-embedding-daemon", version=__version__)
 
