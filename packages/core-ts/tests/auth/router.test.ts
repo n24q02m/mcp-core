@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createRouter, htmlResponse, jsonResponse, parseFormBody, parseJsonBody } from '../../src/auth/router.js'
 
 function startTestServer(handler: ReturnType<typeof createRouter>): Promise<{ url: string; close: () => void }> {
@@ -25,7 +25,7 @@ describe('createRouter', () => {
         handler: (_req, res) => jsonResponse(res, 200, { ok: true })
       }
     ])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const resp = await fetch(`${url}/hello`)
       expect(resp.status).toBe(200)
@@ -37,7 +37,7 @@ describe('createRouter', () => {
 
   it('returns 404 for unmatched routes', async () => {
     const handler = createRouter([])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const resp = await fetch(`${url}/nonexistent`)
       expect(resp.status).toBe(404)
@@ -58,7 +58,7 @@ describe('createRouter', () => {
         }
       }
     ])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const resp = await fetch(`${url}/fail`)
       expect(resp.status).toBe(500)
@@ -80,7 +80,7 @@ describe('createRouter', () => {
         handler: (_r, res) => jsonResponse(res, 200, { method: 'POST' })
       }
     ])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const getResp = await fetch(`${url}/x`)
       expect(((await getResp.json()) as Record<string, string>).method).toBe('GET')
@@ -89,6 +89,67 @@ describe('createRouter', () => {
     } finally {
       close()
     }
+  })
+
+  it('uses default method, url and host when missing', async () => {
+    let called = false
+    const handler = createRouter([
+      {
+        method: 'GET',
+        path: '/',
+        handler: (_req, res) => {
+          called = true
+          res.writeHead(200)
+          res.end()
+        }
+      }
+    ])
+
+    const req = {
+      method: undefined,
+      url: undefined,
+      headers: {}
+    } as any
+    const res = {
+      writeHead: () => {},
+      end: () => {}
+    } as any
+
+    await handler(req, res)
+    expect(called).toBe(true)
+  })
+
+  it('does not write 500 if headers already sent', async () => {
+    const handler = createRouter([
+      {
+        method: 'GET',
+        path: '/sent',
+        handler: (_req, res) => {
+          res.writeHead(200)
+          // node.http.ServerResponse sets headersSent automatically on writeHead
+          // but we are mocking it here. We use Object.defineProperty because headersSent is read-only on the type.
+          Object.defineProperty(res, 'headersSent', { value: true })
+          throw new Error('boom')
+        }
+      }
+    ])
+
+    const writeHead = vi.fn()
+    const req = {
+      method: 'GET',
+      url: '/sent',
+      headers: { host: 'localhost' }
+    } as any
+    const res = {
+      writeHead,
+      headersSent: false,
+      end: () => {}
+    } as any
+
+    await handler(req, res)
+    // writeHead was called once with 200, but should NOT be called again with 500
+    expect(writeHead).toHaveBeenCalledOnce()
+    expect(writeHead).toHaveBeenCalledWith(200)
   })
 })
 
@@ -104,7 +165,7 @@ describe('parseJsonBody', () => {
         }
       }
     ])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const resp = await fetch(`${url}/echo`, {
         method: 'POST',
@@ -132,7 +193,7 @@ describe('parseJsonBody', () => {
         }
       }
     ])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const resp = await fetch(`${url}/bad`, {
         method: 'POST',
@@ -157,7 +218,7 @@ describe('parseFormBody', () => {
         }
       }
     ])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const resp = await fetch(`${url}/form`, {
         method: 'POST',
@@ -180,7 +241,7 @@ describe('jsonResponse', () => {
         handler: (_r, res) => jsonResponse(res, 201, { a: 1 })
       }
     ])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const resp = await fetch(`${url}/j`)
       expect(resp.status).toBe(201)
@@ -201,7 +262,7 @@ describe('htmlResponse', () => {
         handler: (_r, res) => htmlResponse(res, 200, '<html></html>')
       }
     ])
-    const { url, close } = await startTestServer(handler)
+    const { url, close = () => {} } = await startTestServer(handler)
     try {
       const resp = await fetch(`${url}/h`)
       expect(resp.status).toBe(200)
