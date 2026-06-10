@@ -32,17 +32,25 @@ class SqliteUserStore(IUserCredentialStore):
         """
         if len(master_key) != 32:
             raise ValueError("master_key must be exactly 32 bytes")
+        if db_path.is_dir():
+            raise ValueError(f"db_path must be a file, but a directory was provided: {db_path}")
         self.db_path = db_path
         self._master_key = master_key
 
         # Ensure directory exists with strict permissions (owner-only access).
         # 0o700 = owner read+write+exec only; group/other denied. This is the
         # secure default for a credential store directory.
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        if self.db_path.parent.exists() and os.name != "nt":
-            self.db_path.parent.chmod(0o700)
+        try:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            if self.db_path.parent.exists() and os.name != "nt":
+                self.db_path.parent.chmod(0o700)
+        except OSError as e:
+            raise RuntimeError(f"Failed to create or set permissions on user store directory: {e}") from e
 
-        self._init_db()
+        try:
+            self._init_db()
+        except (sqlite3.Error, OSError) as e:
+            raise RuntimeError(f"Failed to initialize user store database: {e}") from e
 
     def _init_db(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
