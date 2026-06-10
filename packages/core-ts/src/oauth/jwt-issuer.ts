@@ -35,21 +35,23 @@ export class JWTIssuer {
     if (existsSync(this.privateKeyPath) && existsSync(this.publicKeyPath)) {
       const privatePem = readFileSync(this.privateKeyPath, 'utf-8')
       const publicPem = readFileSync(this.publicKeyPath, 'utf-8')
-      this.privateKey = await jose.importPKCS8(privatePem, 'RS256')
-      this.publicKey = await jose.importSPKI(publicPem, 'RS256')
+      this.privateKey = await jose.importPKCS8(privatePem, 'RS256', { extractable: false })
+      this.publicKey = await jose.importSPKI(publicPem, 'RS256', { extractable: true })
     } else {
       const { publicKey, privateKey } = await jose.generateKeyPair('RS256', {
         modulusLength: 2048,
         extractable: true
       })
-      this.privateKey = privateKey
-      this.publicKey = publicKey
 
       const privatePem = await jose.exportPKCS8(privateKey)
       const publicPem = await jose.exportSPKI(publicKey)
 
       writeFileSync(this.privateKeyPath, privatePem, { mode: 0o600 })
       writeFileSync(this.publicKeyPath, publicPem, { mode: 0o644 })
+
+      // Re-import with extractable: false for in-memory storage
+      this.privateKey = await jose.importPKCS8(privatePem, 'RS256', { extractable: false })
+      this.publicKey = await jose.importSPKI(publicPem, 'RS256', { extractable: true })
     }
     this._initialized = true
   }
