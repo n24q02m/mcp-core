@@ -39,6 +39,13 @@ describe('PerPluginStore', () => {
     expect(credPath('foo', 'abc-123')).toContain(join('.foo-mcp', 'subs', 'abc-123', 'config.json'))
   })
 
+  it('path traversal protection', () => {
+    expect(() => credPath('../evil', null)).toThrow(/Invalid pluginName/)
+    expect(() => credPath('plugin', '../../evil')).toThrow(/Invalid sub/)
+    expect(() => credPath('', null)).toThrow(/Invalid pluginName/)
+    expect(() => credPath('plugin', '')).toThrow(/Invalid sub/)
+  })
+
   it('clear', async () => {
     const store = new PerPluginStore('test-plugin')
     await store.save({ x: 1 })
