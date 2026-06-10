@@ -1246,6 +1246,7 @@ def test_otp_endpoint_with_future_callbacks():
     assert data["ok"] is True
     assert "next_step" not in data
 
+
 # ---------------------------------------------------------------------------
 # Authorize POST error paths (Coverage)
 # ---------------------------------------------------------------------------
