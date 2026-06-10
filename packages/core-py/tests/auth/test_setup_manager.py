@@ -1,4 +1,3 @@
-import pytest
 from mcp_core.auth.local_oauth_app import _SetupStatusManager
 
 def test_setup_manager_initial_state():
