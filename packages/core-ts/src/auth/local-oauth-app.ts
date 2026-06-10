@@ -245,6 +245,28 @@ function getBaseUrl(req: IncomingMessage): string {
 }
 
 /**
+ * Collapses multiple whitespace characters into a single space and trims the result.
+ * Optimized manual loop to avoid regex allocation and multiple string/array copies.
+ */
+function collapseWhitespace(str: string): string {
+  let result = ''
+  let inWhitespace = true
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i]
+    if (c === ' ' || c === '\n' || c === '\r' || c === '\t' || c === '\f' || c === '\v') {
+      if (!inWhitespace) {
+        result += ' '
+        inWhitespace = true
+      }
+    } else {
+      result += c
+      inWhitespace = false
+    }
+  }
+  return inWhitespace && result.length > 0 ? result.slice(0, -1) : result
+}
+
+/**
  * Create OAuth 2.1 Authorization Server HTTP handler.
  *
  * Returns a handler compatible with ``http.createServer`` along with the
@@ -793,8 +815,8 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
    * single-line (the frontend inlines it verbatim).
    */
   function markSetupFailed(key = 'gdrive', error = 'unknown error'): void {
-    // ⚡ Bolt: Replace multiple array allocations (.split.filter.join) with regex replace for faster whitespace collapsing
-    const collapsed = String(error).replace(/\s+/g, ' ').trim()
+    // ⚡ Bolt: Use manual loop for single-pass whitespace collapsing and trimming to avoid regex overhead
+    const collapsed = collapseWhitespace(String(error))
     const message = collapsed.length > 0 ? collapsed : 'unknown error'
     setupStatus[key] = `error:${message}`
   }
