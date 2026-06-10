@@ -51,7 +51,7 @@ export function persistToolsCache(
   tools: unknown[]
 ): void {
   const path = join(self.cacheDir(), cacheFilename(serverName, port, srvVersion, coreVersion))
-  const payload = JSON.stringify({ tools, srvVersion, coreVersion })
+  const payload = JSON.stringify({ tools, srv_version: srvVersion, core_version: coreVersion })
   try {
     self.atomicWrite(path, payload)
   } catch (err) {
@@ -70,7 +70,7 @@ export function loadToolsCache(
   if (!existsSync(path)) return null
   try {
     const payload = JSON.parse(readFileSync(path, 'utf-8'))
-    if (payload.srvVersion !== srvVersion || payload.coreVersion !== coreVersion) return null
+    if (payload.srv_version !== srvVersion || payload.core_version !== coreVersion) return null
     return Array.isArray(payload.tools) ? payload.tools : null
   } catch {
     return null
