@@ -46,12 +46,27 @@ function writeChallenge(res: ServerResponse, resourceMetadataUrl: string, error?
   )
 }
 
-function extractBearerToken(authHeader: string | undefined): string | null {
+export function extractBearerToken(authHeader: string | undefined): string | null {
   if (!authHeader) return null
+
+  // Fast path for strictly "Bearer " or "bearer " (exact case & single space)
+  if (authHeader.startsWith('Bearer ') || authHeader.startsWith('bearer ')) {
+    const token = authHeader.substring(7).trim()
+    return token.length > 0 ? token : null
+  }
+
+  // Fallback for tricky cases (mixed case, leading whitespace, etc.)
   const trimmed = authHeader.trim()
-  const match = trimmed.match(/^Bearer\s+(.+)$/i)
-  if (!match) return null
-  const token = match[1]?.trim() ?? ''
+  if (trimmed.length <= 6) return null
+
+  const prefix = trimmed.substring(0, 6)
+  if (prefix.toLowerCase() !== 'bearer') return null
+
+  const char6 = trimmed.charCodeAt(6)
+  // Check if character 6 is whitespace (space=32, tab=9, newline=10, return=13)
+  if (char6 !== 32 && char6 !== 9 && char6 !== 10 && char6 !== 13) return null
+
+  const token = trimmed.substring(7).trim()
   return token.length > 0 ? token : null
 }
 
