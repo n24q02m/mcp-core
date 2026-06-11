@@ -24,8 +24,8 @@ classifiers = [
 dependencies = [
     "fastmcp>=3.4.2",
     "httpx>=0.28.1",
-    "httpcore>=1.0.0",
-    "cryptography>=48.0.0",
+    "httpcore>=1.0.9",
+    "cryptography>=48.0.1",
     "authlib>=1.7.2",
     "starlette>=1.2.1",
     # Pydantic kept open >=2.12.5,<3 so downstream plugins (telegram/imagine/
@@ -37,13 +37,13 @@ dependencies = [
     "loguru>=0.7.3",
     "platformdirs>=4.10.0",
     "tomli-w>=1.2.0",
-    "filelock>=3.29.1",
+    "filelock>=3.29.3",
 ]
 
 [project.optional-dependencies]
 # litellm>=1.83.0: CVE-2026-35030 fixed in 1.83.0; 1.82.7-1.82.8 were removed
 # from PyPI (supply-chain incident). Library mode only — NEVER litellm[proxy].
-llm = ["litellm>=1.83.0"]
+llm = ["litellm>=1.88.1"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
@@ -60,7 +60,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.15.16",
-    "ty>=0.0.45",
+    "ty>=0.0.48",
 ]
 
 [tool.hatch.build.targets.wheel]
