@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.2 (2026-06-11)
+
+### Features
+
+- Canonical model-prefix to credential-env map (mcp_core.llm.providers)
+  ([#438](https://github.com/n24q02m/mcp-core/pull/438),
+  [`7ff3c9e`](https://github.com/n24q02m/mcp-core/commit/7ff3c9ec98995d1bd909a12636d644eb806fe302))
+
+- Model-chain + derived keys in ConfigField schema
+  ([#438](https://github.com/n24q02m/mcp-core/pull/438),
+  [`7ff3c9e`](https://github.com/n24q02m/mcp-core/commit/7ff3c9ec98995d1bd909a12636d644eb806fe302))
+
+- Model-chain widget JS (chip dropdown-checkbox + drag-reorder + derive-keys)
+  ([#438](https://github.com/n24q02m/mcp-core/pull/438),
+  [`7ff3c9e`](https://github.com/n24q02m/mcp-core/commit/7ff3c9ec98995d1bd909a12636d644eb806fe302))
+
+- Relay model-chain widget + provider->key map (selection redesign Phase 1)
+  ([#438](https://github.com/n24q02m/mcp-core/pull/438),
+  [`7ff3c9e`](https://github.com/n24q02m/mcp-core/commit/7ff3c9ec98995d1bd909a12636d644eb806fe302))
+
+- Render model-chain widget + derived credential fields in relay form
+  ([#438](https://github.com/n24q02m/mcp-core/pull/438),
+  [`7ff3c9e`](https://github.com/n24q02m/mcp-core/commit/7ff3c9ec98995d1bd909a12636d644eb806fe302))
+
+
 ## v1.18.0-beta.1 (2026-06-10)
 
 ### Bug Fixes
