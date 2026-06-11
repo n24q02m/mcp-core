@@ -11,7 +11,9 @@ class ConfigField(TypedDict, total=False):
 
     key: str
     label: str
-    type: str  # 'text' | 'password' | 'number' | 'tel' | 'url' | 'email' | 'select'
+    # 'text' | 'password' | 'number' | 'tel' | 'url' | 'email' | 'select'
+    # | 'model-chain'
+    type: str
     placeholder: str
     helpUrl: str
     helpText: str
@@ -19,6 +21,12 @@ class ConfigField(TypedDict, total=False):
     choices: list[str]
     required: bool
     validation: str
+    # --- model-chain widget only ---
+    task: str  # 'embedding' | 'rerank' | 'chat' | 'summary' | 'understand'
+    suggestedModels: list[str]  # curated provider/model suggestions
+    hasLocal: bool  # True -> empty chain falls back to local ONNX
+    # --- derived credential field only ---
+    derived: bool  # True -> hidden until a model-chain chip references it
 
 
 class ConfigMode(TypedDict):
