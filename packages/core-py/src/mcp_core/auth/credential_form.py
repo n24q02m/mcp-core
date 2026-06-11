@@ -42,6 +42,157 @@ def _escape(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
 
+# Interactive model-chain widget script. Built as a PLAIN (non-f) string so the
+# many JS braces need no escaping; ``__PROVIDER_KEY_JSON__`` is substituted at
+# render time with ``json.dumps(PROVIDER_KEY_ENV)`` (the canonical provider->env
+# map). The widget renders draggable chips, a suggested-model dropdown, keeps the
+# hidden ``.field-input`` CSV synced (so the existing submit handler works
+# unchanged), and toggles ``[data-provider-key]`` credential fields based on the
+# providers of the chosen models (derive-keys).
+_MODEL_CHAIN_SCRIPT = """
+    <script>
+    (function () {
+        var PROVIDER_KEY = JSON.parse('__PROVIDER_KEY_JSON__');
+        function providerOf(model) {
+            model = (model || "").trim();
+            var i = model.indexOf("/");
+            return i === -1 ? "openai" : model.slice(0, i);
+        }
+        function keyEnvFor(model) {
+            var p = providerOf(model);
+            return PROVIDER_KEY[p] || (p.toUpperCase() + "_API_KEY");
+        }
+
+        var widgets = document.querySelectorAll(".model-chain");
+
+        function getChips(w) {
+            var hidden = document.getElementById("field-" + w.getAttribute("data-key"));
+            return hidden.value ? hidden.value.split(",").map(function (s) { return s.trim(); }).filter(Boolean) : [];
+        }
+        function deriveKeys() {
+            var needed = {};
+            widgets.forEach(function (w) {
+                getChips(w).forEach(function (m) { needed[keyEnvFor(m)] = true; });
+            });
+            document.querySelectorAll("[data-provider-key]").forEach(function (grp) {
+                var k = grp.getAttribute("data-provider-key");
+                grp.style.display = needed[k] ? "" : "none";
+                if (!needed[k]) {
+                    var inp = grp.querySelector("input");
+                    if (inp) inp.value = "";
+                }
+            });
+        }
+        function updateBadge(w, models) {
+            var badge = document.getElementById("mc-badge-" + w.getAttribute("data-key"));
+            if (models.length > 0) { badge.textContent = ""; return; }
+            badge.textContent = (w.getAttribute("data-has-local") === "true")
+                ? "No models -> local ONNX (no key needed)"
+                : "No models -> this feature is disabled";
+        }
+        function setChips(w, models) {
+            var hidden = document.getElementById("field-" + w.getAttribute("data-key"));
+            hidden.value = models.join(",");
+            renderChips(w, models);
+            updateBadge(w, models);
+            deriveKeys();
+        }
+        function attachDrag(w, chip) {
+            chip.addEventListener("dragstart", function (e) {
+                chip.classList.add("dragging");
+                e.dataTransfer.setData("text/plain", chip.dataset.model);
+            });
+            chip.addEventListener("dragend", function () { chip.classList.remove("dragging"); });
+            chip.addEventListener("dragover", function (e) { e.preventDefault(); });
+            chip.addEventListener("drop", function (e) {
+                e.preventDefault();
+                var dragged = e.dataTransfer.getData("text/plain");
+                var target = chip.dataset.model;
+                if (dragged === target) return;
+                var models = getChips(w).filter(function (x) { return x !== dragged; });
+                var ti = models.indexOf(target);
+                models.splice(ti, 0, dragged);
+                setChips(w, models);
+            });
+        }
+        function renderChips(w, models) {
+            var box = document.getElementById("mc-chips-" + w.getAttribute("data-key"));
+            while (box.firstChild) box.removeChild(box.firstChild);
+            models.forEach(function (m, idx) {
+                var chip = document.createElement("span");
+                chip.className = "mc-chip";
+                chip.setAttribute("draggable", "true");
+                chip.dataset.model = m;
+                var ord = document.createElement("span");
+                ord.className = "mc-order";
+                ord.textContent = (idx + 1) + ".";
+                chip.appendChild(ord);
+                var name = document.createElement("span");
+                name.textContent = m;
+                chip.appendChild(name);
+                var rm = document.createElement("button");
+                rm.type = "button";
+                rm.setAttribute("aria-label", "Remove " + m);
+                rm.textContent = "x";
+                rm.addEventListener("click", function () {
+                    setChips(w, getChips(w).filter(function (x) { return x !== m; }));
+                });
+                chip.appendChild(rm);
+                attachDrag(w, chip);
+                box.appendChild(chip);
+            });
+        }
+        function buildDropdown(w) {
+            var dd = document.getElementById("mc-dropdown-" + w.getAttribute("data-key"));
+            while (dd.firstChild) dd.removeChild(dd.firstChild);
+            var suggested = JSON.parse(w.getAttribute("data-suggested") || "[]");
+            var current = getChips(w);
+            suggested.forEach(function (m) {
+                var lbl = document.createElement("label");
+                var cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.checked = current.indexOf(m) !== -1;
+                cb.addEventListener("change", function () {
+                    var models = getChips(w);
+                    if (cb.checked) { if (models.indexOf(m) === -1) models.push(m); }
+                    else { models = models.filter(function (x) { return x !== m; }); }
+                    setChips(w, models);
+                });
+                lbl.appendChild(cb);
+                var span = document.createElement("span");
+                span.textContent = m;
+                lbl.appendChild(span);
+                dd.appendChild(lbl);
+            });
+            dd.hidden = false;
+        }
+        widgets.forEach(function (w) {
+            var input = w.querySelector(".mc-typeahead");
+            var dd = document.getElementById("mc-dropdown-" + w.getAttribute("data-key"));
+            setChips(w, getChips(w));
+            input.addEventListener("focus", function () { buildDropdown(w); });
+            input.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" && input.value.trim()) {
+                    e.preventDefault();
+                    var m = input.value.trim();
+                    var suggested = JSON.parse(w.getAttribute("data-suggested") || "[]");
+                    if (suggested.indexOf(m) === -1) { return; }
+                    var models = getChips(w);
+                    if (models.indexOf(m) === -1) models.push(m);
+                    setChips(w, models);
+                    input.value = "";
+                    buildDropdown(w);
+                }
+            });
+            document.addEventListener("click", function (e) {
+                if (!w.contains(e.target)) dd.hidden = true;
+            });
+        });
+        deriveKeys();
+    })();
+    </script>"""
+
+
 # Shared CSS for every relay/auth HTML page rendered by core-py.
 #
 # Kept verbatim with ``packages/core-ts/src/auth/credential-form.ts``'s
@@ -183,6 +334,18 @@ _FORM_SHELL_CSS = """        *, *::before, *::after {
             cursor: not-allowed;
             background-color: #0f0f0f;
         }
+
+        .model-chain { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; position: relative; padding: 8px; border: 1px solid #2a2a3a; border-radius: 8px; background: #14141f; }
+        .mc-chips { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+        .mc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: #23233a; border: 1px solid #34344a; border-radius: 6px; font-size: 13px; cursor: grab; }
+        .mc-chip.dragging { opacity: 0.4; }
+        .mc-chip .mc-order { color: #8a8aa5; font-variant-numeric: tabular-nums; }
+        .mc-chip button { background: none; border: none; color: #b56; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+        .mc-typeahead { flex: 1; min-width: 140px; background: transparent; border: none; color: inherit; outline: none; font-size: 14px; padding: 4px; }
+        .mc-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; background: #1b1b2a; border: 1px solid #2a2a3a; border-radius: 8px; margin-top: 4px; max-height: 220px; overflow-y: auto; }
+        .mc-dropdown label { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+        .mc-dropdown label:hover { background: #23233a; }
+        .mc-badge { font-size: 12px; color: #8a8aa5; width: 100%; }
 
         .help-text {
             font-size: 0.8125rem;
@@ -960,7 +1123,17 @@ def render_credential_form(
         }})();
     </script>"""
 
-    return render_form_shell(title, body_html)
+    # Append the model-chain widget script (chips/dropdown/drag + derive-keys).
+    # Injected as a <script> text node, so the provider map is plain
+    # ``json.dumps`` (NOT HTML-escaped): the values are fixed identifiers with no
+    # ``<``/``>``/quotes, and HTML-escaping the double quotes would break the
+    # single-quoted ``JSON.parse('...')`` literal.
+    from mcp_core.llm.providers import PROVIDER_KEY_ENV
+
+    provider_map_json = json.dumps(PROVIDER_KEY_ENV)
+    model_chain_script = _MODEL_CHAIN_SCRIPT.replace("__PROVIDER_KEY_JSON__", provider_map_json)
+
+    return render_form_shell(title, body_html + model_chain_script)
 
 
 def is_schema_complete(config: dict[str, Any] | None, schema: dict[str, Any]) -> bool:

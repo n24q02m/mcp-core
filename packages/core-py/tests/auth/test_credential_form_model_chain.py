@@ -34,3 +34,28 @@ def test_plain_password_field_unchanged():
     assert 'type="password"' in html
     assert "data-model-chain" not in html
     assert "data-provider-key" not in html
+
+
+def test_full_form_with_model_chain_renders_script_and_map():
+    from mcp_core.auth.credential_form import render_credential_form
+
+    schema = {
+        "server": "demo",
+        "displayName": "Demo",
+        "fields": [
+            {
+                "key": "EMBEDDING_MODELS",
+                "label": "Embedding",
+                "type": "model-chain",
+                "task": "embedding",
+                "suggestedModels": ["jina_ai/jina-embeddings-v5-text-small"],
+                "hasLocal": True,
+            },
+            {"key": "JINA_AI_API_KEY", "label": "Jina", "type": "password", "derived": True},
+        ],
+    }
+    html = render_credential_form(schema, submit_url="/authorize")
+    assert "PROVIDER_KEY" in html
+    assert "JINA_AI_API_KEY" in html
+    assert 'data-model-chain="embedding"' in html
+    assert "deriveKeys" in html
