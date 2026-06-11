@@ -19,6 +19,7 @@ Each ``RelayConfigField`` dict supports keys:
 """
 
 import html
+import json
 from typing import Any, TypedDict
 
 
@@ -436,6 +437,61 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
             help_html = f'<p class="help-text" id="help-{key}"><a href="{help_url}" target="_blank" rel="noopener noreferrer">{help_text}</a></p>'
         else:
             help_html = f'<p class="help-text" id="help-{key}">{help_text}</p>'
+
+    # --- model-chain widget: chip combobox + drag-reorder; the JS keeps a
+    # hidden ``.field-input`` synced with the CSV so the existing submit
+    # handler picks it up unchanged.
+    if field_type == "model-chain":
+        task = _escape(field.get("task", ""))
+        has_local = "true" if field.get("hasLocal", False) else "false"
+        suggested = field.get("suggestedModels", [])
+        suggested_json = _escape(json.dumps(suggested))
+        return f"""
+        <div class="field-group">
+            <label class="field-label" for="mc-input-{key}">
+                {label}
+                <span class="optional-badge">Optional</span>
+            </label>
+            <div class="model-chain" id="mc-{key}"
+                 data-model-chain="{task}"
+                 data-key="{key}"
+                 data-has-local="{has_local}"
+                 data-suggested="{suggested_json}">
+                <div class="mc-chips" id="mc-chips-{key}" role="list"></div>
+                <input id="mc-input-{key}" class="mc-typeahead" type="text"
+                       placeholder="{placeholder or "add model…"}"
+                       autocomplete="off" autocorrect="off"
+                       autocapitalize="off" spellcheck="false" />
+                <div class="mc-dropdown" id="mc-dropdown-{key}" hidden></div>
+                <span class="mc-badge" id="mc-badge-{key}"></span>
+            </div>
+            <input type="hidden" name="{key}" class="field-input"
+                   id="field-{key}"{value_attr} />
+            {help_html}
+        </div>"""
+
+    # --- derived credential field: rendered but hidden until a model-chain
+    # chip references its provider (derive-keys JS toggles display).
+    if field.get("derived", False):
+        return f"""
+        <div class="field-group" data-provider-key="{key}" style="display:none">
+            <label for="field-{key}" class="field-label">
+                {label}
+                <span class="optional-badge">Optional</span>
+            </label>
+            <input
+                id="field-{key}"
+                name="{key}"
+                type="{field_type}"
+                placeholder="{placeholder}"
+                class="field-input"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"{value_attr}{aria_describedby}
+            />
+            {help_html}
+        </div>"""
 
     return f"""
         <div class="field-group">
