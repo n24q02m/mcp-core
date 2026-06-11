@@ -90,6 +90,7 @@ async def test_wrong_password_401() -> None:
     configure_relay_login("secret123")
     result = await login_post_handler({"password": "wrong", "next": "/authorize"}, ip="1.1.1.1")
     assert result.status_code == 401
+    assert "Invalid password. Please try again." in result.body.decode("utf-8")
 
 
 async def test_correct_password_sets_cookie_and_redirects() -> None:

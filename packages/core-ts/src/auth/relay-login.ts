@@ -162,34 +162,26 @@ function getSafeNext(input: unknown): string {
   return next
 }
 
-export async function loginGetHandler(
-  req: Pick<RelayLoginRequest, 'query'>,
-  res: Pick<RelayLoginResponse, 'send' | 'set'>
-): Promise<void> {
-  const next = getSafeNext(req.query?.next)
-  res.set?.('Content-Type', 'text/html')
-  // ``next`` flows from the query string but every interpolation is run
-  // through ``escapeHtml`` (defined above) which replaces &, <, >, ", and
-  // ' with their HTML entity equivalents — the same character set the
-  // raw-html-format rule expects sanitisers to handle. Semgrep can't see
-  // the custom helper so we suppress the warning here.
+function renderLoginForm(next: string, errorMsg?: string): string {
   const safeNext = escapeHtml(String(next))
-  // Visual parity with the relay credential form: same dark-theme card,
-  // typography, ``.field-group`` / ``.field-label`` / ``.field-input``
-  // classes, and primary submit button styling. Pure POST (no JavaScript)
-  // so the gate works under strict CSP that blocks inline scripts.
-  const bodyHtml = `    <div class="container">
+  const errorHtml = errorMsg
+    ? `\n            <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">\n                ${escapeHtml(errorMsg)}\n            </div>`
+    : ''
+
+  const ariaAttributes = errorMsg ? ' aria-invalid="true" aria-errormessage="login-error"' : ''
+
+  return `    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">Relay login</h1>
                 <div class="server-id">mcp-relay</div>
                 <p class="server-description">Enter the relay password shared by your deployer.</p>
-            </div>
+            </div>${errorHtml}
 
             <p class="form-title">Authenticate</p>
 
-            <form method="POST" action="/login" novalidate>
-                <!-- nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format -- safeNext is escapeHtml(next) at line 156 -->
+            <form method="POST" action="/login">
+                <!-- nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format -- safeNext is escapeHtml(next) -->
                 <input type="hidden" name="next" value="${safeNext}">
                 <div class="field-group">
                     <label for="field-password" class="field-label">
@@ -207,15 +199,23 @@ export async function loginGetHandler(
                         autocapitalize="off"
                         spellcheck="false"
                         required
-                        autofocus
+                        autofocus${ariaAttributes}
                     />
                 </div>
 
                 <button type="submit" class="submit-btn">Continue</button>
             </form>
         </div>
-    </div>` // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-  res.send(renderFormShell('Relay login', bodyHtml))
+    </div>`
+}
+
+export async function loginGetHandler(
+  req: Pick<RelayLoginRequest, 'query'>,
+  res: Pick<RelayLoginResponse, 'send' | 'set'>
+): Promise<void> {
+  const next = getSafeNext(req.query?.next)
+  res.set?.('Content-Type', 'text/html')
+  res.send(renderFormShell('Relay login', renderLoginForm(next)))
 }
 
 export async function loginPostHandler(
@@ -234,7 +234,8 @@ export async function loginPostHandler(
   const next = getSafeNext(req.body?.next)
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
     bumpFail(ip)
-    res.status(401).send('Invalid password.')
+    res.set?.('Content-Type', 'text/html')
+    res.status(401).send(renderFormShell('Relay login', renderLoginForm(next, 'Invalid password. Please try again.')))
     return
   }
   clearFail(ip)
