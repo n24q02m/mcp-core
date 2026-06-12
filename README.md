@@ -1,5 +1,7 @@
 # mcp-core
 
+**Shared foundation for building MCP servers -- Streamable HTTP transport, OAuth 2.1, browser-based credential setup, and a shared embedding daemon.**
+
 <!-- BEGIN: AUTO-GENERATED-CROSS-PROMO -->
 <details>
   <summary><strong>Sister projects from n24q02m</strong> (click to expand)</summary>
