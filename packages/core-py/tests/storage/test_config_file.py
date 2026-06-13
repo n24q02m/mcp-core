@@ -268,6 +268,7 @@ class TestCoverageExt:
         mark_setup_complete("test-server")
 
         config = read_config("test-server")
+        assert config is not None
         from mcp_core.storage.config_file import SETUP_COMPLETE_KEY
 
         assert config[SETUP_COMPLETE_KEY] == "true"
@@ -276,6 +277,7 @@ class TestCoverageExt:
     def test_mark_setup_complete_new_server(self):
         mark_setup_complete("new-server")
         config = read_config("new-server")
+        assert config is not None
         from mcp_core.storage.config_file import SETUP_COMPLETE_KEY
 
         assert config == {SETUP_COMPLETE_KEY: "true"}
