@@ -13,6 +13,7 @@ from mcp_core.storage.config_file import (
     export_config,
     import_config,
     list_configs,
+    mark_setup_complete,
     read_config,
     set_config_path,
     write_config,
@@ -251,3 +252,78 @@ class TestMigration:
         current_key = derive_file_key(machine_id, username, salt, PBKDF2_ITERATIONS)
         decrypted = decrypt_data(current_key, payload)
         assert json.loads(decrypted) == store
+
+
+class TestCoverageExt:
+    def test_raises_original_error_if_all_formats_fail(self, _temp_config):
+        config_path = _temp_config / "config.enc"
+        # 28 bytes or more to trigger new format check first
+        config_path.write_bytes(b"a" * 30)
+
+        with pytest.raises(InvalidTag):
+            read_config("any")
+
+    def test_mark_setup_complete(self):
+        write_config("test-server", {"foo": "bar"})
+        mark_setup_complete("test-server")
+
+        config = read_config("test-server")
+        from mcp_core.storage.config_file import SETUP_COMPLETE_KEY
+
+        assert config[SETUP_COMPLETE_KEY] == "true"
+        assert config["foo"] == "bar"
+
+    def test_mark_setup_complete_new_server(self):
+        mark_setup_complete("new-server")
+        config = read_config("new-server")
+        from mcp_core.storage.config_file import SETUP_COMPLETE_KEY
+
+        assert config == {SETUP_COMPLETE_KEY: "true"}
+
+    def test_get_config_path_default(self):
+        from mcp_core.storage.config_file import _get_config_path, _DEFAULT_CONFIG_PATH
+
+        set_config_path(None)
+        assert _get_config_path() == _DEFAULT_CONFIG_PATH
+
+    def test_schedule_reload_exit_starts_thread(self):
+        from mcp_core.storage.config_file import schedule_reload_exit
+
+        with patch("threading.Thread") as mock_thread:
+            with patch.dict("os.environ", {}, clear=True):
+                schedule_reload_exit()
+                mock_thread.assert_called_once()
+                assert mock_thread.call_args[1]["daemon"] is True
+
+    def test_import_config_legacy_iterations(self):
+        store = {"version": 1, "servers": {"legacy-import": {"k": "v"}}}
+        salt = b"s" * 16
+        # New format salt + payload, but legacy iterations
+        key = derive_passphrase_key("pass", salt, LEGACY_PBKDF2_ITERATIONS)
+        encrypted = encrypt_data(key, json.dumps(store))
+        data = salt + encrypted
+
+        import_config("pass", data)
+        assert read_config("legacy-import") == {"k": "v"}
+
+    def test_import_config_legacy_unsalted_and_legacy_iterations(self):
+        store = {"version": 1, "servers": {"legacy-unsalted-import": {"k": "v"}}}
+        # Legacy unsalted format uses LEGACY_EXPORT_SALT
+        key = derive_passphrase_key("pass", LEGACY_EXPORT_SALT, LEGACY_PBKDF2_ITERATIONS)
+        encrypted = encrypt_data(key, json.dumps(store))
+
+        import_config("pass", encrypted)
+        assert read_config("legacy-unsalted-import") == {"k": "v"}
+
+    def test_schedule_reload_exit_thread_execution(self):
+        with patch("os._exit") as mock_exit:
+            with patch("time.sleep") as mock_sleep:
+                with patch.dict("os.environ", {}, clear=True):
+                    with patch("threading.Thread") as MockThread:
+                        from mcp_core.storage.config_file import schedule_reload_exit
+
+                        schedule_reload_exit()
+                        target = MockThread.call_args[1]["target"]
+                        target()  # Execute _exit()
+                        mock_sleep.assert_called_with(1.0)
+                        mock_exit.assert_called_with(0)
