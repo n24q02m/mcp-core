@@ -1,6 +1,6 @@
 """Credential backend tests."""
 
-from mcp_core.storage.backends import InMemoryBackend, LocalFsBackend
+from mcp_core.storage.backends import CfKvBackend, InMemoryBackend, LocalFsBackend
 
 
 def test_inmemory_put_get_roundtrip():
@@ -41,3 +41,34 @@ def test_localfs_sub_path_and_get_delete(tmp_path, monkeypatch):
     assert backend.get("wet/subs/u1/config") == b"blob"
     backend.delete("wet/subs/u1/config")
     assert backend.get("wet/subs/u1/config") is None
+
+
+class _FakeHttp:
+    """In-memory HTTP stub keyed by the URL's last path segment."""
+
+    def __init__(self):
+        self.store: dict[str, bytes] = {}
+
+    def request(self, method, url, data, headers):
+        seg = url.rsplit("/", 1)[-1]
+        if method == "PUT":
+            self.store[seg] = data
+            return (200, b"")
+        if method == "GET":
+            if seg in self.store:
+                return (200, self.store[seg])
+            return (404, b"")
+        if method == "DELETE":
+            self.store.pop(seg, None)
+            return (200, b"")
+        raise AssertionError(f"unexpected method {method}")
+
+
+def test_cfkv_backend_roundtrip_via_http():
+    fake = _FakeHttp()
+    backend = CfKvBackend(base_url="http://kv.internal", http=fake)
+    assert backend.get("wet/config") is None
+    backend.put("wet/config", b"blob")
+    assert backend.get("wet/config") == b"blob"
+    backend.delete("wet/config")
+    assert backend.get("wet/config") is None
