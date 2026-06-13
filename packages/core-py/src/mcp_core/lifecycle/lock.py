@@ -31,6 +31,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import asyncio
 from types import TracebackType
 from typing import Any
 
@@ -261,3 +262,68 @@ class LifecycleLock:
                 self._lock_file.unlink(missing_ok=True)
             except OSError:
                 pass
+
+
+async def async_refresh_lock_timestamp(path: Path) -> None:
+    """Async variant of ``refresh_lock_timestamp``."""
+    return await asyncio.to_thread(refresh_lock_timestamp, path)
+
+
+async def async_sweep_stale_locks(
+    server_name: str,
+    ttl_hours: int = DEFAULT_LOCK_TTL_HOURS,
+    root: Path | None = None,
+) -> int:
+    """Async variant of ``sweep_stale_locks``."""
+    return await asyncio.to_thread(sweep_stale_locks, server_name, ttl_hours, root)
+
+
+def write_lock_file(server_name: str, port: int, token: str, root: str | Path | None = None) -> Path:
+    """Directly write a lock file with the specified metadata.
+
+    Usually called internally by ``LifecycleLock``, but exposed for cases where
+    manual management is required.
+    """
+    dir_path = _locks_dir(Path(root) if root else None)
+    dir_path.mkdir(parents=True, exist_ok=True)
+    path = dir_path / f"{server_name}-{port}.lock"
+    payload = f"{os.getpid()}\n{port}\n{token}\n{datetime.now(timezone.utc).isoformat()}\n"
+    padded = payload.ljust(512, " ")
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as fh:
+        fh.write(padded)
+    return path
+
+
+async def async_write_lock_file(server_name: str, port: int, token: str, root: str | Path | None = None) -> Path:
+    """Async variant of ``write_lock_file``."""
+    return await asyncio.to_thread(write_lock_file, server_name, port, token, root)
+
+
+class AsyncLifecycleLock:
+    """Async variant of ``LifecycleLock``."""
+
+    def __init__(
+        self,
+        name: str,
+        port: int,
+        root: Path | None = None,
+        token: str | None = None,
+    ) -> None:
+        self._sync_lock = LifecycleLock(name, port, root, token)
+
+    @property
+    def path(self) -> Path:
+        """Location of the lock file on disk."""
+        return self._sync_lock.path
+
+    async def __aenter__(self) -> AsyncLifecycleLock:
+        await asyncio.to_thread(self._sync_lock.__enter__)
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        await asyncio.to_thread(self._sync_lock.__exit__, exc_type, exc, tb)
