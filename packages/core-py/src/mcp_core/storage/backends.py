@@ -155,8 +155,8 @@ def backend_from_env() -> CredentialBackend:
     if kind in ("local", "local-fs", ""):
         return LocalFsBackend()
     if kind == "cf-kv":
-        return CfKvBackend(
-            base_url=os.environ["MCP_KV_BASE_URL"],
-            token=os.environ.get("MCP_KV_TOKEN"),
-        )
+        base_url = os.environ.get("MCP_KV_BASE_URL")
+        if not base_url:
+            raise ValueError("MCP_KV_BASE_URL is required when MCP_STORAGE_BACKEND=cf-kv")
+        return CfKvBackend(base_url=base_url, token=os.environ.get("MCP_KV_TOKEN"))
     raise ValueError(f"Unknown MCP_STORAGE_BACKEND: {kind}")

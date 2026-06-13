@@ -154,3 +154,39 @@ def test_backend_from_env_selects_cfkv(monkeypatch):
     monkeypatch.setenv("MCP_STORAGE_BACKEND", "cf-kv")
     monkeypatch.setenv("MCP_KV_BASE_URL", "http://kv.internal")
     assert isinstance(backend_from_env(), CfKvBackend)
+
+
+def test_backend_from_env_cfkv_requires_base_url(monkeypatch):
+    monkeypatch.setenv("MCP_STORAGE_BACKEND", "cf-kv")
+    monkeypatch.delenv("MCP_KV_BASE_URL", raising=False)
+    with pytest.raises(ValueError, match="MCP_KV_BASE_URL"):
+        backend_from_env()
+
+
+def test_backend_from_env_unknown_kind_raises(monkeypatch):
+    monkeypatch.setenv("MCP_STORAGE_BACKEND", "bogus")
+    with pytest.raises(ValueError):
+        backend_from_env()
+
+
+def test_cfkv_put_raises_on_server_error():
+    backend = CfKvBackend(base_url="http://kv.internal", http=_StatusHttp(500))
+    with pytest.raises(RuntimeError):
+        backend.put("wet/config", b"x")
+
+
+class _RaisingHttp:
+    """HTTP stub whose request always raises a transport-level error."""
+
+    def request(self, *args, **kwargs):
+        raise OSError("econnrefused")
+
+
+def test_cfkv_propagates_transport_errors():
+    backend = CfKvBackend(base_url="http://kv.internal", http=_RaisingHttp())
+    with pytest.raises(OSError):
+        backend.get("wet/config")
+    with pytest.raises(OSError):
+        backend.put("wet/config", b"x")
+    with pytest.raises(OSError):
+        backend.delete("wet/config")
