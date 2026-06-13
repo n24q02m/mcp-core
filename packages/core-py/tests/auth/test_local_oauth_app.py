@@ -1245,3 +1245,142 @@ def test_otp_endpoint_with_future_callbacks():
     data = resp.json()
     assert data["ok"] is True
     assert "next_step" not in data
+
+
+# ---------------------------------------------------------------------------
+# Coverage: JSON error handling and callback failures
+# ---------------------------------------------------------------------------
+
+
+def test_on_credentials_saved_exception():
+    def on_saved(creds, context):
+        raise ValueError("Simulated failure")
+
+    app, _ = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=on_saved,
+    )
+    client = TestClient(app, base_url="http://localhost")
+
+    nonce = _extract_nonce(client)
+    resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+    assert resp.status_code == 500
+    assert resp.json()["error"] == "server_error"
+
+
+def test_on_credentials_saved_returns_error():
+    def on_saved(creds, context):
+        return {"type": "error", "text": "Callback-level error"}
+
+    app, _ = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=on_saved,
+    )
+    client = TestClient(app, base_url="http://localhost")
+
+    nonce = _extract_nonce(client)
+    resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is False
+    assert resp.json()["error"] == "Callback-level error"
+
+
+def test_authorize_post_invalid_json(client):
+    nonce = _extract_nonce(client)
+    resp = client.post(
+        f"/authorize?nonce={nonce}",
+        content="not json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+    assert "Invalid JSON body" in resp.json()["error_description"]
+
+
+def test_authorize_post_non_dict_json(client):
+    nonce = _extract_nonce(client)
+    resp = client.post(
+        f"/authorize?nonce={nonce}",
+        json=["not", "a", "dict"],
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+    assert "Body must be JSON object" in resp.json()["error_description"]
+
+
+def test_authorize_prefill_invalid_json(client):
+    resp = client.post(
+        "/authorize/prefill?state=test-state",
+        content="not json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+    assert "Body must be JSON object" in resp.json()["error_description"]
+
+
+def test_authorize_prefill_non_dict_json(client):
+    resp = client.post(
+        "/authorize/prefill?state=test-state",
+        json=["not", "a", "dict"],
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+    assert "Body must be JSON object" in resp.json()["error_description"]
+
+
+def test_otp_invalid_json(client):
+    import asyncio
+
+    # Need an active step session
+    loop = asyncio.new_event_loop()
+    f1 = loop.create_future()
+    f1.set_result(
+        {
+            "type": "otp_required",
+            "text": "Enter OTP",
+            "field": "otp_code",
+            "input_type": "text",
+        }
+    )
+
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=lambda c, ctx: f1,
+    )
+    c = TestClient(app)
+    nonce = _extract_nonce(c)
+    c.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+
+    resp = c.post(
+        "/otp",
+        content="not json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"] == "invalid_request"
+    assert "Invalid JSON body" in resp.json()["error_description"]
+
+
+def test_register_invalid_json(client):
+    resp = client.post(
+        "/register",
+        content="not json",
+        headers={"Content-Type": "application/json"},
+    )
+    # /register is permissive and falls back to empty dict/defaults
+    assert resp.status_code == 201
+    assert resp.json()["client_id"] == "local-browser"
+
+
+def test_register_non_dict_json(client):
+    resp = client.post(
+        "/register",
+        json=["not", "a", "dict"],
+    )
+    # /register is permissive and falls back to empty dict/defaults
+    assert resp.status_code == 201
+    assert resp.json()["client_id"] == "local-browser"

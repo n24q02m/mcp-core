@@ -285,6 +285,11 @@ def create_local_oauth_app(
 
         try:
             credentials: dict[str, str] = await request.json()
+            if not isinstance(credentials, dict):
+                return JSONResponse(
+                    {"error": "invalid_request", "error_description": "Body must be JSON object"},
+                    status_code=400,
+                )
         except Exception:
             return JSONResponse(
                 {"error": "invalid_request", "error_description": "Invalid JSON body"},
