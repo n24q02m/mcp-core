@@ -38,7 +38,7 @@ import {
   type StepCallback
 } from '../auth/local-oauth-app.js'
 import { jsonResponse } from '../auth/router.js'
-import { refreshLockTimestamp, sweepStaleLocks, writeLockFile } from '../lifecycle/lock.js'
+import { refreshLockTimestampAsync, sweepStaleLocksAsync, writeLockFileAsync } from '../lifecycle/lock.js'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 import { tryOpenBrowser } from '../relay/browser.js'
 import { readConfig } from '../storage/config-file.js'
@@ -352,7 +352,7 @@ export async function runHttpServer(
   // Sweep stale locks for our server name BEFORE writing our own. Without
   // this, abnormal-exit residue (Windows OOM, taskkill, signal) can pile up
   // dozens of `<server>-<port>.lock` files — see 2026-04-28 wet-mcp 11-stale-lock incident.
-  const swept = sweepStaleLocks(options.serverName)
+  const swept = await sweepStaleLocksAsync(options.serverName)
   if (swept > 0) {
     console.error(`[runHttpServer] cleaned ${swept} stale lock(s) for ${options.serverName}`)
   }
@@ -360,11 +360,11 @@ export async function runHttpServer(
   const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
   const lockDirPath = path.join(os.homedir(), '.config', 'mcp', 'locks')
   fs.mkdirSync(lockDirPath, { recursive: true, mode: 0o700 })
-  const lockFile = writeLockFile(options.serverName, actualPort, proxyToken, lockDirPath)
+  const lockFile = await writeLockFileAsync(options.serverName, actualPort, proxyToken, lockDirPath)
 
   // Refresh the lock timestamp hourly so the 24h TTL sweep does not kill
   // long-running daemons. Cancelled in `close()`.
-  const lockRefreshInterval = setInterval(() => refreshLockTimestamp(lockFile), 3600 * 1000)
+  const lockRefreshInterval = setInterval(() => refreshLockTimestampAsync(lockFile), 3600 * 1000)
   if (typeof lockRefreshInterval.unref === 'function') {
     lockRefreshInterval.unref()
   }

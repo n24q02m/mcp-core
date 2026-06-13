@@ -24,7 +24,7 @@
  * identical for cross-language parity.
  */
 
-import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, promises as fs, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -174,5 +174,100 @@ export function writeLockFile(serverName: string, port: number, token: string, r
   const path = join(dir, `${serverName}-${port}.lock`)
   const payload = `${process.pid}\n${port}\n${token}\n${new Date().toISOString()}\n`
   writeFileSync(path, payload.padEnd(512, ' '), { encoding: 'utf-8', mode: 0o600 })
+  return path
+}
+
+/**
+ * Async version of `refreshLockTimestamp`.
+ */
+export async function refreshLockTimestampAsync(path: string): Promise<void> {
+  if (!existsSync(path)) return
+  let raw: string
+  try {
+    raw = await fs.readFile(path, { encoding: 'utf-8' })
+  } catch {
+    return
+  }
+  const md = parseLockText(raw)
+  if (md === null) return
+  const now = new Date().toISOString()
+  const payload = `${md.pid}\n${md.port}\n${md.token}\n${now}\n`
+  try {
+    await fs.writeFile(path, payload.padEnd(512, ' '), { encoding: 'utf-8' })
+  } catch {
+    // Best-effort
+  }
+}
+
+/**
+ * Async version of `sweepStaleLocks`.
+ */
+export async function sweepStaleLocksAsync(serverName: string, ttlHours?: number, root?: string): Promise<number> {
+  const dir = root !== undefined ? root : self.lockDir()
+  if (!existsSync(dir)) return 0
+
+  let removed = 0
+  let entries: string[]
+  try {
+    entries = await fs.readdir(dir)
+  } catch {
+    return 0
+  }
+
+  const prefix = `${serverName}-`
+  const suffix = '.lock'
+  const now = Date.now()
+  const ttlMs = (ttlHours ?? DEFAULT_LOCK_TTL_HOURS) * 3600 * 1000
+
+  for (const entry of entries) {
+    if (!entry.startsWith(prefix) || !entry.endsWith(suffix)) continue
+    const full = join(dir, entry)
+    let raw: string
+    try {
+      raw = await fs.readFile(full, { encoding: 'utf-8' })
+    } catch {
+      try {
+        await fs.unlink(full)
+        removed += 1
+      } catch {
+        /* ignore */
+      }
+      continue
+    }
+    const meta = parseLockText(raw)
+    if (meta === null) {
+      try {
+        await fs.unlink(full)
+        removed += 1
+      } catch {
+        /* ignore */
+      }
+      continue
+    }
+    if (now - meta.spawnedAt.getTime() > ttlMs) {
+      try {
+        await fs.unlink(full)
+        removed += 1
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return removed
+}
+
+/**
+ * Async version of `writeLockFile`.
+ */
+export async function writeLockFileAsync(
+  serverName: string,
+  port: number,
+  token: string,
+  root?: string
+): Promise<string> {
+  const dir = locksDir(root)
+  const path = join(dir, `${serverName}-${port}.lock`)
+  const payload = `${process.pid}\n${port}\n${token}\n${new Date().toISOString()}\n`
+  await fs.writeFile(path, payload.padEnd(512, ' '), { encoding: 'utf-8', mode: 0o600 })
   return path
 }

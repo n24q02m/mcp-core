@@ -7,8 +7,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   DEFAULT_LOCK_TTL_HOURS,
   refreshLockTimestamp,
+  refreshLockTimestampAsync,
   sweepStaleLocks,
-  writeLockFile
+  sweepStaleLocksAsync,
+  writeLockFile,
+  writeLockFileAsync
 } from '../../src/lifecycle/lock.js'
 
 let tmp: string
@@ -112,6 +115,57 @@ describe('sweepStaleLocks', () => {
 describe('writeLockFile', () => {
   it('writes 4-line padded payload', () => {
     const path = writeLockFile('demo', 12345, 'tok', tmp)
+    const raw = readFileSync(path, 'utf-8')
+    const lines = raw.replace(/\n+$/, '').replace(/\s+$/, '').split('\n')
+    expect(lines[0]).toBe(String(process.pid))
+    expect(lines[1]).toBe('12345')
+    expect(lines[2]).toBe('tok')
+    expect(new Date(lines[3])).toBeInstanceOf(Date)
+  })
+})
+
+describe('refreshLockTimestampAsync', () => {
+  it('updates timestamp in 4-line lock', async () => {
+    const path = join(tmp, 'demo-async-1234.lock')
+    writeLockWithAge(path, 9999, 1234, 10)
+    const beforeRaw = readFileSync(path, 'utf-8')
+    const beforeTs = beforeRaw.split('\n')[3]
+
+    await refreshLockTimestampAsync(path)
+
+    const afterRaw = readFileSync(path, 'utf-8')
+    const afterTs = afterRaw.split('\n')[3]
+    expect(new Date(afterTs).getTime()).toBeGreaterThan(new Date(beforeTs).getTime())
+  })
+
+  it('silent no-op on legacy 3-line lock', async () => {
+    const path = join(tmp, 'demo-async-1234.lock')
+    writeFileSync(path, '9999\n1234\ntoken\n')
+    await expect(refreshLockTimestampAsync(path)).resolves.not.toThrow()
+    const content = readFileSync(path, 'utf-8')
+    expect(content.startsWith('9999\n1234\ntoken\n')).toBe(true)
+  })
+})
+
+describe('sweepStaleLocksAsync', () => {
+  it('removes expired lock', async () => {
+    const p = join(tmp, 'demo-async-2001.lock')
+    writeLockWithAge(p, process.pid, 2001, 25)
+
+    expect(await sweepStaleLocksAsync('demo-async', 24, tmp)).toBe(1)
+  })
+
+  it('keeps lock within TTL', async () => {
+    const p = join(tmp, 'demo-async-3001.lock')
+    writeLockWithAge(p, process.pid, 3001, 1)
+
+    expect(await sweepStaleLocksAsync('demo-async', 24, tmp)).toBe(0)
+  })
+})
+
+describe('writeLockFileAsync', () => {
+  it('writes 4-line padded payload', async () => {
+    const path = await writeLockFileAsync('demo-async', 12345, 'tok', tmp)
     const raw = readFileSync(path, 'utf-8')
     const lines = raw.replace(/\n+$/, '').replace(/\s+$/, '').split('\n')
     expect(lines[0]).toBe(String(process.pid))
