@@ -65,9 +65,17 @@ def _registry_entry(model: str) -> dict | None:
 def check_capability(model: str, expected_modes: tuple[str, ...]) -> None:
     """Raise ModelCapabilityError on a KNOWN model with the wrong mode.
 
-    Unknown model => debug log + pass (open passthrough, spec D3).
+    Unknown model => debug log + pass (open passthrough, spec D3). When litellm
+    is not installed (no ``[llm]`` extra) the advisory registry lookup cannot
+    run, so this also passes through: httpx-only adapters (vertex_express) must
+    work without litellm, and litellm-backed providers fail later at the actual
+    call with the clear install-the-extra error.
     """
-    entry = _registry_entry(model)
+    try:
+        entry = _registry_entry(model)
+    except RuntimeError:
+        logger.debug(f"litellm unavailable; skipping advisory capability check for {model!r}")
+        return
     if entry is None:
         logger.debug(f"model {model!r} not in litellm registry; passthrough")
         return
