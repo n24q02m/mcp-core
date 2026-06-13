@@ -26,9 +26,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-import httpx
-
-from mcp_core.http import SSRFBlockedError, get_ssrf_safe_async_client, vet_api_base
+from mcp_core.http import get_ssrf_safe_async_client, get_ssrf_safe_sync_client, vet_api_base
 from mcp_core.http.ssrf import is_multi_user_mode
 from mcp_core.llm.catalog import check_capability
 
@@ -142,6 +140,10 @@ def build_express_request(
     api_base: str | None,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    top_p: float | None = None,
+    stop: str | list[str] | None = None,
+    response_format: dict[str, Any] | None = None,
+    stream: bool | None = None,
     **_ignored: Any,
 ) -> tuple[str, dict[str, str], dict[str, Any]]:
     """Build (url, headers, json_body) for an Express generateContent call.
@@ -149,7 +151,21 @@ def build_express_request(
     ``api_base`` overrides the ``https://aiplatform.googleapis.com/<version>``
     prefix (already SSRF-vetted by the caller). The api_key goes in the
     ``x-goog-api-key`` header, never the URL query string.
+
+    Honored OpenAI params (mapped into ``generationConfig``): ``temperature``,
+    ``max_tokens`` (-> ``maxOutputTokens``), ``top_p`` (-> ``topP``), ``stop``
+    (-> ``stopSequences``), and ``response_format={"type": "json_object"}``
+    (-> ``responseMimeType: application/json``). ``stream=True`` is REJECTED
+    with ``VertexExpressError`` — this adapter returns a buffered response and
+    cannot stream, so silently degrading a streamed request would diverge from
+    the litellm path. Any other kwarg (``seed``/``n``/``tools``/...) is not
+    supported on this passthrough and is ignored.
     """
+    if stream:
+        raise VertexExpressError(
+            "vertex_express does not support streaming (stream=True); use a litellm provider for streamed completions"
+        )
+
     bare = strip_express_prefix(model)
     base = (api_base or f"{_DEFAULT_BASE}/{_DEFAULT_API_VERSION}").rstrip("/")
     url = f"{base}/publishers/google/models/{bare}:generateContent"
@@ -164,6 +180,12 @@ def build_express_request(
         gen_config["temperature"] = temperature
     if max_tokens is not None:
         gen_config["maxOutputTokens"] = max_tokens
+    if top_p is not None:
+        gen_config["topP"] = top_p
+    if stop is not None:
+        gen_config["stopSequences"] = [stop] if isinstance(stop, str) else list(stop)
+    if response_format is not None and response_format.get("type") == "json_object":
+        gen_config["responseMimeType"] = "application/json"
     if gen_config:
         body["generationConfig"] = gen_config
     return url, headers, body
@@ -258,32 +280,6 @@ def _vet_base(api_base: str | None) -> str | None:
     return vet_api_base(api_base) if api_base else None
 
 
-def _get_ssrf_safe_sync_client(**kwargs: bool) -> httpx.Client:
-    """Sync sibling of get_ssrf_safe_async_client (no sync variant in core.http)."""
-    return httpx.Client(transport=_SyncSSRFSafeTransport(**kwargs))
-
-
-class _SyncSSRFSafeTransport(httpx.HTTPTransport):
-    """Minimal sync DNS-pinning transport — vets the host on every request."""
-
-    def __init__(self, *, allow_private: bool = False, allow_loopback: bool = False) -> None:
-        super().__init__()
-        self._allow_private = allow_private
-        self._allow_loopback = allow_loopback
-
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        from mcp_core.http.ssrf import _SAFE_URL_SCHEMES, validate_url_and_get_ip
-
-        if request.url.scheme.lower() not in _SAFE_URL_SCHEMES:
-            raise SSRFBlockedError(f"Unsupported scheme {request.url.scheme!r}")
-        validate_url_and_get_ip(
-            str(request.url),
-            allow_private=self._allow_private,
-            allow_loopback=self._allow_loopback,
-        )
-        return super().handle_request(request)
-
-
 async def acompletion_express(
     *,
     model: str,
@@ -323,7 +319,7 @@ def completion_express(
     check_capability(model, _CHAT_MODES)
     base = _vet_base(api_base)
     url, headers, body = build_express_request(model=model, messages=messages, api_key=key, api_base=base, **kwargs)
-    with _get_ssrf_safe_sync_client(**_ssrf_flags()) as client:
+    with get_ssrf_safe_sync_client(**_ssrf_flags()) as client:
         resp = client.post(url, headers=headers, json=body, timeout=_REQUEST_TIMEOUT_S)
     if resp.status_code // 100 != 2:
         raise VertexExpressError(f"Vertex Express HTTP {resp.status_code}: {resp.text[:500]}")

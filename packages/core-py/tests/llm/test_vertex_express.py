@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import socket
 
-import httpx
 import pytest
 
 from mcp_core.http import SSRFBlockedError
@@ -319,7 +318,7 @@ def test_completion_express_sync_happy_path(monkeypatch):
             return _FakeResponse(200, raw)
 
     monkeypatch.setattr(
-        "mcp_core.llm.vertex_express._get_ssrf_safe_sync_client",
+        "mcp_core.llm.vertex_express.get_ssrf_safe_sync_client",
         lambda **kw: _FakeSyncClient(),
     )
     resp = completion_express(
@@ -424,33 +423,70 @@ def test_ssrf_flags_multi_user_blocks_private_and_loopback(monkeypatch):
     assert _ssrf_flags() == {"allow_private": False, "allow_loopback": False}
 
 
-def test_sync_ssrf_transport_rejects_unsupported_scheme():
-    from mcp_core.llm.vertex_express import _SyncSSRFSafeTransport
+def test_build_express_request_rejects_stream():
+    from mcp_core.llm.vertex_express import VertexExpressError
 
-    transport = _SyncSSRFSafeTransport()
-    request = httpx.Request("GET", "ftp://example.com/x")
-    with pytest.raises(SSRFBlockedError, match="Unsupported scheme"):
-        transport.handle_request(request)
+    # The adapter buffers a single response; silently dropping stream=True would
+    # diverge from the litellm path, so it must raise instead of degrade.
+    with pytest.raises(VertexExpressError, match="stream"):
+        build_express_request(
+            model="vertex_express/gemini-2.5-flash",
+            messages=[{"role": "user", "content": "hi"}],
+            api_key="AQ.key",
+            api_base=None,
+            stream=True,
+        )
 
 
-def test_sync_ssrf_transport_vets_then_dials(monkeypatch):
-    from mcp_core.llm.vertex_express import _SyncSSRFSafeTransport, _get_ssrf_safe_sync_client
+def test_build_express_request_maps_top_p_and_stop_string():
+    _url, _headers, body = build_express_request(
+        model="vertex_express/gemini-2.5-flash",
+        messages=[{"role": "user", "content": "hi"}],
+        api_key="AQ.key",
+        api_base=None,
+        top_p=0.9,
+        stop="END",
+    )
+    assert body["generationConfig"]["topP"] == 0.9
+    # A bare string stop is wrapped into a single-element stopSequences list.
+    assert body["generationConfig"]["stopSequences"] == ["END"]
 
-    dialled: dict = {}
 
-    def fake_super_handle(self, request):
-        dialled["url"] = str(request.url)
-        return httpx.Response(200, json={"ok": True})
+def test_build_express_request_maps_stop_list():
+    _url, _headers, body = build_express_request(
+        model="vertex_express/gemini-2.5-flash",
+        messages=[{"role": "user", "content": "hi"}],
+        api_key="AQ.key",
+        api_base=None,
+        stop=["END", "STOP"],
+    )
+    assert body["generationConfig"]["stopSequences"] == ["END", "STOP"]
 
-    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", fake_super_handle)
-    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
 
-    client = _get_ssrf_safe_sync_client(allow_private=False, allow_loopback=False)
-    assert isinstance(client, httpx.Client)
-    assert isinstance(client._transport, _SyncSSRFSafeTransport)
-    resp = client._transport.handle_request(httpx.Request("GET", "https://example.com/v1beta1/x"))
-    assert resp.status_code == 200
-    assert dialled["url"] == "https://example.com/v1beta1/x"
+def test_build_express_request_maps_json_response_format():
+    _url, _headers, body = build_express_request(
+        model="vertex_express/gemini-2.5-flash",
+        messages=[{"role": "user", "content": "hi"}],
+        api_key="AQ.key",
+        api_base=None,
+        response_format={"type": "json_object"},
+    )
+    assert body["generationConfig"]["responseMimeType"] == "application/json"
+
+
+def test_build_express_request_ignores_unknown_kwargs():
+    # seed/n/tools aren't supported on this passthrough; they must be dropped,
+    # not forwarded raw into generationConfig.
+    _url, _headers, body = build_express_request(
+        model="vertex_express/gemini-2.5-flash",
+        messages=[{"role": "user", "content": "hi"}],
+        api_key="AQ.key",
+        api_base=None,
+        seed=42,
+        n=2,
+    )
+    assert "generationConfig" not in body
+    assert body["contents"][0]["parts"][0]["text"] == "hi"
 
 
 def test_completion_express_sync_non_2xx_raises(monkeypatch):
@@ -467,7 +503,7 @@ def test_completion_express_sync_non_2xx_raises(monkeypatch):
             return _FakeResponse(403, {"error": {"message": "denied"}})
 
     monkeypatch.setattr(
-        "mcp_core.llm.vertex_express._get_ssrf_safe_sync_client",
+        "mcp_core.llm.vertex_express.get_ssrf_safe_sync_client",
         lambda **kw: _FakeSyncClient403(),
     )
     with pytest.raises(VertexExpressError) as exc:
