@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from mcp_core.relay.client import RelaySession, create_session, poll_for_result
 
+
 @pytest.mark.asyncio
 async def test_create_session_reuses_client():
     mock_response = MagicMock()
@@ -24,6 +25,7 @@ async def test_create_session_reuses_client():
     # Verify the client was NOT closed (aclose for AsyncClient)
     assert mock_client.aclose.call_count == 0
 
+
 @pytest.mark.asyncio
 async def test_poll_for_result_reuses_client():
     mock_response_200 = MagicMock()
@@ -40,7 +42,7 @@ async def test_poll_for_result_reuses_client():
 
     # It will fail on response.json() or further crypto, but we want to check the call
     with pytest.raises(Exception):
-         await poll_for_result("https://relay.example.com", mock_session, client=mock_client, timeout_s=0.1)
+        await poll_for_result("https://relay.example.com", mock_session, client=mock_client, timeout_s=0.1)
 
     assert mock_client.get.called
     assert mock_client.aclose.call_count == 0
