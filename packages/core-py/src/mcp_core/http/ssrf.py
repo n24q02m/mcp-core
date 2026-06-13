@@ -189,6 +189,89 @@ def get_ssrf_safe_async_client(*, allow_private: bool = False, allow_loopback: b
     )
 
 
+class SyncSSRFSafeBackend(httpcore.NetworkBackend):
+    """Sync sibling of AsyncSSRFSafeBackend: dial the vetted IP, never re-resolve.
+
+    The default httpcore.SyncBackend re-resolves the hostname at dial time,
+    discarding any earlier validation (a DNS-rebinding TOCTOU hole). This
+    backend resolves+vets ONCE and dials that IP literal, so gate and connect
+    share a single resolution — matching the async path's guarantee.
+    """
+
+    def __init__(self, *, allow_private: bool = False, allow_loopback: bool = False) -> None:
+        self._backend = httpcore.SyncBackend()
+        self._allow_private = allow_private
+        self._allow_loopback = allow_loopback
+
+    def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: typing.Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.NetworkStream:
+        ip = _validate_hostname_and_get_ip(
+            host,
+            port,
+            allow_private=self._allow_private,
+            allow_loopback=self._allow_loopback,
+        )
+        return self._backend.connect_tcp(
+            host=ip,
+            port=port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+    def connect_unix_socket(
+        self,
+        path: str,
+        timeout: float | None = None,
+        socket_options: typing.Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.NetworkStream:
+        raise SSRFBlockedError("Unix sockets are not allowed")
+
+    def sleep(self, seconds: float) -> None:
+        return self._backend.sleep(seconds)
+
+
+class SyncSSRFSafeTransport(httpx.HTTPTransport):
+    """Sync httpx transport with DNS pinning; preserves Host header + SNI."""
+
+    def __init__(
+        self,
+        *,
+        allow_private: bool = False,
+        allow_loopback: bool = False,
+        **kwargs: typing.Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._pool._network_backend = SyncSSRFSafeBackend(  # ty: ignore[invalid-assignment]
+            allow_private=allow_private, allow_loopback=allow_loopback
+        )
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        url = request.url
+        if url.scheme.lower() not in _SAFE_URL_SCHEMES:
+            raise SSRFBlockedError(f"Unsupported scheme {url.scheme!r}")
+        # Defensive: httpx clients always set Host; matters only for direct transport use.
+        if "Host" not in request.headers:
+            request.headers["Host"] = url.host
+        request.extensions["sni_hostname"] = url.host
+        return super().handle_request(request)
+
+
+def get_ssrf_safe_sync_client(*, allow_private: bool = False, allow_loopback: bool = False) -> httpx.Client:
+    """New httpx.Client with SSRF-safe transport (caller owns lifecycle).
+
+    Sync sibling of get_ssrf_safe_async_client. Use from sync contexts only
+    (e.g. crg's sync summarizer); the DNS-pinning guarantee is identical.
+    """
+    return httpx.Client(transport=SyncSSRFSafeTransport(allow_private=allow_private, allow_loopback=allow_loopback))
+
+
 def is_multi_user_mode() -> bool:
     """Multi-user remote deployment when PUBLIC_URL is set (spec D4)."""
     return bool(os.environ.get("PUBLIC_URL"))
