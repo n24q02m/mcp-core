@@ -245,7 +245,8 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     throw new Error('deviceAuthUrl is required for device_code flow')
   }
 
-  const jwtIssuer = options.jwtIssuer ?? new JWTIssuer(options.serverName)
+  const jwtIssuer =
+    options.jwtIssuer ?? new JWTIssuer(options.serverName, undefined, process.env.CREDENTIAL_SECRET ?? null)
   await jwtIssuer.init()
 
   const pendingSessions = new Map<string, PendingSession>()

@@ -285,3 +285,26 @@ describe('JWTIssuer local RSA mode unchanged (no CREDENTIAL_SECRET)', () => {
     expect(jwks.keys[0]).toMatchObject({ kty: 'RSA', alg: 'RS256', kid: 'key-1' })
   })
 })
+
+describe('JWTIssuer env-gated mode (process.env.CREDENTIAL_SECRET ?? null)', () => {
+  const OLD = process.env.CREDENTIAL_SECRET
+  afterEach(() => {
+    if (OLD === undefined) delete process.env.CREDENTIAL_SECRET
+    else process.env.CREDENTIAL_SECRET = OLD
+  })
+
+  it('uses EdDSA when CREDENTIAL_SECRET is set', async () => {
+    process.env.CREDENTIAL_SECRET = 'test-credential-secret-value'
+    const issuer = new JWTIssuer('wet-mcp', tempDir, process.env.CREDENTIAL_SECRET ?? null)
+    await issuer.init()
+    expect(issuer.alg).toBe('EdDSA')
+    expect(existsSync(join(tempDir, 'wet-mcp_private.pem'))).toBe(false)
+  })
+
+  it('uses RS256 when CREDENTIAL_SECRET is unset', async () => {
+    delete process.env.CREDENTIAL_SECRET
+    const issuer = new JWTIssuer('wet-mcp', tempDir, process.env.CREDENTIAL_SECRET ?? null)
+    await issuer.init()
+    expect(issuer.alg).toBe('RS256')
+  })
+})
