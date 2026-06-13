@@ -101,28 +101,29 @@ async def require_relay_session(
     return RedirectResponse(url=f"/login?next={next_}", status_code=302)
 
 
-async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
-    """Render the password form using the shared relay form shell.
+def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
+    safe_next = html.escape(str(next_url))
+    error_html = ""
+    aria_attributes = ""
+    if error_msg:
+        error_html = f"""
+            <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">
+                {html.escape(error_msg)}
+            </div>"""
+        aria_attributes = ' aria-invalid="true" aria-errormessage="login-error"'
 
-    The visible card mirrors the relay credential form: dark theme, Inter
-    fall-back font stack, ``.field-group`` / ``.field-label`` / ``.field-input``
-    classes for the password input, and a primary submit button matching the
-    "Connect" styling. The form keeps a plain HTML POST (no JavaScript) so the
-    gate works even with a strict CSP that blocks inline scripts.
-    """
-    next = _get_safe_next(next)
-    safe_next = html.escape(str(next))
-    body_html = f"""    <div class="container">
+    return f'''    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">Relay login</h1>
                 <div class="server-id">mcp-relay</div>
                 <p class="server-description">Enter the relay password shared by your deployer.</p>
-            </div>
+            </div>{error_html}
 
             <p class="form-title">Authenticate</p>
 
             <form method="POST" action="/login" novalidate>
+                <!-- nosemgrep: python.fastapi.security.injection.raw-html-format.raw-html-format -- safe_next is escaped -->
                 <input type="hidden" name="next" value="{safe_next}">
                 <div class="field-group">
                     <label for="field-password" class="field-label">
@@ -140,15 +141,27 @@ async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
                         autocapitalize="off"
                         spellcheck="false"
                         required
-                        autofocus
+                        autofocus{aria_attributes}
                     />
                 </div>
 
                 <button type="submit" class="submit-btn">Continue</button>
             </form>
         </div>
-    </div>"""
-    return HTMLResponse(render_form_shell("Relay login", body_html))
+    </div>'''
+
+
+async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
+    """Render the password form using the shared relay form shell.
+
+    The visible card mirrors the relay credential form: dark theme, Inter
+    fall-back font stack, ``.field-group`` / ``.field-label`` / ``.field-input``
+    classes for the password input, and a primary submit button matching the
+    "Connect" styling. The form keeps a plain HTML POST (no JavaScript) so the
+    gate works even with a strict CSP that blocks inline scripts.
+    """
+    next = _get_safe_next(next)
+    return HTMLResponse(render_form_shell("Relay login", _render_login_form(next)))
 
 
 async def login_post_handler(form: dict, ip: str) -> Response:
@@ -166,7 +179,10 @@ async def login_post_handler(form: dict, ip: str) -> Response:
     next_ = _get_safe_next(form.get("next"))
     if not _configured_password or not hmac.compare_digest(password.encode(), _configured_password.encode()):
         _bump_fail(ip)
-        return Response("Invalid password.", status_code=401)
+        return HTMLResponse(
+            render_form_shell("Relay login", _render_login_form(next_, "Invalid password. Please try again.")),
+            status_code=401,
+        )
     _clear_fail(ip)
     sid = secrets.token_hex(32)
     _sessions[sid] = time.time() + SESSION_TTL_S
