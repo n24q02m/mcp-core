@@ -178,9 +178,9 @@ function renderLoginForm(next: string, errorMsg?: string): string {
                 <p class="server-description">Enter the relay password shared by your deployer.</p>
             </div>${errorHtml}
 
-            <p class="form-title">Authenticate</p>
+            <p class="form-title" id="form-title">Authenticate</p>
 
-            <form method="POST" action="/login">
+            <form method="POST" action="/login" aria-labelledby="form-title">
                 <!-- nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format -- safeNext is escapeHtml(next) -->
                 <input type="hidden" name="next" value="${safeNext}">
                 <div class="field-group">

@@ -748,9 +748,9 @@ def render_credential_form(
                 {description_html}
             </div>
 
-            <p class="form-title">Enter your credentials</p>
+            <p class="form-title" id="form-title">Enter your credentials</p>
 
-            <form id="credential-form" novalidate>
+            <form id="credential-form" aria-labelledby="form-title" novalidate>
                 {fields_html}
 
                 <button type="submit" class="submit-btn" id="submit-btn">

@@ -568,9 +568,9 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                 ${descriptionHtml}
             </div>
 
-            <p class="form-title">Enter your credentials</p>
+            <p class="form-title" id="form-title">Enter your credentials</p>
 
-            <form id="credential-form" novalidate>
+            <form id="credential-form" aria-labelledby="form-title" novalidate>
                 ${fieldsHtml}
 
                 <button type="submit" class="submit-btn" id="submit-btn">

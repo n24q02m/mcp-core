@@ -120,9 +120,9 @@ def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
                 <p class="server-description">Enter the relay password shared by your deployer.</p>
             </div>{error_html}
 
-            <p class="form-title">Authenticate</p>
+            <p class="form-title" id="form-title">Authenticate</p>
 
-            <form method="POST" action="/login" novalidate>
+            <form method="POST" action="/login" aria-labelledby="form-title" novalidate>
                 <!-- nosemgrep: python.fastapi.security.injection.raw-html-format.raw-html-format -- safe_next is escaped -->
                 <input type="hidden" name="next" value="{safe_next}">
                 <div class="field-group">
