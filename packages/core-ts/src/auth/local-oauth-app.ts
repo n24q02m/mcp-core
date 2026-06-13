@@ -794,7 +794,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
    */
   function markSetupFailed(key = 'gdrive', error = 'unknown error'): void {
     // ⚡ Bolt: Replace multiple array allocations (.split.filter.join) with regex replace for faster whitespace collapsing
-    const collapsed = String(error).replace(/\s+/g, ' ').trim()
+    const collapsed = collapseWhitespace(String(error))
     const message = collapsed.length > 0 ? collapsed : 'unknown error'
     setupStatus[key] = `error:${message}`
   }
@@ -1115,6 +1115,34 @@ export function renderField(field: RelayConfigField, currentValue: unknown): str
     `<input id="field-${escapeHtml(name)}" type="${escapeHtml(fieldType)}" name="${escapeHtml(name)}" ` +
     `value="${valueAttr}"></div>`
   )
+}
+
+/**
+ * Collapses contiguous whitespace into a single space and trims the result.
+ * Manual single-pass loop to avoid regex engine overhead and multiple
+ * string/array allocations.
+ */
+function collapseWhitespace(str: string): string {
+  let result = ''
+  let inWhitespace = false
+  let hasStarted = false
+
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i)
+    if (code <= 32) {
+      if (hasStarted && !inWhitespace) {
+        inWhitespace = true
+      }
+    } else {
+      if (inWhitespace) {
+        result += ' '
+        inWhitespace = false
+      }
+      result += str[i]
+      hasStarted = true
+    }
+  }
+  return result
 }
 
 /**
