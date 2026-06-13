@@ -188,8 +188,9 @@ export function backendFromEnv(): CredentialBackend {
     return new LocalFsBackend()
   }
   if (kind === 'cf-kv') {
-    // biome-ignore lint/style/noNonNullAssertion: base URL is required for cf-kv; absence is a config error that should surface.
-    return new CfKvBackend(process.env.MCP_KV_BASE_URL!, process.env.MCP_KV_TOKEN)
+    const baseUrl = process.env.MCP_KV_BASE_URL
+    if (!baseUrl) throw new Error('MCP_KV_BASE_URL is required when MCP_STORAGE_BACKEND=cf-kv')
+    return new CfKvBackend(baseUrl, process.env.MCP_KV_TOKEN)
   }
   throw new Error(`Unknown MCP_STORAGE_BACKEND: ${kind}`)
 }

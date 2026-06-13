@@ -185,6 +185,21 @@ describe('CfKvBackend', () => {
     const backend = new CfKvBackend('http://kv.internal', undefined, new StatusHttp(404))
     await expect(backend.delete('wet/config')).resolves.toBeUndefined()
   })
+
+  it('put throws on 500', async () => {
+    const backend = new CfKvBackend('http://kv.internal', undefined, new StatusHttp(500))
+    await expect(backend.put('wet/config', Buffer.from('x'))).rejects.toThrow()
+  })
+
+  it('propagates transport errors from get/put/delete', async () => {
+    const throwingHttp: Http = {
+      request: () => Promise.reject(new Error('econnrefused'))
+    }
+    const backend = new CfKvBackend('http://kv.internal', undefined, throwingHttp)
+    await expect(backend.get('wet/config')).rejects.toThrow(/econnrefused/)
+    await expect(backend.put('wet/config', Buffer.from('x'))).rejects.toThrow(/econnrefused/)
+    await expect(backend.delete('wet/config')).rejects.toThrow(/econnrefused/)
+  })
 })
 
 describe('backendFromEnv', () => {
@@ -203,5 +218,16 @@ describe('backendFromEnv', () => {
     process.env.MCP_STORAGE_BACKEND = 'cf-kv'
     process.env.MCP_KV_BASE_URL = 'http://kv.internal'
     expect(backendFromEnv()).toBeInstanceOf(CfKvBackend)
+  })
+
+  it('throws on an unknown backend kind', () => {
+    process.env.MCP_STORAGE_BACKEND = 'bogus'
+    expect(() => backendFromEnv()).toThrow()
+  })
+
+  it('cf-kv without MCP_KV_BASE_URL throws a clear error', () => {
+    process.env.MCP_STORAGE_BACKEND = 'cf-kv'
+    delete process.env.MCP_KV_BASE_URL
+    expect(() => backendFromEnv()).toThrow(/MCP_KV_BASE_URL/)
   })
 })
