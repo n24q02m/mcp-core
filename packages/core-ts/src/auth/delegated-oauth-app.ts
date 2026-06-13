@@ -860,12 +860,23 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     const header = req.headers.cookie
     if (!header) return {}
     const out: Record<string, string> = {}
-    for (const part of header.split(';')) {
-      const idx = part.indexOf('=')
-      if (idx < 0) continue
-      const k = part.slice(0, idx).trim()
-      const v = part.slice(idx + 1).trim()
-      if (k.length > 0) out[k] = decodeURIComponent(v)
+    let pos = 0
+    const len = header.length
+    while (pos < len) {
+      let sep = header.indexOf(';', pos)
+      if (sep === -1) sep = len
+
+      const eq = header.indexOf('=', pos)
+      if (eq !== -1 && eq < sep) {
+        const k = header.substring(pos, eq).trim()
+        const v = header.substring(eq + 1, sep).trim()
+        if (k.length > 0) out[k] = decodeURIComponent(v)
+      }
+
+      pos = sep + 1
+      while (pos < len && header.charCodeAt(pos) === 32) {
+        pos++
+      }
     }
     return out
   }
