@@ -33,8 +33,8 @@ def _get_litellm() -> Any:
 
 # Env-key -> litellm provider prefix (for configured_only filtering).
 # Intentionally covers only the provider set used by the n24q02m servers
-# (gemini/openai/xai/anthropic/cohere/jina_ai), NOT all ~30 litellm providers.
-# Passthrough still works for ANY provider; this map only affects
+# (gemini/openai/xai/anthropic/cohere/jina_ai/vertex_express), NOT all litellm
+# providers. Passthrough still works for ANY provider; this map only affects
 # listing/suggestions.
 _PROVIDER_ENV_KEYS: dict[str, str] = {
     "GEMINI_API_KEY": "gemini",
@@ -45,6 +45,7 @@ _PROVIDER_ENV_KEYS: dict[str, str] = {
     "COHERE_API_KEY": "cohere",
     "CO_API_KEY": "cohere",
     "JINA_AI_API_KEY": "jina_ai",
+    "GOOGLE_VERTEX_EXPRESS_API_KEY": "vertex_express",
 }
 
 

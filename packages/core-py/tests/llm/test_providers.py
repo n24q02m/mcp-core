@@ -31,6 +31,22 @@ def test_key_env_for_uncurated_provider_falls_back_to_convention():
 
 
 def test_curated_providers_set():
-    assert CURATED_PROVIDERS == frozenset({"gemini", "openai", "jina_ai", "cohere", "xai", "anthropic"})
+    assert CURATED_PROVIDERS == frozenset(
+        {"gemini", "openai", "jina_ai", "cohere", "xai", "anthropic", "vertex_express"}
+    )
     for p in CURATED_PROVIDERS:
         assert p in PROVIDER_KEY_ENV
+
+
+def test_vertex_express_provider_key_env():
+    from mcp_core.llm.providers import PROVIDER_KEY_ENV, key_env_for_model, provider_of_model
+
+    assert PROVIDER_KEY_ENV["vertex_express"] == "GOOGLE_VERTEX_EXPRESS_API_KEY"
+    assert provider_of_model("vertex_express/gemini-2.5-flash") == "vertex_express"
+    assert key_env_for_model("vertex_express/gemini-2.5-flash") == "GOOGLE_VERTEX_EXPRESS_API_KEY"
+
+
+def test_vertex_express_in_catalog_provider_env_keys():
+    from mcp_core.llm.catalog import _PROVIDER_ENV_KEYS
+
+    assert _PROVIDER_ENV_KEYS["GOOGLE_VERTEX_EXPRESS_API_KEY"] == "vertex_express"
