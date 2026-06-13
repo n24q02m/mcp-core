@@ -30,6 +30,7 @@ import httpx
 
 from mcp_core.http import SSRFBlockedError, get_ssrf_safe_async_client, vet_api_base
 from mcp_core.http.ssrf import is_multi_user_mode
+from mcp_core.llm.catalog import check_capability
 
 VERTEX_EXPRESS_PREFIX = "vertex_express"
 
@@ -228,6 +229,7 @@ def translate_response(raw: dict[str, Any], *, model: str) -> ExpressResponse:
 
 _REQUEST_TIMEOUT_S = 120.0
 _API_KEY_ENV = "GOOGLE_VERTEX_EXPRESS_API_KEY"
+_CHAT_MODES = ("chat", "responses", "completion")
 
 
 def _resolve_api_key(api_key: str | None) -> str:
@@ -292,6 +294,10 @@ async def acompletion_express(
 ) -> ExpressResponse:
     """Async Vertex Express generateContent call (litellm#21036 workaround)."""
     key = _resolve_api_key(api_key)
+    # Advisory only: litellm's registry has no vertex_express/* entries today,
+    # so this passes via the graceful-unknown branch. Kept for forward-compat
+    # and parity with the litellm path's capability gate.
+    check_capability(model, _CHAT_MODES)
     base = _vet_base(api_base)
     url, headers, body = build_express_request(model=model, messages=messages, api_key=key, api_base=base, **kwargs)
     async with get_ssrf_safe_async_client(**_ssrf_flags()) as client:
@@ -311,6 +317,10 @@ def completion_express(
 ) -> ExpressResponse:
     """Sync Vertex Express generateContent call. Do NOT call from async context."""
     key = _resolve_api_key(api_key)
+    # Advisory only: litellm's registry has no vertex_express/* entries today,
+    # so this passes via the graceful-unknown branch. Kept for forward-compat
+    # and parity with the litellm path's capability gate.
+    check_capability(model, _CHAT_MODES)
     base = _vet_base(api_base)
     url, headers, body = build_express_request(model=model, messages=messages, api_key=key, api_base=base, **kwargs)
     with _get_ssrf_safe_sync_client(**_ssrf_flags()) as client:

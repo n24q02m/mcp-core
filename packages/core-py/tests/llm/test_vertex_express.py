@@ -327,3 +327,45 @@ def test_completion_express_sync_happy_path(monkeypatch):
         api_key="AQ.key",
     )
     assert resp.choices[0].message.content == "sync-pong"
+
+
+async def test_acompletion_express_calls_capability_check(monkeypatch):
+    raw = {"candidates": [{"content": {"parts": [{"text": "x"}]}, "finishReason": "STOP"}]}
+    fake_client = _FakeAsyncClient(_FakeResponse(200, raw))
+    monkeypatch.setattr(
+        "mcp_core.llm.vertex_express.get_ssrf_safe_async_client",
+        lambda **kw: fake_client,
+    )
+    seen: dict = {}
+
+    def fake_check(model, modes):
+        seen["model"] = model
+        seen["modes"] = modes
+
+    monkeypatch.setattr("mcp_core.llm.vertex_express.check_capability", fake_check)
+    await acompletion_express(
+        model="vertex_express/gemini-2.5-flash",
+        messages=[{"role": "user", "content": "ping"}],
+        api_key="AQ.key",
+    )
+    # capability check is invoked with the full prefixed model + chat modes
+    assert seen["model"] == "vertex_express/gemini-2.5-flash"
+    assert "chat" in seen["modes"]
+
+
+async def test_acompletion_express_capability_check_is_advisory(monkeypatch):
+    # An unknown vertex_express model must NOT raise (registry has no such key).
+    raw = {"candidates": [{"content": {"parts": [{"text": "x"}]}, "finishReason": "STOP"}]}
+    fake_client = _FakeAsyncClient(_FakeResponse(200, raw))
+    monkeypatch.setattr(
+        "mcp_core.llm.vertex_express.get_ssrf_safe_async_client",
+        lambda **kw: fake_client,
+    )
+    # Use the real check_capability (importorskip litellm) — must pass through.
+    pytest.importorskip("litellm")
+    resp = await acompletion_express(
+        model="vertex_express/totally-unknown-model",
+        messages=[{"role": "user", "content": "ping"}],
+        api_key="AQ.key",
+    )
+    assert resp.choices[0].message.content == "x"
