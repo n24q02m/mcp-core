@@ -1,4 +1,11 @@
 export {
+  backendFromEnv,
+  CfKvBackend,
+  type CredentialBackend,
+  InMemoryBackend,
+  LocalFsBackend
+} from './backends.js'
+export {
   deleteConfig,
   exportConfig,
   importConfig,
