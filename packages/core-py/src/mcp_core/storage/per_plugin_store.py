@@ -28,6 +28,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from mcp_core.storage.backends import CredentialBackend, LocalFsBackend
+
 
 def _cred_path(plugin_name: str, sub: Optional[str]) -> Path:
     unsafe = re.compile(r"[^a-zA-Z0-9.-]")
@@ -77,10 +79,17 @@ class PerPluginStore:
     See module docstring for layout and key derivation rules.
     """
 
-    def __init__(self, plugin_name: str, sub: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        plugin_name: str,
+        sub: Optional[str] = None,
+        backend: Optional[CredentialBackend] = None,
+    ) -> None:
         self.plugin_name = plugin_name
         self.sub = sub
         self.cred_path = _cred_path(plugin_name, sub)
+        self.cred_key = f"{plugin_name}/subs/{sub}/config" if sub else f"{plugin_name}/config"
+        self._backend = backend if backend is not None else LocalFsBackend()
 
     def _key(self) -> bytes:
         if self.sub:
@@ -88,9 +97,9 @@ class PerPluginStore:
         return _load_or_generate_machine_key(self.plugin_name)
 
     def load(self) -> Optional[dict]:
-        if not self.cred_path.exists():
+        blob = self._backend.get(self.cred_key)
+        if blob is None:
             return None
-        blob = self.cred_path.read_bytes()
         if len(blob) < 13:
             return None
         nonce, ciphertext = blob[:12], blob[12:]
@@ -102,15 +111,11 @@ class PerPluginStore:
         return json.loads(plaintext)
 
     def save(self, payload: dict) -> None:
-        self.cred_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         plaintext = json.dumps(payload).encode("utf-8")
         nonce = secrets.token_bytes(12)
         aesgcm = AESGCM(self._key())
         ciphertext = aesgcm.encrypt(nonce, plaintext, None)
-        self.cred_path.write_bytes(nonce + ciphertext)
-        if os.name != "nt":
-            os.chmod(self.cred_path, 0o600)
+        self._backend.put(self.cred_key, nonce + ciphertext)
 
     def clear(self) -> None:
-        if self.cred_path.exists():
-            self.cred_path.unlink()
+        self._backend.delete(self.cred_key)

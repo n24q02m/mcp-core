@@ -1,8 +1,10 @@
 """Per-plugin encrypted credential store tests."""
 
+import json
 import os
 import pytest
 
+from mcp_core.storage.backends import InMemoryBackend
 from mcp_core.storage.per_plugin_store import PerPluginStore, _cred_path
 
 
@@ -77,6 +79,16 @@ def test_multi_user_requires_credential_secret(store_factory, monkeypatch):
     store = store_factory("plugin", sub="some-sub")
     with pytest.raises(RuntimeError, match="CREDENTIAL_SECRET"):
         store.save({"k": "v"})
+
+
+def test_per_plugin_store_uses_injected_backend(monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_SECRET", "test-master")
+    mem = InMemoryBackend()
+    PerPluginStore("wet", "u1", backend=mem).save({"JINA_AI_API_KEY": "k"})
+    blob = mem.get("wet/subs/u1/config")
+    assert blob is not None
+    assert blob != json.dumps({"JINA_AI_API_KEY": "k"}).encode("utf-8")
+    assert PerPluginStore("wet", "u1", backend=mem).load() == {"JINA_AI_API_KEY": "k"}
 
 
 def test_load_returns_none_on_tampered_ciphertext(store_factory):
