@@ -355,3 +355,39 @@ class TestLocalRsaModeUnchanged:
         jwks = issuer.get_jwks()
         assert jwks["keys"][0]["kty"] == "RSA"
         assert jwks["keys"][0]["alg"] == "RS256"
+
+
+class TestBuildLocalAppIssuerMode:
+    """build_local_app must construct the issuer in EdDSA mode when
+    CREDENTIAL_SECRET is set in the environment."""
+
+    def test_build_local_app_uses_eddsa_when_credential_secret_set(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CREDENTIAL_SECRET", "test-credential-secret-value")
+        from mcp.server.fastmcp import FastMCP
+
+        from mcp_core.transport.local_server import build_local_app
+
+        mcp = FastMCP("wet-mcp")
+        _, issuer = build_local_app(
+            mcp,
+            server_name="wet-mcp",
+            relay_schema={"fields": []},
+            jwt_keys_dir=tmp_path / "keys",
+        )
+        assert issuer.alg == "EdDSA"
+        assert not (tmp_path / "keys" / "wet-mcp_private.pem").exists()
+
+    def test_build_local_app_uses_rsa_when_no_credential_secret(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("CREDENTIAL_SECRET", raising=False)
+        from mcp.server.fastmcp import FastMCP
+
+        from mcp_core.transport.local_server import build_local_app
+
+        mcp = FastMCP("wet-mcp")
+        _, issuer = build_local_app(
+            mcp,
+            server_name="wet-mcp",
+            relay_schema={"fields": []},
+            jwt_keys_dir=tmp_path / "keys",
+        )
+        assert issuer.alg == "RS256"

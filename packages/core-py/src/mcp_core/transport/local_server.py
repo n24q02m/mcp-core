@@ -241,10 +241,20 @@ def build_local_app(
     if relay_schema is None and delegated_oauth is None:
         raise ValueError("exactly one of `relay_schema` or `delegated_oauth` must be provided")
 
-    # Build JWT issuer with optional custom keys directory
+    # Build JWT issuer with optional custom keys directory.
+    #
+    # When CREDENTIAL_SECRET is set (HTTP multi-user mode) the issuer derives a
+    # stable EdDSA signing key from it (no disk, no volume), so OAuth tokens
+    # survive container recreation. When it is unset (local single-user) the
+    # issuer keeps the RSA-2048-on-disk path.
+    import os
+
     jwt_issuer_kwargs: dict[str, Any] = {"server_name": server_name}
     if jwt_keys_dir is not None:
         jwt_issuer_kwargs["keys_dir"] = jwt_keys_dir
+    credential_secret = os.environ.get("CREDENTIAL_SECRET")
+    if credential_secret:
+        jwt_issuer_kwargs["credential_secret"] = credential_secret
     jwt_issuer = JWTIssuer(**jwt_issuer_kwargs)
 
     if delegated_oauth is not None:
