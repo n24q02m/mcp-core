@@ -98,6 +98,47 @@ def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
     return secrets.compare_digest(computed, code_challenge)
 
 
+class _SetupStatusManager:
+    """Manages in-memory setup status for background tasks.
+
+    Status values: "idle", "complete", or "error:<message>".
+    The "error:<message>" format allows the frontend to detect failure
+    and surface the message to the user.
+    """
+
+    def __init__(self) -> None:
+        self._status: dict[str, str] = {"gdrive": "idle"}
+
+    def mark_complete(self, key: str = "gdrive") -> None:
+        """Mark a background setup step as complete."""
+        self._status[key] = "complete"
+
+    def mark_failed(self, key: str = "gdrive", error: str = "unknown error") -> None:
+        """Mark a background setup step as failed with sanitization.
+
+        Collapses whitespace and strips redundant "error:" prefixes to avoid
+        double-prefixing in the status string.
+        """
+        # Sanitize: collapse whitespace so the error string is single-line
+        # (the frontend inlines it).
+        message = " ".join(str(error).split()) or "unknown error"
+
+        # Strip redundant "error:" prefix if present in the message
+        if message.lower().startswith("error:"):
+            message = message[6:].lstrip() or "unknown error"
+
+        self._status[key] = f"error:{message}"
+
+    def reset_all(self) -> None:
+        """Reset all status keys to "idle"."""
+        for key in list(self._status.keys()):
+            self._status[key] = "idle"
+
+    def get_status(self) -> dict[str, str]:
+        """Return a copy of the current status dictionary."""
+        return self._status.copy()
+
+
 def create_local_oauth_app(
     *,
     server_name: str,
@@ -161,6 +202,7 @@ def create_local_oauth_app(
     # Structure: {state: {data: {KEY: VALUE}, created_at: monotonic}}
     pending_prefills: dict[str, dict[str, Any]] = {}
     _PREFILL_TTL_S = 300.0
+    status_manager = _SetupStatusManager()
 
     # Edge auth password gate (per spec 2026-05-01-stdio-pure-http-multiuser
     # §4.2.1). When ``MCP_RELAY_PASSWORD`` is set, /authorize GET + POST and
@@ -292,16 +334,7 @@ def create_local_oauth_app(
             )
 
         # Reset stale completion markers from previous authorize submits.
-        # _setup_status is closure-scoped, so a key flipped to "complete"
-        # by a prior background poll (e.g. Outlook device code finished
-        # on the first attempt) would otherwise persist into the next
-        # form submit. The frontend renders a fresh oauth_device_code UI
-        # and starts polling /setup-status, which returns the stale
-        # "complete" within a few seconds and triggers a premature
-        # redirect. Reset all keys to "idle" so each submit starts from
-        # a clean state.
-        for _k in list(_setup_status.keys()):
-            _setup_status[_k] = "idle"
+        status_manager.reset_all()
 
         # Save credentials via callback. Callback may return a dict with
         # next_step info (e.g., GDrive OAuth device code to show in the form).
@@ -658,31 +691,9 @@ def create_local_oauth_app(
             )
         )
 
-    # In-memory setup status (set by background tasks via mark_setup_complete
-    # or mark_setup_failed). Values: "idle", "complete", or "error:<message>".
-    _setup_status: dict[str, str] = {"gdrive": "idle"}
-
-    def mark_setup_complete(key: str = "gdrive") -> None:
-        """Mark a background setup step as complete (called externally)."""
-        _setup_status[key] = "complete"
-
-    def mark_setup_failed(key: str = "gdrive", error: str = "unknown error") -> None:
-        """Mark a background setup step as failed (called externally).
-
-        The status is encoded as ``"error:<message>"`` so the frontend poll
-        handler can detect failure and surface the message to the user,
-        stopping the spinner that would otherwise wait forever.
-        """
-        # Sanitize: collapse whitespace so the error string is single-line
-        # (the frontend inlines it). Strip colons in the user-visible part
-        # only by replacing the rare ``error:`` prefix in callback text, to
-        # avoid double-prefixing.
-        message = " ".join(str(error).split()) or "unknown error"
-        _setup_status[key] = f"error:{message}"
-
     async def setup_status(request: Request) -> JSONResponse:
         """GET /setup-status -- polled by the form to detect GDrive auth completion."""
-        return JSONResponse(_setup_status)
+        return JSONResponse(status_manager.get_status())
 
     async def root(request: Request):
         """GET / -- auto-generate PKCE and redirect to /authorize.
@@ -813,8 +824,8 @@ def create_local_oauth_app(
 
     # Expose mark_setup_complete / mark_setup_failed on the app for
     # external callers (see transport/local_server.py for wiring).
-    app.state.mark_setup_complete = mark_setup_complete  # type: ignore[attr-defined]
-    app.state.mark_setup_failed = mark_setup_failed  # type: ignore[attr-defined]
+    app.state.mark_setup_complete = status_manager.mark_complete  # type: ignore[attr-defined]
+    app.state.mark_setup_failed = status_manager.mark_failed  # type: ignore[attr-defined]
 
     return app, jwt_issuer
 
