@@ -208,3 +208,80 @@ describe('JWTIssuer refresh tokens (issue #261)', () => {
     expect(pub.extractable).toBe(true)
   })
 })
+
+describe('JWTIssuer derived EdDSA mode (CREDENTIAL_SECRET set)', () => {
+  const serverName = 'wet-mcp'
+  const SECRET = 'test-credential-secret-value'
+
+  it('does not write PEM files in derived mode', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir, SECRET)
+    await issuer.init()
+    expect(issuer.alg).toBe('EdDSA')
+    expect(existsSync(join(tempDir, `${serverName}_private.pem`))).toBe(false)
+    expect(existsSync(join(tempDir, `${serverName}_public.pem`))).toBe(false)
+  })
+
+  it('derives the same key across instances (multi-replica determinism)', async () => {
+    const a = new JWTIssuer(serverName, tempDir, SECRET)
+    await a.init()
+    const b = new JWTIssuer(serverName, tempDir, SECRET)
+    await b.init()
+    const ja = await a.getJwks()
+    const jb = await b.getJwks()
+    expect((ja.keys[0] as { x: string }).x).toBe((jb.keys[0] as { x: string }).x)
+  })
+
+  it('getJwks emits an OKP EdDSA key with thumbprint kid matching the parity vector', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir, SECRET)
+    await issuer.init()
+    const jwks = await issuer.getJwks()
+    expect(jwks.keys[0]).toMatchObject({
+      kty: 'OKP',
+      crv: 'Ed25519',
+      use: 'sig',
+      alg: 'EdDSA',
+      kid: 'r71l8IICMLZykZU5',
+      x: 'VGfGsMquscEDCVyGu4sNbM8DihXhYAb2c1s1EDIrAdE'
+    })
+  })
+
+  it('access token roundtrip uses EdDSA + thumbprint kid', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir, SECRET)
+    await issuer.init()
+    const token = await issuer.issueAccessToken('u')
+    const decodedHeader = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString())
+    expect(decodedHeader.alg).toBe('EdDSA')
+    expect(decodedHeader.kid).toBe('r71l8IICMLZykZU5')
+    const payload = await issuer.verifyAccessToken(token)
+    expect(payload.sub).toBe('u')
+    expect(payload.typ).toBe('access')
+  })
+
+  it('refresh token roundtrip works in EdDSA mode', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir, SECRET)
+    await issuer.init()
+    const token = await issuer.issueRefreshToken('u')
+    const payload = await issuer.verifyRefreshToken(token)
+    expect(payload.typ).toBe('refresh')
+  })
+
+  it('verifyAccessToken rejects a refresh token in EdDSA mode', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir, SECRET)
+    await issuer.init()
+    const refresh = await issuer.issueRefreshToken('u')
+    await expect(issuer.verifyAccessToken(refresh)).rejects.toThrow()
+  })
+})
+
+describe('JWTIssuer local RSA mode unchanged (no CREDENTIAL_SECRET)', () => {
+  const serverName = 'test-server'
+
+  it('defaults to RS256 + key-1 + on-disk RSA key', async () => {
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+    expect(issuer.alg).toBe('RS256')
+    expect(existsSync(join(tempDir, `${serverName}_private.pem`))).toBe(true)
+    const jwks = await issuer.getJwks()
+    expect(jwks.keys[0]).toMatchObject({ kty: 'RSA', alg: 'RS256', kid: 'key-1' })
+  })
+})
