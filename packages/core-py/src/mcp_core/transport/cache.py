@@ -28,9 +28,9 @@ def _cache_dir() -> Path:
 
 
 def cache_filename(server_name: str, port: int, srv_version: str, core_version: str) -> str:
-    safe_name = re.sub(r"[^a-zA-Z0-9.-]", "_", server_name)
-    safe_srv_version = re.sub(r"[^a-zA-Z0-9.-]", "_", srv_version)
-    safe_core_version = re.sub(r"[^a-zA-Z0-9.-]", "_", core_version)
+    safe_name = re.sub(r"[^a-zA-Z0-9.-]", "_", server_name).replace("..", "__")
+    safe_srv_version = re.sub(r"[^a-zA-Z0-9.-]", "_", srv_version).replace("..", "__")
+    safe_core_version = re.sub(r"[^a-zA-Z0-9.-]", "_", core_version).replace("..", "__")
     return f"{safe_name}-{port}-{safe_srv_version}-{safe_core_version}.tools.json"
 
 
