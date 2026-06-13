@@ -6,6 +6,7 @@ litellm need NOT be installed for these tests; the adapter is httpx-only.
 
 from __future__ import annotations
 
+import pytest
 
 from mcp_core.llm.vertex_express import (
     VERTEX_EXPRESS_PREFIX,
@@ -17,6 +18,7 @@ from mcp_core.llm.vertex_express import (
     is_express_model,
     messages_to_contents,
     strip_express_prefix,
+    translate_response,
 )
 
 
@@ -141,3 +143,58 @@ def test_build_express_request_body_includes_generation_config():
     assert body["generationConfig"]["temperature"] == 0.5
     assert body["generationConfig"]["maxOutputTokens"] == 128
     assert body["contents"][0]["parts"][0]["text"] == "hi"
+
+
+def test_translate_response_happy_path():
+    raw = {
+        "candidates": [
+            {
+                "content": {"role": "model", "parts": [{"text": "Hello "}, {"text": "world"}]},
+                "finishReason": "STOP",
+            }
+        ],
+        "usageMetadata": {
+            "promptTokenCount": 5,
+            "candidatesTokenCount": 2,
+            "totalTokenCount": 7,
+        },
+    }
+    resp = translate_response(raw, model="vertex_express/gemini-2.5-flash")
+    assert resp.choices[0].message.content == "Hello world"
+    assert resp.choices[0].message.role == "assistant"
+    assert resp.choices[0].finish_reason == "stop"  # STOP -> stop
+    assert resp.usage.prompt_tokens == 5
+    assert resp.usage.completion_tokens == 2
+    assert resp.usage.total_tokens == 7
+    assert resp.model == "vertex_express/gemini-2.5-flash"
+
+
+def test_translate_response_finish_reason_mapping():
+    raw = {"candidates": [{"content": {"parts": [{"text": "x"}]}, "finishReason": "MAX_TOKENS"}]}
+    resp = translate_response(raw, model="vertex_express/m")
+    assert resp.choices[0].finish_reason == "length"  # MAX_TOKENS -> length
+
+
+def test_translate_response_safety_block_maps_to_content_filter():
+    raw = {"candidates": [{"finishReason": "SAFETY"}]}
+    resp = translate_response(raw, model="vertex_express/m")
+    assert resp.choices[0].finish_reason == "content_filter"
+    assert resp.choices[0].message.content is None
+
+
+def test_translate_response_empty_candidates_raises():
+    from mcp_core.llm.vertex_express import VertexExpressError
+
+    raw = {
+        "promptFeedback": {"blockReason": "SAFETY"},
+        "candidates": [],
+    }
+    with pytest.raises(VertexExpressError) as exc:
+        translate_response(raw, model="vertex_express/m")
+    assert "SAFETY" in str(exc.value)
+
+
+def test_translate_response_missing_usage_defaults_zero():
+    raw = {"candidates": [{"content": {"parts": [{"text": "ok"}]}, "finishReason": "STOP"}]}
+    resp = translate_response(raw, model="vertex_express/m")
+    assert resp.usage.total_tokens == 0

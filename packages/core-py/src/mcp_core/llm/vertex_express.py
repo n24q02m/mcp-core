@@ -160,3 +160,61 @@ def build_express_request(
     if gen_config:
         body["generationConfig"] = gen_config
     return url, headers, body
+
+
+class VertexExpressError(RuntimeError):
+    """Vertex Express returned an error, a non-2xx status, or no candidate."""
+
+
+# Vertex finishReason enum -> OpenAI finish_reason.
+_FINISH_MAP = {
+    "STOP": "stop",
+    "MAX_TOKENS": "length",
+    "SAFETY": "content_filter",
+    "RECITATION": "content_filter",
+    "BLOCKLIST": "content_filter",
+    "PROHIBITED_CONTENT": "content_filter",
+}
+
+
+def _join_parts(parts: list[dict[str, Any]]) -> str | None:
+    texts = [p.get("text", "") for p in parts if "text" in p]
+    return "".join(texts) if texts else None
+
+
+def translate_response(raw: dict[str, Any], *, model: str) -> ExpressResponse:
+    """Translate a Vertex generateContent JSON body to ``ExpressResponse``.
+
+    Raises ``VertexExpressError`` when no candidate is present (e.g. a prompt
+    blocked by safety filters surfaces only ``promptFeedback.blockReason``).
+    """
+    candidates = raw.get("candidates") or []
+    if not candidates:
+        feedback = raw.get("promptFeedback", {})
+        reason = feedback.get("blockReason", "no candidates returned")
+        raise VertexExpressError(f"Vertex Express returned no candidate: {reason}")
+
+    cand = candidates[0]
+    parts = (cand.get("content") or {}).get("parts") or []
+    content = _join_parts(parts)
+    vertex_finish = cand.get("finishReason", "STOP")
+    finish_reason = _FINISH_MAP.get(vertex_finish, "stop")
+
+    usage_meta = raw.get("usageMetadata") or {}
+    usage = ExpressUsage(
+        prompt_tokens=int(usage_meta.get("promptTokenCount", 0)),
+        completion_tokens=int(usage_meta.get("candidatesTokenCount", 0)),
+        total_tokens=int(usage_meta.get("totalTokenCount", 0)),
+    )
+
+    return ExpressResponse(
+        choices=[
+            ExpressChoice(
+                message=ExpressMessage(role="assistant", content=content),
+                finish_reason=finish_reason,
+                index=0,
+            )
+        ],
+        usage=usage,
+        model=model,
+    )
