@@ -125,7 +125,8 @@ def create_local_oauth_app(
             compare secrets MUST use ``secrets.compare_digest`` or similar
             timing-safe comparison to prevent timing attacks.
         jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
-            automatically using ``server_name``.
+            automatically using ``server_name`` -- EdDSA derived from
+            ``CREDENTIAL_SECRET`` in HTTP multi-user mode, else RS256 on disk.
         custom_credential_form_html: Optional callable
             ``(schema, submit_url, *, prefill=None) -> html_string`` used to
             render GET /authorize. When provided, replaces the default
@@ -145,7 +146,10 @@ def create_local_oauth_app(
         transport layer to verify Bearer tokens on ``/mcp`` requests.
     """
     if jwt_issuer is None:
-        jwt_issuer = JWTIssuer(server_name=server_name)
+        # Mirror core-ts: in HTTP multi-user mode the fallback issuer derives a
+        # stable EdDSA key from CREDENTIAL_SECRET (survives container
+        # recreation); unset -> RS256-on-disk local path.
+        jwt_issuer = JWTIssuer(server_name=server_name, credential_secret=os.environ.get("CREDENTIAL_SECRET"))
 
     # In-memory stores keyed by nonce / auth_code.
     # Each entry includes a ``created_at`` timestamp for TTL expiry.

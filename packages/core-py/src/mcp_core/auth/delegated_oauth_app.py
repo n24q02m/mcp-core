@@ -210,7 +210,9 @@ def create_delegated_oauth_app(
             (``access_token``, optionally ``refresh_token``/``expires_in``/...)
             once the upstream flow completes. Consumer persists tokens as it
             sees fit -- this module never stores them.
-        jwt_issuer: Optional pre-created JWTIssuer.
+        jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
+            from ``server_name`` -- EdDSA derived from ``CREDENTIAL_SECRET`` in
+            HTTP multi-user mode, else RS256 on disk.
 
     Returns:
         ``(app, jwt_issuer)``. ``jwt_issuer`` is needed by the transport
@@ -222,7 +224,10 @@ def create_delegated_oauth_app(
         raise ValueError("device_auth_url is required for device_code flow")
 
     if jwt_issuer is None:
-        jwt_issuer = JWTIssuer(server_name=server_name)
+        # Mirror core-ts: in HTTP multi-user mode the fallback issuer derives a
+        # stable EdDSA key from CREDENTIAL_SECRET (survives container
+        # recreation); unset -> RS256-on-disk local path.
+        jwt_issuer = JWTIssuer(server_name=server_name, credential_secret=os.environ.get("CREDENTIAL_SECRET"))
 
     # Structure keyed by upstream-state nonce: PKCE session from the MCP client.
     # {nonce: {client_id, redirect_uri, state, code_challenge, code_challenge_method, created_at}}
