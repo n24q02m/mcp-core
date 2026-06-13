@@ -86,8 +86,6 @@ def _with_retry(fn: Any) -> Any:
             if not is_busy or attempt == _MAX_RETRIES - 1:
                 raise
             time.sleep(_BASE_DELAY_S * (2**attempt))
-    msg = "Unreachable"
-    raise RuntimeError(msg)
 
 
 def _load_store() -> dict[str, Any]:
