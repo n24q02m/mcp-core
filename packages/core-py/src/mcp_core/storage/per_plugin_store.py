@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from mcp_core.storage.backends import CredentialBackend, LocalFsBackend
+from mcp_core.storage.backends import CredentialBackend, backend_from_env
 
 
 def _cred_path(plugin_name: str, sub: Optional[str]) -> Path:
@@ -89,7 +89,7 @@ class PerPluginStore:
         self.sub = sub
         self.cred_path = _cred_path(plugin_name, sub)
         self.cred_key = f"{plugin_name}/subs/{sub}/config" if sub else f"{plugin_name}/config"
-        self._backend = backend if backend is not None else LocalFsBackend()
+        self._backend = backend if backend is not None else backend_from_env()
 
     def _key(self) -> bytes:
         if self.sub:

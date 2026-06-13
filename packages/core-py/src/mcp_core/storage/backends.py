@@ -84,9 +84,7 @@ class LocalFsBackend:
 class _UrllibHttp:
     """Minimal HTTP client over urllib, returning (status, body)."""
 
-    def request(
-        self, method: str, url: str, data: Optional[bytes], headers: dict
-    ) -> tuple[int, bytes]:
+    def request(self, method: str, url: str, data: Optional[bytes], headers: dict) -> tuple[int, bytes]:
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req) as resp:
@@ -124,3 +122,16 @@ class CfKvBackend:
 
     def delete(self, key: str) -> None:
         self._http.request("DELETE", self._url(key), None, self._headers())
+
+
+def backend_from_env() -> CredentialBackend:
+    """Select a credential backend from the MCP_STORAGE_BACKEND env var."""
+    kind = os.environ.get("MCP_STORAGE_BACKEND", "local").lower()
+    if kind in ("local", "local-fs", ""):
+        return LocalFsBackend()
+    if kind == "cf-kv":
+        return CfKvBackend(
+            base_url=os.environ["MCP_KV_BASE_URL"],
+            token=os.environ.get("MCP_KV_TOKEN"),
+        )
+    raise ValueError(f"Unknown MCP_STORAGE_BACKEND: {kind}")

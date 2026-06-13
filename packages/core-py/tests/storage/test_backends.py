@@ -1,6 +1,11 @@
 """Credential backend tests."""
 
-from mcp_core.storage.backends import CfKvBackend, InMemoryBackend, LocalFsBackend
+from mcp_core.storage.backends import (
+    CfKvBackend,
+    InMemoryBackend,
+    LocalFsBackend,
+    backend_from_env,
+)
 
 
 def test_inmemory_put_get_roundtrip():
@@ -72,3 +77,14 @@ def test_cfkv_backend_roundtrip_via_http():
     assert backend.get("wet/config") == b"blob"
     backend.delete("wet/config")
     assert backend.get("wet/config") is None
+
+
+def test_backend_from_env_default_is_localfs(monkeypatch):
+    monkeypatch.delenv("MCP_STORAGE_BACKEND", raising=False)
+    assert isinstance(backend_from_env(), LocalFsBackend)
+
+
+def test_backend_from_env_selects_cfkv(monkeypatch):
+    monkeypatch.setenv("MCP_STORAGE_BACKEND", "cf-kv")
+    monkeypatch.setenv("MCP_KV_BASE_URL", "http://kv.internal")
+    assert isinstance(backend_from_env(), CfKvBackend)
