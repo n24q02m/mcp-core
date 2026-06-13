@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import socket
 
+import httpx
 import pytest
 
 from mcp_core.http import SSRFBlockedError
@@ -369,3 +370,110 @@ async def test_acompletion_express_capability_check_is_advisory(monkeypatch):
         api_key="AQ.key",
     )
     assert resp.choices[0].message.content == "x"
+
+
+def test_public_exports():
+    import mcp_core.llm as llm
+
+    assert hasattr(llm, "acompletion_express")
+    assert hasattr(llm, "completion_express")
+    assert hasattr(llm, "is_express_model")
+    assert hasattr(llm, "VertexExpressError")
+
+
+def test_messages_to_contents_remote_image_url_rejected():
+    with pytest.raises(ValueError, match="inline data"):
+        messages_to_contents(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": "https://example.com/cat.png"},
+                        }
+                    ],
+                }
+            ]
+        )
+
+
+def test_messages_to_contents_unsupported_block_type_rejected():
+    with pytest.raises(ValueError, match="unsupported content block type"):
+        messages_to_contents([{"role": "user", "content": [{"type": "audio_url", "audio_url": {}}]}])
+
+
+def test_build_express_request_hoists_system_instruction():
+    _url, _headers, body = build_express_request(
+        model="vertex_express/gemini-2.5-flash",
+        messages=[
+            {"role": "system", "content": "be terse"},
+            {"role": "user", "content": "hi"},
+        ],
+        api_key="AQ.key",
+        api_base=None,
+    )
+    assert body["systemInstruction"] == {"parts": [{"text": "be terse"}]}
+    assert body["contents"][0]["role"] == "user"
+
+
+def test_ssrf_flags_multi_user_blocks_private_and_loopback(monkeypatch):
+    from mcp_core.llm.vertex_express import _ssrf_flags
+
+    monkeypatch.setenv("PUBLIC_URL", "https://srv.example.com")
+    assert _ssrf_flags() == {"allow_private": False, "allow_loopback": False}
+
+
+def test_sync_ssrf_transport_rejects_unsupported_scheme():
+    from mcp_core.llm.vertex_express import _SyncSSRFSafeTransport
+
+    transport = _SyncSSRFSafeTransport()
+    request = httpx.Request("GET", "ftp://example.com/x")
+    with pytest.raises(SSRFBlockedError, match="Unsupported scheme"):
+        transport.handle_request(request)
+
+
+def test_sync_ssrf_transport_vets_then_dials(monkeypatch):
+    from mcp_core.llm.vertex_express import _SyncSSRFSafeTransport, _get_ssrf_safe_sync_client
+
+    dialled: dict = {}
+
+    def fake_super_handle(self, request):
+        dialled["url"] = str(request.url)
+        return httpx.Response(200, json={"ok": True})
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", fake_super_handle)
+    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
+
+    client = _get_ssrf_safe_sync_client(allow_private=False, allow_loopback=False)
+    assert isinstance(client, httpx.Client)
+    assert isinstance(client._transport, _SyncSSRFSafeTransport)
+    resp = client._transport.handle_request(httpx.Request("GET", "https://example.com/v1beta1/x"))
+    assert resp.status_code == 200
+    assert dialled["url"] == "https://example.com/v1beta1/x"
+
+
+def test_completion_express_sync_non_2xx_raises(monkeypatch):
+    from mcp_core.llm.vertex_express import VertexExpressError
+
+    class _FakeSyncClient403:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, headers=None, json=None, timeout=None):
+            return _FakeResponse(403, {"error": {"message": "denied"}})
+
+    monkeypatch.setattr(
+        "mcp_core.llm.vertex_express._get_ssrf_safe_sync_client",
+        lambda **kw: _FakeSyncClient403(),
+    )
+    with pytest.raises(VertexExpressError) as exc:
+        completion_express(
+            model="vertex_express/gemini-2.5-flash",
+            messages=[{"role": "user", "content": "ping"}],
+            api_key="AQ.key",
+        )
+    assert "403" in str(exc.value)
