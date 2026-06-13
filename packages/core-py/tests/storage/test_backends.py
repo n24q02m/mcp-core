@@ -1,5 +1,7 @@
 """Credential backend tests."""
 
+import pytest
+
 from mcp_core.storage.backends import (
     CfKvBackend,
     InMemoryBackend,
@@ -46,6 +48,31 @@ def test_localfs_sub_path_and_get_delete(tmp_path, monkeypatch):
     assert backend.get("wet/subs/u1/config") == b"blob"
     backend.delete("wet/subs/u1/config")
     assert backend.get("wet/subs/u1/config") is None
+
+
+def test_localfs_rejects_traversal_sub(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    backend = LocalFsBackend()
+    with pytest.raises(ValueError):
+        backend.put("wet/subs/../config", b"x")
+    with pytest.raises(ValueError):
+        backend.get("wet/subs/../config")
+    with pytest.raises(ValueError):
+        backend.delete("wet/subs/../config")
+
+
+def test_localfs_rejects_traversal_plugin(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    backend = LocalFsBackend()
+    with pytest.raises(ValueError):
+        backend.put("../config", b"x")
+
+
+def test_localfs_allows_dot_in_sub(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    backend = LocalFsBackend()
+    backend.put("wet/subs/u.1/config", b"blob")
+    assert backend.get("wet/subs/u.1/config") == b"blob"
 
 
 class _FakeHttp:

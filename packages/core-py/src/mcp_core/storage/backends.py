@@ -43,6 +43,12 @@ class InMemoryBackend:
         self._store.pop(key, None)
 
 
+def _validate_component(name: str) -> str:
+    if not name or name in (".", "..") or "/" in name or "\\" in name or "\x00" in name:
+        raise ValueError(f"Invalid path component: {name!r}")
+    return name
+
+
 def _key_to_path(key: str) -> Path:
     """Map a backend key to its on-disk path.
 
@@ -50,13 +56,22 @@ def _key_to_path(key: str) -> Path:
     "<plugin>/subs/<sub>/config" -> ~/.<plugin>-mcp/subs/<sub>/config.json
     """
     plugin, _, rest = key.partition("/")
+    _validate_component(plugin)
     base = Path.home() / f".{plugin}-mcp"
     if rest == "config":
-        return base / "config.json"
-    if rest.startswith("subs/") and rest.endswith("/config"):
+        path = base / "config.json"
+    elif rest.startswith("subs/") and rest.endswith("/config"):
         sub = rest[len("subs/") : -len("/config")]
-        return base / "subs" / sub / "config.json"
-    raise ValueError(f"Invalid backend key: {key}")
+        _validate_component(sub)
+        path = base / "subs" / sub / "config.json"
+    else:
+        raise ValueError(f"Invalid backend key: {key}")
+
+    base_resolved = base.resolve()
+    resolved = path.resolve()
+    if base_resolved != resolved and base_resolved not in resolved.parents:
+        raise ValueError(f"Path escapes base: {key}")
+    return path
 
 
 class LocalFsBackend:
