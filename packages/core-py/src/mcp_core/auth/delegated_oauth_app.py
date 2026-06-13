@@ -678,6 +678,10 @@ def create_delegated_oauth_app(
         base = derive_base_url(request)
         return JSONResponse(protected_resource_metadata(resource=base, authorization_servers=[base]))
 
+    async def well_known_jwks(request: Request) -> JSONResponse:
+        """GET /.well-known/jwks.json -- public signing keys (RFC 7517)."""
+        return JSONResponse(jwt_issuer.get_jwks())
+
     async def register_handler(request: Request) -> JSONResponse:
         """RFC 7591 Dynamic Client Registration (echo-style).
 
@@ -776,6 +780,7 @@ def create_delegated_oauth_app(
         Route("/setup-status", setup_status, methods=["GET"]),
         Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", well_known_pr, methods=["GET"]),
+        Route("/.well-known/jwks.json", well_known_jwks, methods=["GET"]),
     ]
     if flow == "redirect":
         routes.append(Route(upstream.callback_path, _callback, methods=["GET"]))

@@ -658,6 +658,10 @@ def create_local_oauth_app(
             )
         )
 
+    async def well_known_jwks(request: Request) -> JSONResponse:
+        """GET /.well-known/jwks.json -- public signing keys (RFC 7517)."""
+        return JSONResponse(jwt_issuer.get_jwks())
+
     # In-memory setup status (set by background tasks via mark_setup_complete
     # or mark_setup_failed). Values: "idle", "complete", or "error:<message>".
     _setup_status: dict[str, str] = {"gdrive": "idle"}
@@ -807,6 +811,7 @@ def create_local_oauth_app(
         Route("/callback-done", callback_done, methods=["GET"]),
         Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", well_known_pr, methods=["GET"]),
+        Route("/.well-known/jwks.json", well_known_jwks, methods=["GET"]),
     ]
 
     app = Starlette(routes=routes)
