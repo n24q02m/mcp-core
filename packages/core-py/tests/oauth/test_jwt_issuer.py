@@ -281,9 +281,7 @@ class TestDerivedEdDSAMode:
     SECRET = "test-credential-secret-value"
 
     def test_no_pem_files_written_in_derived_mode(self, keys_dir):
-        issuer = JWTIssuer(
-            server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET
-        )
+        issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
         assert issuer.alg == "EdDSA"
         # Derived mode never touches disk.
         assert not (keys_dir / "wet-mcp_private.pem").exists()
@@ -337,9 +335,7 @@ class TestDerivedEdDSAMode:
         """A token from a separate RSA/local issuer must NOT verify against EdDSA."""
         rsa_issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir / "rsa")
         rsa_token = rsa_issuer.issue_access_token(sub="u")
-        eddsa_issuer = JWTIssuer(
-            server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET
-        )
+        eddsa_issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
         with pytest.raises(jwt.InvalidTokenError):
             eddsa_issuer.verify_access_token(rsa_token)
 

@@ -8,9 +8,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from mcp_core.crypto import derive_jwt_signing_seed
 
-_VECTORS = json.loads(
-    (Path(__file__).parents[1] / "fixtures" / "crypto-vectors.json").read_text()
-)
+_VECTORS = json.loads((Path(__file__).parents[1] / "fixtures" / "crypto-vectors.json").read_text())
 
 
 def _b64url(raw: bytes) -> str:
