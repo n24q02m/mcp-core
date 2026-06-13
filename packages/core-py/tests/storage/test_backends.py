@@ -96,6 +96,17 @@ class _FakeHttp:
         raise AssertionError(f"unexpected method {method}")
 
 
+class _StatusHttp:
+    """HTTP stub returning a fixed (status, body) for any request."""
+
+    def __init__(self, status, body=b""):
+        self.status = status
+        self.body = body
+
+    def request(self, method, url, data, headers):
+        return (self.status, self.body)
+
+
 def test_cfkv_backend_roundtrip_via_http():
     fake = _FakeHttp()
     backend = CfKvBackend(base_url="http://kv.internal", http=fake)
@@ -104,6 +115,34 @@ def test_cfkv_backend_roundtrip_via_http():
     assert backend.get("wet/config") == b"blob"
     backend.delete("wet/config")
     assert backend.get("wet/config") is None
+
+
+def test_cfkv_get_raises_on_server_error():
+    backend = CfKvBackend(base_url="http://kv.internal", http=_StatusHttp(500, b"<html>oops</html>"))
+    with pytest.raises(RuntimeError):
+        backend.get("wet/config")
+
+
+def test_cfkv_get_raises_on_unauthorized():
+    backend = CfKvBackend(base_url="http://kv.internal", http=_StatusHttp(401, b""))
+    with pytest.raises(RuntimeError):
+        backend.get("wet/config")
+
+
+def test_cfkv_get_returns_none_on_404():
+    backend = CfKvBackend(base_url="http://kv.internal", http=_StatusHttp(404, b""))
+    assert backend.get("wet/config") is None
+
+
+def test_cfkv_delete_raises_on_server_error():
+    backend = CfKvBackend(base_url="http://kv.internal", http=_StatusHttp(500, b""))
+    with pytest.raises(RuntimeError):
+        backend.delete("wet/config")
+
+
+def test_cfkv_delete_ignores_404():
+    backend = CfKvBackend(base_url="http://kv.internal", http=_StatusHttp(404, b""))
+    backend.delete("wet/config")  # must not raise
 
 
 def test_backend_from_env_default_is_localfs(monkeypatch):

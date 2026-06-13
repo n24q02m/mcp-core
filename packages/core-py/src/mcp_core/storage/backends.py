@@ -67,6 +67,7 @@ def _key_to_path(key: str) -> Path:
     else:
         raise ValueError(f"Invalid backend key: {key}")
 
+    # Defense-in-depth: _validate_component already rejects separators/./../empty/NUL.
     base_resolved = base.resolve()
     resolved = path.resolve()
     if base_resolved != resolved and base_resolved not in resolved.parents:
@@ -109,7 +110,12 @@ class _UrllibHttp:
 
 
 class CfKvBackend:
-    """Stores blobs in a Cloudflare Workers KV namespace over HTTP."""
+    """Stores blobs in a Cloudflare Workers KV namespace over HTTP.
+
+    Error contract: 200 -> data, 404 -> absent (None for get, no-op for delete).
+    Every other HTTP status, plus transport errors (URLError / socket errors from
+    the HTTP client), raises -- failures are loud, never silently returned as data.
+    """
 
     def __init__(self, base_url: str, token: Optional[str] = None, http=None) -> None:
         self._base_url = base_url
@@ -126,9 +132,11 @@ class CfKvBackend:
 
     def get(self, key: str) -> Optional[bytes]:
         status, body = self._http.request("GET", self._url(key), None, self._headers())
+        if status == 200:
+            return body
         if status == 404:
             return None
-        return body
+        raise RuntimeError(f"CfKvBackend get failed: HTTP {status}")
 
     def put(self, key: str, blob: bytes) -> None:
         status, _ = self._http.request("PUT", self._url(key), blob, self._headers())
@@ -136,7 +144,9 @@ class CfKvBackend:
             raise RuntimeError(f"CfKvBackend put failed: HTTP {status}")
 
     def delete(self, key: str) -> None:
-        self._http.request("DELETE", self._url(key), None, self._headers())
+        status, _ = self._http.request("DELETE", self._url(key), None, self._headers())
+        if status not in (200, 204, 404):
+            raise RuntimeError(f"CfKvBackend delete failed: HTTP {status}")
 
 
 def backend_from_env() -> CredentialBackend:
