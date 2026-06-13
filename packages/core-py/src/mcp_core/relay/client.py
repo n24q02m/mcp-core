@@ -5,7 +5,9 @@ import base64
 import json
 import secrets
 import sys
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import AsyncIterator
 from urllib.parse import quote, urljoin
 
 import httpx
@@ -24,6 +26,16 @@ from mcp_core.crypto.ecdh import (
 from mcp_core.crypto.kdf import derive_aes_key
 from mcp_core.relay.wordlist import WORDLIST
 from mcp_core.schema.types import RelayConfigSchema
+
+
+@asynccontextmanager
+async def _get_client(client: httpx.AsyncClient | None) -> AsyncIterator[httpx.AsyncClient]:
+    """Helper to reuse a client or create a transient one."""
+    if client is not None:
+        yield client
+    else:
+        async with httpx.AsyncClient() as new_client:
+            yield new_client
 
 
 def _safe_urljoin(base_url: str, path: str) -> str:
@@ -93,6 +105,7 @@ async def create_session(
     schema: RelayConfigSchema,
     *,
     oauth_state: dict[str, str] | None = None,
+    client: httpx.AsyncClient | None = None,
 ) -> RelaySession:
     """Create a new relay session.
 
@@ -106,6 +119,7 @@ async def create_session(
             during the OAuth code-exchange flow. Expected keys mirror the
             relay-server wire format: ``clientId``, ``redirectUri``, ``state``,
             ``codeChallenge``, ``codeChallengeMethod``.
+        client: Optional httpx.AsyncClient to reuse.
 
     Returns:
         RelaySession with session ID, keys, passphrase, and relay URL.
@@ -125,8 +139,8 @@ async def create_session(
     if oauth_state is not None:
         body["oauthState"] = oauth_state
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
+    async with _get_client(client) as c:
+        response = await c.post(
             _safe_urljoin(relay_base_url, "/api/sessions"),
             json=body,
         )
@@ -151,6 +165,7 @@ async def poll_for_result(
     session: RelaySession,
     interval_s: float = 2.0,
     timeout_s: float = 600.0,
+    client: httpx.AsyncClient | None = None,
 ) -> dict[str, str]:
     """Poll the relay server for encrypted credentials.
 
@@ -159,6 +174,7 @@ async def poll_for_result(
         session: Active relay session.
         interval_s: Polling interval in seconds.
         timeout_s: Total timeout in seconds.
+        client: Optional httpx.AsyncClient to reuse.
 
     Returns:
         Decrypted credentials dict.
@@ -170,9 +186,9 @@ async def poll_for_result(
 
     deadline = time.monotonic() + timeout_s
 
-    async with httpx.AsyncClient() as client:
+    async with _get_client(client) as c:
         while time.monotonic() < deadline:
-            response = await client.get(_safe_urljoin(relay_base_url, f"/api/sessions/{session.session_id}"))
+            response = await c.get(_safe_urljoin(relay_base_url, f"/api/sessions/{session.session_id}"))
 
             if response.status_code == 200:
                 body = response.json()
@@ -180,7 +196,7 @@ async def poll_for_result(
                 if body.get("status") == "skipped":
                     # Cleanup session (best effort)
                     try:
-                        await client.delete(_safe_urljoin(relay_base_url, f"/api/sessions/{session.session_id}"))
+                        await c.delete(_safe_urljoin(relay_base_url, f"/api/sessions/{session.session_id}"))
                     except Exception:
                         pass
                     msg = "RELAY_SKIPPED"
@@ -220,6 +236,7 @@ async def send_message(
     relay_base_url: str,
     session_id: str,
     message: dict,
+    client: httpx.AsyncClient | None = None,
 ) -> str:
     """Push a message from server to browser via the relay.
 
@@ -227,6 +244,7 @@ async def send_message(
         relay_base_url: Base URL of the relay server.
         session_id: Active session ID.
         message: Dict with 'type', 'text', and optional 'data'.
+        client: Optional httpx.AsyncClient to reuse.
 
     Returns:
         The generated message ID.
@@ -234,8 +252,8 @@ async def send_message(
     Raises:
         RuntimeError: If the relay returns a non-2xx status.
     """
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
+    async with _get_client(client) as c:
+        response = await c.post(
             _safe_urljoin(relay_base_url, f"/api/sessions/{session_id}/messages"),
             json=message,
         )
@@ -251,6 +269,7 @@ async def poll_for_responses(
     message_id: str,
     interval_s: float = 2.0,
     timeout_s: float = 300.0,
+    client: httpx.AsyncClient | None = None,
 ) -> str:
     """Poll the relay for a browser response to a specific message.
 
@@ -260,6 +279,7 @@ async def poll_for_responses(
         message_id: The message ID to wait for a response to.
         interval_s: Polling interval in seconds.
         timeout_s: Total timeout in seconds.
+        client: Optional httpx.AsyncClient to reuse.
 
     Returns:
         The response value string.
@@ -271,9 +291,9 @@ async def poll_for_responses(
 
     deadline = time.monotonic() + timeout_s
 
-    async with httpx.AsyncClient() as client:
+    async with _get_client(client) as c:
         while time.monotonic() < deadline:
-            response = await client.get(_safe_urljoin(relay_base_url, f"/api/sessions/{session_id}/responses"))
+            response = await c.get(_safe_urljoin(relay_base_url, f"/api/sessions/{session_id}/responses"))
             if response.status_code >= 400:
                 msg = f"Failed to poll responses: {response.status_code}"
                 raise RuntimeError(msg)
@@ -295,6 +315,7 @@ async def notify_complete(
     text: str = "Setup complete!",
     *,
     grace_period_s: float = 5.0,
+    client: httpx.AsyncClient | None = None,
 ) -> None:
     """Notify the browser that relay setup is complete, then clean up the session.
 
@@ -315,6 +336,7 @@ async def notify_complete(
             relay_base_url,
             session_id,
             {"type": "complete", "text": text},
+            client=client,
         )
     except Exception as err:  # noqa: BLE001
         print(
@@ -326,8 +348,8 @@ async def notify_complete(
     async def _delayed_delete() -> None:
         try:
             await asyncio.sleep(grace_period_s)
-            async with httpx.AsyncClient() as client:
-                await client.delete(_safe_urljoin(relay_base_url, f"/api/sessions/{session_id}"))
+            async with _get_client(client) as c:
+                await c.delete(_safe_urljoin(relay_base_url, f"/api/sessions/{session_id}"))
         except Exception:  # noqa: BLE001
             # Best-effort cleanup; the relay server's TTL will reclaim if this
             # fails (e.g. process exits before the sleep resolves).

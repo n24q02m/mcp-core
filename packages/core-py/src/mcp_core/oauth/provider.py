@@ -13,6 +13,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+import httpx
+
 from mcp_core.crypto.ecdh import export_private_key, import_private_key
 from mcp_core.relay.client import RelaySession, create_session, poll_for_result
 from mcp_core.schema.types import RelayConfigSchema
@@ -70,12 +72,14 @@ class OAuthProvider:
         relay_schema: RelayConfigSchema,
         jwt_issuer: JWTIssuer,
         cache: IOAuthSessionCache | None = None,
+        client: httpx.AsyncClient | None = None,
     ):
         self.server_name = server_name
         self.relay_base_url = relay_base_url
         self.relay_schema = relay_schema
         self.jwt_issuer = jwt_issuer
         self.cache = cache or InMemoryAuthCache()
+        self.client = client
 
     async def create_authorize_redirect(
         self,
@@ -99,6 +103,7 @@ class OAuthProvider:
                 "codeChallenge": code_challenge,
                 "codeChallengeMethod": code_challenge_method,
             },
+            client=self.client,
         )
 
         # Store private key and passphrase temporarily
@@ -164,6 +169,7 @@ class OAuthProvider:
             relay_session,
             interval_s=1.0,
             timeout_s=10.0,
+            client=self.client,
         )
 
         # Extract unique user_id
