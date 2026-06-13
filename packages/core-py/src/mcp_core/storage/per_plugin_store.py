@@ -31,9 +31,9 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 def _cred_path(plugin_name: str, sub: Optional[str]) -> Path:
     unsafe = re.compile(r"[^a-zA-Z0-9.-]")
-    if not plugin_name or unsafe.search(plugin_name):
+    if not plugin_name or unsafe.search(plugin_name) or ".." in plugin_name:
         raise ValueError("Invalid plugin_name")
-    if sub is not None and (not sub or unsafe.search(sub)):
+    if sub is not None and (not sub or unsafe.search(sub) or ".." in sub):
         raise ValueError("Invalid sub")
 
     base = Path.home() / f".{plugin_name}-mcp"

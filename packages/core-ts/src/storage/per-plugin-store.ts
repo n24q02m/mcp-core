@@ -33,7 +33,7 @@ function getHomeDir(): string {
 }
 
 export function credPath(pluginName: string, sub: string | null): string {
-  const unsafe = /[^a-zA-Z0-9.-]/g
+  const unsafe = /[^a-zA-Z0-9.-]/
   if (!pluginName || unsafe.test(pluginName) || pluginName.includes('..')) {
     throw new Error('Invalid pluginName')
   }
