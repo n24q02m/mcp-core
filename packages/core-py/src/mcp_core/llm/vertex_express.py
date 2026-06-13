@@ -23,6 +23,7 @@ mcp-core; this is a pure httpx passthrough.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 VERTEX_EXPRESS_PREFIX = "vertex_express"
 
@@ -64,3 +65,98 @@ def is_express_model(model: str) -> bool:
 def strip_express_prefix(model: str) -> str:
     """Drop the leading ``vertex_express/`` segment, keep the rest verbatim."""
     return model.strip().split("/", 1)[1]
+
+
+_DEFAULT_BASE = "https://aiplatform.googleapis.com"
+_DEFAULT_API_VERSION = "v1beta1"
+
+# OpenAI chat role -> Vertex generateContent role. "system" is handled
+# separately (hoisted to systemInstruction); "tool"/"function" are not
+# supported on this passthrough and fall back to "user".
+_ROLE_MAP = {"user": "user", "assistant": "model"}
+
+
+def _content_parts(content: Any) -> list[dict[str, Any]]:
+    """Translate an OpenAI message ``content`` to Vertex ``parts``.
+
+    Accepts a plain string or the vision list-of-blocks form
+    (``{"type": "text"|"image_url", ...}``). A ``data:<mime>;base64,<data>``
+    image_url becomes an ``inlineData`` part; a remote ``http(s)`` image_url is
+    rejected (the caller must inline media — matches how imagine-mcp downloads
+    via the SSRF-safe client before dispatch).
+    """
+    if isinstance(content, str):
+        return [{"text": content}]
+    parts: list[dict[str, Any]] = []
+    for block in content:
+        btype = block.get("type")
+        if btype == "text":
+            parts.append({"text": block.get("text", "")})
+        elif btype == "image_url":
+            url = block.get("image_url", {}).get("url", "")
+            if not url.startswith("data:"):
+                raise ValueError(
+                    "vertex_express only accepts inline data: image URLs; download remote media before dispatch"
+                )
+            header, _, data = url.partition(",")
+            mime = header.removeprefix("data:").split(";", 1)[0] or "image/png"
+            parts.append({"inlineData": {"mimeType": mime, "data": data}})
+        else:
+            raise ValueError(f"unsupported content block type {btype!r}")
+    return parts
+
+
+def messages_to_contents(
+    messages: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """OpenAI ``messages`` -> (Vertex ``contents``, optional systemInstruction)."""
+    contents: list[dict[str, Any]] = []
+    system: dict[str, Any] | None = None
+    for msg in messages:
+        role = msg.get("role", "user")
+        if role == "system":
+            sys_parts = _content_parts(msg.get("content", ""))
+            system = {"parts": sys_parts} if system is None else {"parts": system["parts"] + sys_parts}
+            continue
+        contents.append(
+            {
+                "role": _ROLE_MAP.get(role, "user"),
+                "parts": _content_parts(msg.get("content", "")),
+            }
+        )
+    return contents, system
+
+
+def build_express_request(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    api_key: str,
+    api_base: str | None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    **_ignored: Any,
+) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """Build (url, headers, json_body) for an Express generateContent call.
+
+    ``api_base`` overrides the ``https://aiplatform.googleapis.com/<version>``
+    prefix (already SSRF-vetted by the caller). The api_key goes in the
+    ``x-goog-api-key`` header, never the URL query string.
+    """
+    bare = strip_express_prefix(model)
+    base = (api_base or f"{_DEFAULT_BASE}/{_DEFAULT_API_VERSION}").rstrip("/")
+    url = f"{base}/publishers/google/models/{bare}:generateContent"
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+
+    contents, system = messages_to_contents(messages)
+    body: dict[str, Any] = {"contents": contents}
+    if system is not None:
+        body["systemInstruction"] = system
+    gen_config: dict[str, Any] = {}
+    if temperature is not None:
+        gen_config["temperature"] = temperature
+    if max_tokens is not None:
+        gen_config["maxOutputTokens"] = max_tokens
+    if gen_config:
+        body["generationConfig"] = gen_config
+    return url, headers, body
