@@ -2,6 +2,8 @@
 
 import json
 import time
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -11,6 +13,7 @@ from mcp_core.storage.session_lock import (
     release_session_lock,
     set_lock_dir,
     write_session_lock,
+    _get_lock_dir,
 )
 
 
@@ -94,6 +97,25 @@ class TestAcquireSessionLock:
 
         result = await acquire_session_lock("test-server")
         assert result is None
+
+    async def test_returns_none_on_os_error_reading_file(self, _temp_lock_dir):
+        lock_file = _temp_lock_dir / "relay-session-test-server.lock"
+        lock_file.write_text("{}", encoding="utf-8")
+
+        with patch.object(Path, "read_text", side_effect=OSError("Read failed")):
+            result = await acquire_session_lock("test-server")
+            assert result is None
+
+        # Should still be cleaned up if possible
+        assert not lock_file.exists()
+
+    async def test_handles_os_error_on_release_during_acquisition_failure(self, _temp_lock_dir):
+        lock_file = _temp_lock_dir / "relay-session-test-server.lock"
+        lock_file.write_text("invalid json", encoding="utf-8")
+
+        with patch("mcp_core.storage.session_lock.release_session_lock", side_effect=OSError("Release failed")):
+            result = await acquire_session_lock("test-server")
+            assert result is None
 
 
 class TestWriteSessionLock:
@@ -192,3 +214,23 @@ class TestReleaseSessionLock:
         result = await acquire_session_lock("server-b")
         assert result is not None
         assert result.session_id == "server-b"
+
+    async def test_handles_os_error_on_unlink(self, _temp_lock_dir):
+        info = SessionInfo(
+            session_id="to-release",
+            relay_url="https://relay.example.com/release",
+            created_at=time.time(),
+        )
+        await write_session_lock("test-server", info)
+
+        with patch.object(Path, "unlink", side_effect=OSError("Unlink failed")):
+            # Should not raise
+            await release_session_lock("test-server")
+
+
+class TestMisc:
+    def test_get_lock_dir_default(self):
+        set_lock_dir(None)
+        lock_dir = _get_lock_dir()
+        assert lock_dir is not None
+        assert "mcp" in str(lock_dir)
