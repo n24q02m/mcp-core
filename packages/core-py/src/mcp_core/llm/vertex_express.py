@@ -22,8 +22,14 @@ mcp-core; this is a pure httpx passthrough.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any
+
+import httpx
+
+from mcp_core.http import SSRFBlockedError, get_ssrf_safe_async_client, vet_api_base
+from mcp_core.http.ssrf import is_multi_user_mode
 
 VERTEX_EXPRESS_PREFIX = "vertex_express"
 
@@ -218,3 +224,97 @@ def translate_response(raw: dict[str, Any], *, model: str) -> ExpressResponse:
         usage=usage,
         model=model,
     )
+
+
+_REQUEST_TIMEOUT_S = 120.0
+_API_KEY_ENV = "GOOGLE_VERTEX_EXPRESS_API_KEY"
+
+
+def _resolve_api_key(api_key: str | None) -> str:
+    key = api_key or os.environ.get(_API_KEY_ENV)
+    if not key:
+        raise VertexExpressError(f"vertex_express models require an API key (pass api_key= or set {_API_KEY_ENV})")
+    return key
+
+
+def _ssrf_flags() -> dict[str, bool]:
+    """SSRF policy for the fixed first-party host / vetted custom base.
+
+    The Google host is public, so allow_private/allow_loopback stay False; a
+    vetted loopback api_base in single-user mode is dialled because the
+    transport flags mirror vet_api_base's own decision.
+    """
+    if is_multi_user_mode():
+        return {"allow_private": False, "allow_loopback": False}
+    return {
+        "allow_private": os.environ.get("LLM_API_BASE_ALLOW_PRIVATE") == "1",
+        "allow_loopback": True,
+    }
+
+
+def _vet_base(api_base: str | None) -> str | None:
+    return vet_api_base(api_base) if api_base else None
+
+
+def _get_ssrf_safe_sync_client(**kwargs: bool) -> httpx.Client:
+    """Sync sibling of get_ssrf_safe_async_client (no sync variant in core.http)."""
+    return httpx.Client(transport=_SyncSSRFSafeTransport(**kwargs))
+
+
+class _SyncSSRFSafeTransport(httpx.HTTPTransport):
+    """Minimal sync DNS-pinning transport — vets the host on every request."""
+
+    def __init__(self, *, allow_private: bool = False, allow_loopback: bool = False) -> None:
+        super().__init__()
+        self._allow_private = allow_private
+        self._allow_loopback = allow_loopback
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        from mcp_core.http.ssrf import _SAFE_URL_SCHEMES, validate_url_and_get_ip
+
+        if request.url.scheme.lower() not in _SAFE_URL_SCHEMES:
+            raise SSRFBlockedError(f"Unsupported scheme {request.url.scheme!r}")
+        validate_url_and_get_ip(
+            str(request.url),
+            allow_private=self._allow_private,
+            allow_loopback=self._allow_loopback,
+        )
+        return super().handle_request(request)
+
+
+async def acompletion_express(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    api_key: str | None = None,
+    api_base: str | None = None,
+    **kwargs: Any,
+) -> ExpressResponse:
+    """Async Vertex Express generateContent call (litellm#21036 workaround)."""
+    key = _resolve_api_key(api_key)
+    base = _vet_base(api_base)
+    url, headers, body = build_express_request(model=model, messages=messages, api_key=key, api_base=base, **kwargs)
+    async with get_ssrf_safe_async_client(**_ssrf_flags()) as client:
+        resp = await client.post(url, headers=headers, json=body, timeout=_REQUEST_TIMEOUT_S)
+    if resp.status_code // 100 != 2:
+        raise VertexExpressError(f"Vertex Express HTTP {resp.status_code}: {resp.text[:500]}")
+    return translate_response(resp.json(), model=model)
+
+
+def completion_express(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    api_key: str | None = None,
+    api_base: str | None = None,
+    **kwargs: Any,
+) -> ExpressResponse:
+    """Sync Vertex Express generateContent call. Do NOT call from async context."""
+    key = _resolve_api_key(api_key)
+    base = _vet_base(api_base)
+    url, headers, body = build_express_request(model=model, messages=messages, api_key=key, api_base=base, **kwargs)
+    with _get_ssrf_safe_sync_client(**_ssrf_flags()) as client:
+        resp = client.post(url, headers=headers, json=body, timeout=_REQUEST_TIMEOUT_S)
+    if resp.status_code // 100 != 2:
+        raise VertexExpressError(f"Vertex Express HTTP {resp.status_code}: {resp.text[:500]}")
+    return translate_response(resp.json(), model=model)
