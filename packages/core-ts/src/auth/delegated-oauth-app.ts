@@ -793,6 +793,10 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     jsonResponse(res, 200, protectedResourceMetadata(base, [base]))
   }
 
+  async function wellKnownJwks(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+    jsonResponse(res, 200, await jwtIssuer.getJwks())
+  }
+
   /**
    * GET / -- auto-generate PKCE and redirect to /authorize.
    *
@@ -1000,7 +1004,8 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     { method: 'POST', path: '/register', handler: registerHandler },
     { method: 'GET', path: '/setup-status', handler: setupStatusHandler },
     { method: 'GET', path: '/.well-known/oauth-authorization-server', handler: wellKnownAs },
-    { method: 'GET', path: '/.well-known/oauth-protected-resource', handler: wellKnownPr }
+    { method: 'GET', path: '/.well-known/oauth-protected-resource', handler: wellKnownPr },
+    { method: 'GET', path: '/.well-known/jwks.json', handler: wellKnownJwks }
   ]
   if (options.flow === 'redirect') {
     routes.push({ method: 'GET', path: callbackPath, handler: callback })
