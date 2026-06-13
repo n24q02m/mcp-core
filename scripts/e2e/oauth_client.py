@@ -189,8 +189,9 @@ async def acquire_jwt(
     state = secrets.token_urlsafe(16)
 
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-        # Probe BEFORE registering; user seeing a 30s hang then generic failure
-        # is the worst failure mode (silent, looks like driver bug).
+        # MANDATORY: Probe health BEFORE registration. Registration has a 30s
+        # timeout; probing first prevents a long silent hang if the server is
+        # dead, which otherwise resembles a driver bug.
         await _health_probe(client, base_url)
         client_id = await _register_client(client, base_url)
 
@@ -248,9 +249,9 @@ async def acquire_jwt(
         # exchanging the code.
         next_step = body.get("next_step")
         if next_step:
-            # Verify server alive + OAuth metadata reachable BEFORE prompting
-            # the user. A dead container with cached auth code = user clicks
-            # link, sees error, doesn't realize the test framework is at fault.
+            # MANDATORY: Probe health BEFORE prompting the user. A dead container
+            # with a cached auth code results in the user clicking a link, seeing
+            # an error, and assuming a driver bug. Probing first prevents this.
             await _health_probe(client, base_url)
             if on_next_step is not None:
                 result = on_next_step(next_step)
@@ -455,8 +456,10 @@ async def acquire_jwt_via_browser_form(
         redirect_uri = f"http://127.0.0.1:{port}/callback"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
-            # Probe BEFORE registering; user seeing a 30s hang then generic failure
-            # is the worst failure mode (silent, looks like driver bug).
+            # MANDATORY: Probe health BEFORE registration or announcement.
+            # Registration has a 30s timeout; probing first prevents a long
+            # silent hang if the server is dead. Probing BEFORE announcing
+            # also ensures the user never clicks a link to a dead server.
             await _health_probe(client, base_url)
             client_id = await _register_client(client, base_url)
             # Push prefill server-side BEFORE announcing the URL so the value
@@ -564,8 +567,10 @@ async def acquire_jwt_via_upstream_consent(
         redirect_uri = f"http://127.0.0.1:{port}/callback"
 
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
-            # Probe BEFORE registering; user seeing a 30s hang then generic failure
-            # is the worst failure mode (silent, looks like driver bug).
+            # MANDATORY: Probe health BEFORE registration or announcement.
+            # Registration has a 30s timeout; probing first prevents a long
+            # silent hang if the server is dead. Probing BEFORE announcing
+            # also ensures the user never clicks a link to a dead server.
             await _health_probe(client, base_url)
             client_id = await _register_client(client, base_url)
             params = {
