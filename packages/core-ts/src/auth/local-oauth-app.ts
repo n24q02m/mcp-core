@@ -149,6 +149,7 @@ const SESSION_TTL_S = 600
 // Multi-step auth (OTP / 2FA password) constraints.
 const OTP_TIMEOUT_S = 300
 const OTP_MAX_ATTEMPTS = 5
+const PASSWORD_LIMIT = 1024
 
 interface PendingSession {
   clientId: string
@@ -395,6 +396,9 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     let credentials: Record<string, string>
     try {
       credentials = await parseJsonBody<Record<string, string>>(req)
+      for (const key of Object.keys(credentials)) {
+        credentials[key] = String(credentials[key] ?? '').substring(0, PASSWORD_LIMIT)
+      }
     } catch {
       jsonResponse(res, 400, {
         error: 'invalid_request',
@@ -664,6 +668,9 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     let stepData: Record<string, string>
     try {
       stepData = await parseJsonBody<Record<string, string>>(req)
+      for (const key of Object.keys(stepData)) {
+        stepData[key] = String(stepData[key] ?? '').substring(0, PASSWORD_LIMIT)
+      }
     } catch {
       jsonResponse(res, 400, {
         error: 'invalid_request',
