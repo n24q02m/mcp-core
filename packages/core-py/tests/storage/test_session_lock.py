@@ -192,3 +192,34 @@ class TestReleaseSessionLock:
         result = await acquire_session_lock("server-b")
         assert result is not None
         assert result.session_id == "server-b"
+
+
+class TestSessionLockCoverage:
+    async def test_get_lock_dir_default(self):
+        from mcp_core.storage.session_lock import _lock_path
+
+        set_lock_dir(None)
+        path = _lock_path("test-default")
+        assert "mcp" in str(path)
+        assert path.name == "relay-session-test-default.lock"
+
+    async def test_release_session_lock_os_error(self, caplog):
+        import logging
+        import unittest.mock
+
+        caplog.set_level(logging.DEBUG)
+        with unittest.mock.patch("pathlib.Path.unlink", side_effect=OSError("unlink failed")):
+            await release_session_lock("test-server")
+        assert "Failed to release session lock for test-server: unlink failed" in caplog.text
+
+    async def test_acquire_session_lock_recovery_os_error(self, _temp_lock_dir):
+        import unittest.mock
+
+        lock_file = _temp_lock_dir / "relay-session-test-server.lock"
+        lock_file.write_text("corrupt", encoding="utf-8")
+
+        with unittest.mock.patch(
+            "mcp_core.storage.session_lock.release_session_lock", side_effect=OSError("recovery failed")
+        ):
+            result = await acquire_session_lock("test-server")
+            assert result is None
