@@ -1085,7 +1085,7 @@ export function renderField(field: RelayConfigField, currentValue: unknown): str
     return (
       `<div class="field oauth-field"><label>${escapeHtml(label)}</label> ` +
       `<span class="oauth-status">${status}</span> ` +
-      `<button type="button" class="oauth-reauth" data-field="${escapeHtml(name)}">` +
+      `<button type="button" class="oauth-reauth" data-field="${escapeHtml(name)}" aria-label="Re-authorize ${escapeHtml(label)}">` +
       `Re-authorize</button></div>`
     )
   }

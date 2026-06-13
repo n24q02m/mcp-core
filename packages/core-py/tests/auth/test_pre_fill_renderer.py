@@ -42,6 +42,7 @@ def test_render_oauth_field_button():
     html = render_field(SCHEMA_FIELDS[2], current_value="rt_xxx")
     assert "rt_xxx" not in html
     assert "Re-authorize" in html or "reauthorize" in html.lower()
+    assert 'aria-label="Re-authorize Refresh"' in html
 
 
 def test_merge_preserves_secret_on_empty():

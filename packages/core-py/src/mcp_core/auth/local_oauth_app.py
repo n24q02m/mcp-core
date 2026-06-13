@@ -868,7 +868,7 @@ def render_field(field: dict, current_value: Any) -> str:
         return (
             f'<div class="field oauth-field"><label>{_escape(label)}</label> '
             f'<span class="oauth-status">{status}</span> '
-            f'<button type="button" class="oauth-reauth" data-field="{_escape(name)}">'
+            f'<button type="button" class="oauth-reauth" data-field="{_escape(name)}" aria-label="Re-authorize {_escape(label)}">'
             f"Re-authorize</button></div>"
         )
 
