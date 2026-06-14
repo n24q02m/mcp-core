@@ -37,6 +37,7 @@ def authorization_server_metadata(issuer_url: str) -> dict:
         "authorization_endpoint": f"{issuer_url}/authorize",
         "token_endpoint": f"{issuer_url}/token",
         "registration_endpoint": f"{issuer_url}/register",
+        "jwks_uri": f"{issuer_url}/.well-known/jwks.json",
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],

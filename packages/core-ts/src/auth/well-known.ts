@@ -6,6 +6,7 @@ export function authorizationServerMetadata(issuerUrl: string): Record<string, u
     authorization_endpoint: `${issuerUrl}/authorize`,
     token_endpoint: `${issuerUrl}/token`,
     registration_endpoint: `${issuerUrl}/register`,
+    jwks_uri: `${issuerUrl}/.well-known/jwks.json`,
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],

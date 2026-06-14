@@ -210,7 +210,9 @@ def create_delegated_oauth_app(
             (``access_token``, optionally ``refresh_token``/``expires_in``/...)
             once the upstream flow completes. Consumer persists tokens as it
             sees fit -- this module never stores them.
-        jwt_issuer: Optional pre-created JWTIssuer.
+        jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
+            from ``server_name`` -- EdDSA derived from ``CREDENTIAL_SECRET`` in
+            HTTP multi-user mode, else RS256 on disk.
 
     Returns:
         ``(app, jwt_issuer)``. ``jwt_issuer`` is needed by the transport
@@ -222,7 +224,10 @@ def create_delegated_oauth_app(
         raise ValueError("device_auth_url is required for device_code flow")
 
     if jwt_issuer is None:
-        jwt_issuer = JWTIssuer(server_name=server_name)
+        # Mirror core-ts: in HTTP multi-user mode the fallback issuer derives a
+        # stable EdDSA key from CREDENTIAL_SECRET (survives container
+        # recreation); unset -> RS256-on-disk local path.
+        jwt_issuer = JWTIssuer(server_name=server_name, credential_secret=os.environ.get("CREDENTIAL_SECRET"))
 
     # Structure keyed by upstream-state nonce: PKCE session from the MCP client.
     # {nonce: {client_id, redirect_uri, state, code_challenge, code_challenge_method, created_at}}
@@ -678,6 +683,10 @@ def create_delegated_oauth_app(
         base = derive_base_url(request)
         return JSONResponse(protected_resource_metadata(resource=base, authorization_servers=[base]))
 
+    async def well_known_jwks(request: Request) -> JSONResponse:
+        """GET /.well-known/jwks.json -- public signing keys (RFC 7517)."""
+        return JSONResponse(jwt_issuer.get_jwks())
+
     async def register_handler(request: Request) -> JSONResponse:
         """RFC 7591 Dynamic Client Registration (echo-style).
 
@@ -776,6 +785,7 @@ def create_delegated_oauth_app(
         Route("/setup-status", setup_status, methods=["GET"]),
         Route("/.well-known/oauth-authorization-server", well_known_as, methods=["GET"]),
         Route("/.well-known/oauth-protected-resource", well_known_pr, methods=["GET"]),
+        Route("/.well-known/jwks.json", well_known_jwks, methods=["GET"]),
     ]
     if flow == "redirect":
         routes.append(Route(upstream.callback_path, _callback, methods=["GET"]))

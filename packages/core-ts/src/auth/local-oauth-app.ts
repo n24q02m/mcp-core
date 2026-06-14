@@ -253,7 +253,8 @@ function getBaseUrl(req: IncomingMessage): string {
  * device code flow).
  */
 export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promise<LocalOAuthAppResult> {
-  const jwtIssuer = options.jwtIssuer ?? new JWTIssuer(options.serverName)
+  const jwtIssuer =
+    options.jwtIssuer ?? new JWTIssuer(options.serverName, undefined, process.env.CREDENTIAL_SECRET ?? null)
   await jwtIssuer.init()
 
   // In-memory stores keyed by nonce / auth_code. Each entry has a ``createdAt``
@@ -752,6 +753,10 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     jsonResponse(res, 200, protectedResourceMetadata(base, [base]))
   }
 
+  async function wellKnownJwks(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+    jsonResponse(res, 200, await jwtIssuer.getJwks())
+  }
+
   /**
    * RFC 7591 Dynamic Client Registration.
    *
@@ -1020,7 +1025,8 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     { method: 'GET', path: '/setup-status', handler: setupStatusHandler },
     { method: 'GET', path: '/callback-done', handler: callbackDoneHandler },
     { method: 'GET', path: '/.well-known/oauth-authorization-server', handler: wellKnownAs },
-    { method: 'GET', path: '/.well-known/oauth-protected-resource', handler: wellKnownPr }
+    { method: 'GET', path: '/.well-known/oauth-protected-resource', handler: wellKnownPr },
+    { method: 'GET', path: '/.well-known/jwks.json', handler: wellKnownJwks }
   ])
 
   return { handler, jwtIssuer, markSetupComplete, markSetupFailed }

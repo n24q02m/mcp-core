@@ -11,5 +11,13 @@
     "iv_hex": "000000000000000000000000",
     "ciphertext_hex": "05551b79cbc789816118be33e2efc3a3b02e31138ff2208047a8f84608b16efd48",
     "tag_hex": "77934b8180d5553644070a4e9031bde3"
+  },
+  "jwt_signing_seed": {
+    "_comment": "HKDF-SHA256(secret, salt=empty, info='mcp-jwt-signing-key-v1:<server_name>') -> 32-byte Ed25519 seed. okp_x and kid are derived from the resulting Ed25519 public key and MUST be byte-identical across core-py and core-ts.",
+    "credential_secret": "test-credential-secret-value",
+    "server_name": "wet-mcp",
+    "info": "mcp-jwt-signing-key-v1:wet-mcp",
+    "okp_x": "VGfGsMquscEDCVyGu4sNbM8DihXhYAb2c1s1EDIrAdE",
+    "kid": "r71l8IICMLZykZU5"
   }
 }

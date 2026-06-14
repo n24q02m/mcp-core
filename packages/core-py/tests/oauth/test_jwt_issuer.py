@@ -273,3 +273,117 @@ class TestRefreshTokenOperations:
         payload = issuer.verify_access_token(legacy_token)
         assert payload["sub"] == "legacy-user"
         assert "typ" not in payload
+
+
+class TestDerivedEdDSAMode:
+    """HTTP multi-user mode: signing key derived from CREDENTIAL_SECRET (EdDSA)."""
+
+    SECRET = "test-credential-secret-value"
+
+    def test_no_pem_files_written_in_derived_mode(self, keys_dir):
+        issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        assert issuer.alg == "EdDSA"
+        # Derived mode never touches disk.
+        assert not (keys_dir / "wet-mcp_private.pem").exists()
+        assert not (keys_dir / "wet-mcp_public.pem").exists()
+
+    def test_derived_key_is_deterministic_across_instances(self, keys_dir):
+        a = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        b = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        assert a.get_jwks()["keys"][0]["x"] == b.get_jwks()["keys"][0]["x"]
+        assert a._kid == b._kid
+
+    def test_jwks_is_okp_eddsa(self, keys_dir):
+        issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        jwks = issuer.get_jwks()
+        key = jwks["keys"][0]
+        assert key["kty"] == "OKP"
+        assert key["crv"] == "Ed25519"
+        assert key["alg"] == "EdDSA"
+        assert key["use"] == "sig"
+        assert key["x"] == "VGfGsMquscEDCVyGu4sNbM8DihXhYAb2c1s1EDIrAdE"
+        assert "n" not in key and "e" not in key
+
+    def test_kid_is_public_key_thumbprint(self, keys_dir):
+        issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        assert issuer._kid == "r71l8IICMLZykZU5"
+        assert issuer.get_jwks()["keys"][0]["kid"] == "r71l8IICMLZykZU5"
+
+    def test_access_token_roundtrip_eddsa(self, keys_dir):
+        issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        token = issuer.issue_access_token(sub="u")
+        header = jwt.get_unverified_header(token)
+        assert header["alg"] == "EdDSA"
+        assert header["kid"] == "r71l8IICMLZykZU5"
+        payload = issuer.verify_access_token(token)
+        assert payload["sub"] == "u"
+        assert payload["typ"] == "access"
+
+    def test_refresh_token_roundtrip_eddsa(self, keys_dir):
+        issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        token = issuer.issue_refresh_token(sub="u")
+        payload = issuer.verify_refresh_token(token)
+        assert payload["typ"] == "refresh"
+
+    def test_access_verify_rejects_refresh_in_eddsa_mode(self, keys_dir):
+        issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        refresh = issuer.issue_refresh_token(sub="u")
+        with pytest.raises(jwt.InvalidTokenError):
+            issuer.verify_access_token(refresh)
+
+    def test_eddsa_verifier_rejects_rs256_token(self, keys_dir):
+        """A token from a separate RSA/local issuer must NOT verify against EdDSA."""
+        rsa_issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir / "rsa")
+        rsa_token = rsa_issuer.issue_access_token(sub="u")
+        eddsa_issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        with pytest.raises(jwt.InvalidTokenError):
+            eddsa_issuer.verify_access_token(rsa_token)
+
+
+class TestLocalRsaModeUnchanged:
+    """Local single-user mode (no CREDENTIAL_SECRET) keeps RSA-2048 on disk."""
+
+    def test_default_construction_is_rsa(self, keys_dir):
+        issuer = JWTIssuer(server_name="test-server", keys_dir=keys_dir)
+        assert issuer.alg == "RS256"
+        assert issuer._kid == "key-1"
+        assert (keys_dir / "test-server_private.pem").exists()
+        jwks = issuer.get_jwks()
+        assert jwks["keys"][0]["kty"] == "RSA"
+        assert jwks["keys"][0]["alg"] == "RS256"
+
+
+class TestBuildLocalAppIssuerMode:
+    """build_local_app must construct the issuer in EdDSA mode when
+    CREDENTIAL_SECRET is set in the environment."""
+
+    def test_build_local_app_uses_eddsa_when_credential_secret_set(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CREDENTIAL_SECRET", "test-credential-secret-value")
+        from mcp.server.fastmcp import FastMCP
+
+        from mcp_core.transport.local_server import build_local_app
+
+        mcp = FastMCP("wet-mcp")
+        _, issuer = build_local_app(
+            mcp,
+            server_name="wet-mcp",
+            relay_schema={"fields": []},
+            jwt_keys_dir=tmp_path / "keys",
+        )
+        assert issuer.alg == "EdDSA"
+        assert not (tmp_path / "keys" / "wet-mcp_private.pem").exists()
+
+    def test_build_local_app_uses_rsa_when_no_credential_secret(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("CREDENTIAL_SECRET", raising=False)
+        from mcp.server.fastmcp import FastMCP
+
+        from mcp_core.transport.local_server import build_local_app
+
+        mcp = FastMCP("wet-mcp")
+        _, issuer = build_local_app(
+            mcp,
+            server_name="wet-mcp",
+            relay_schema={"fields": []},
+            jwt_keys_dir=tmp_path / "keys",
+        )
+        assert issuer.alg == "RS256"
