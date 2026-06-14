@@ -33,6 +33,21 @@ def test_check_capability_graceful_on_registry_missing():
     check_capability("xai/grok-4-fast", ("chat",))
 
 
+def test_check_capability_graceful_when_litellm_unavailable(monkeypatch):
+    # No [llm] extra installed: the advisory registry lookup cannot run, so the
+    # check must pass through rather than raise. httpx-only adapters
+    # (vertex_express) call this and must work without litellm. (In the actual
+    # no-extra CI leg this path is exercised live by the vertex_express tests;
+    # here litellm is present, so simulate its absence.)
+    import mcp_core.llm.catalog as catalog
+
+    def _no_litellm():
+        raise RuntimeError("LLM features require the optional extra: pip install 'n24q02m-mcp-core[llm]'")
+
+    monkeypatch.setattr(catalog, "_get_litellm", _no_litellm)
+    catalog.check_capability("vertex_express/gemini-2.5-flash", ("chat",))
+
+
 def test_check_capability_falls_back_to_bare_name():
     # Registry keys anthropic models WITHOUT provider prefix.
     check_capability("anthropic/claude-haiku-4-5", ("chat",))

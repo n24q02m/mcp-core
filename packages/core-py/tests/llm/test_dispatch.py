@@ -167,3 +167,49 @@ def test_rerank_sync_vets_api_base(monkeypatch):
             api_base="http://internal.lan/v1",
         )
     mock.assert_not_called()
+
+
+async def test_acompletion_routes_vertex_express_bypassing_litellm(monkeypatch):
+    # litellm.acompletion MUST NOT be called for a vertex_express model.
+    litellm_mock = AsyncMock()
+    monkeypatch.setattr(litellm, "acompletion", litellm_mock)
+
+    express_mock = AsyncMock(return_value="EXPRESS_RESULT")
+    monkeypatch.setattr("mcp_core.llm.dispatch.acompletion_express", express_mock)
+    result = await acompletion(
+        model="vertex_express/gemini-2.5-flash",
+        messages=[{"role": "user", "content": "hi"}],
+        api_key="AQ.key",
+    )
+    assert result == "EXPRESS_RESULT"
+    litellm_mock.assert_not_called()
+    assert express_mock.call_args.kwargs["model"] == "vertex_express/gemini-2.5-flash"
+    assert express_mock.call_args.kwargs["api_key"] == "AQ.key"
+
+
+async def test_acompletion_non_express_still_uses_litellm(monkeypatch):
+    litellm_mock = AsyncMock(return_value={"ok": True})
+    monkeypatch.setattr(litellm, "acompletion", litellm_mock)
+    express_mock = AsyncMock()
+    monkeypatch.setattr("mcp_core.llm.dispatch.acompletion_express", express_mock)
+    result = await acompletion(
+        model="gemini/gemini-2.5-flash",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+    assert result == {"ok": True}
+    express_mock.assert_not_called()
+    litellm_mock.assert_awaited_once()
+
+
+def test_completion_sync_routes_vertex_express(monkeypatch):
+    litellm_mock = MagicMock()
+    monkeypatch.setattr(litellm, "completion", litellm_mock)
+    express_mock = MagicMock(return_value="SYNC_EXPRESS")
+    monkeypatch.setattr("mcp_core.llm.dispatch.completion_express", express_mock)
+    result = completion(
+        model="vertex_express/gemini-2.5-flash",
+        messages=[{"role": "user", "content": "hi"}],
+        api_key="AQ.key",
+    )
+    assert result == "SYNC_EXPRESS"
+    litellm_mock.assert_not_called()

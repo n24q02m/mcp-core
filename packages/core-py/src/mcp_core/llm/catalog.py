@@ -33,8 +33,8 @@ def _get_litellm() -> Any:
 
 # Env-key -> litellm provider prefix (for configured_only filtering).
 # Intentionally covers only the provider set used by the n24q02m servers
-# (gemini/openai/xai/anthropic/cohere/jina_ai), NOT all ~30 litellm providers.
-# Passthrough still works for ANY provider; this map only affects
+# (gemini/openai/xai/anthropic/cohere/jina_ai/vertex_express), NOT all litellm
+# providers. Passthrough still works for ANY provider; this map only affects
 # listing/suggestions.
 _PROVIDER_ENV_KEYS: dict[str, str] = {
     "GEMINI_API_KEY": "gemini",
@@ -45,6 +45,7 @@ _PROVIDER_ENV_KEYS: dict[str, str] = {
     "COHERE_API_KEY": "cohere",
     "CO_API_KEY": "cohere",
     "JINA_AI_API_KEY": "jina_ai",
+    "GOOGLE_VERTEX_EXPRESS_API_KEY": "vertex_express",
 }
 
 
@@ -64,9 +65,17 @@ def _registry_entry(model: str) -> dict | None:
 def check_capability(model: str, expected_modes: tuple[str, ...]) -> None:
     """Raise ModelCapabilityError on a KNOWN model with the wrong mode.
 
-    Unknown model => debug log + pass (open passthrough, spec D3).
+    Unknown model => debug log + pass (open passthrough, spec D3). When litellm
+    is not installed (no ``[llm]`` extra) the advisory registry lookup cannot
+    run, so this also passes through: httpx-only adapters (vertex_express) must
+    work without litellm, and litellm-backed providers fail later at the actual
+    call with the clear install-the-extra error.
     """
-    entry = _registry_entry(model)
+    try:
+        entry = _registry_entry(model)
+    except RuntimeError:
+        logger.debug(f"litellm unavailable; skipping advisory capability check for {model!r}")
+        return
     if entry is None:
         logger.debug(f"model {model!r} not in litellm registry; passthrough")
         return

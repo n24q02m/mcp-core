@@ -8,6 +8,12 @@ retry policy is server-owned.
 litellm functions are looked up as module attributes at call time (via
 ``_get_litellm()``), never imported as names — keeps monkeypatching and
 litellm's lazy loading intact.
+
+Exception: a ``vertex_express/`` model on ``acompletion``/``completion`` is
+routed to ``mcp_core.llm.vertex_express`` (direct generateContent over httpx)
+because litellm's ``vertex_ai/`` ignores the Express api_key
+(BerriAI/litellm#21036). Every other model and every other surface stays a
+pure litellm delegation.
 """
 
 from __future__ import annotations
@@ -16,6 +22,11 @@ from typing import Any
 
 from mcp_core.http import vet_api_base
 from mcp_core.llm.catalog import _get_litellm, check_capability
+from mcp_core.llm.vertex_express import (
+    acompletion_express,
+    completion_express,
+    is_express_model,
+)
 
 _CHAT_MODES = ("chat", "responses", "completion")
 
@@ -49,6 +60,11 @@ async def acompletion(
     api_key: str | None = None,
     **kwargs: Any,
 ) -> Any:
+    if is_express_model(model):
+        # litellm's vertex_ai/ ignores the Express api_key (BerriAI/litellm#21036);
+        # route to the direct generateContent adapter. SSRF + (advisory)
+        # capability checks happen inside the adapter.
+        return await acompletion_express(model=model, messages=messages, api_base=api_base, api_key=api_key, **kwargs)
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, _CHAT_MODES)
@@ -132,6 +148,8 @@ def completion(
     **kwargs: Any,
 ) -> Any:
     """Sync completion. Do NOT call from an async context — blocks the event loop."""
+    if is_express_model(model):
+        return completion_express(model=model, messages=messages, api_base=api_base, api_key=api_key, **kwargs)
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, _CHAT_MODES)

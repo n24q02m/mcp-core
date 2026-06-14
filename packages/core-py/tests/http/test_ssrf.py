@@ -2,14 +2,21 @@
 
 import socket
 
+import httpcore
+import httpx
 import pytest
 
 from mcp_core.http import (
     SSRFBlockedError,
+    get_ssrf_safe_sync_client,
     validate_url_and_get_ip,
     vet_api_base,
 )
-from mcp_core.http.ssrf import AsyncSSRFSafeBackend
+from mcp_core.http.ssrf import (
+    AsyncSSRFSafeBackend,
+    SyncSSRFSafeBackend,
+    SyncSSRFSafeTransport,
+)
 
 
 def _fake_getaddrinfo(ip: str):
@@ -91,6 +98,77 @@ async def test_connect_unix_socket_rejected():
     backend = AsyncSSRFSafeBackend()
     with pytest.raises(SSRFBlockedError):
         await backend.connect_unix_socket("/tmp/x.sock")
+
+
+# --- SyncSSRFSafeBackend (sync sibling: resolve+vet ONCE, dial the IP literal) ---
+
+
+def test_sync_connect_unix_socket_rejected():
+    backend = SyncSSRFSafeBackend()
+    with pytest.raises(SSRFBlockedError):
+        backend.connect_unix_socket("/tmp/x.sock")
+
+
+def test_sync_backend_dials_vetted_ip(monkeypatch):
+    """The dialled target must be the resolved IP literal, never the hostname.
+
+    This is the anti-TOCTOU guarantee: the default httpcore.SyncBackend would
+    re-resolve at dial time (a DNS-rebinding hole); this backend resolves+vets
+    once and passes that IP straight through to the inner backend.
+    """
+    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("93.184.216.34"))
+    dialled: dict = {}
+
+    def fake_connect(self, host, port, **kwargs):
+        dialled["host"] = host
+        dialled["port"] = port
+        return object()  # opaque stream; the test never reads it
+
+    monkeypatch.setattr(httpcore.SyncBackend, "connect_tcp", fake_connect)
+    backend = SyncSSRFSafeBackend()
+    backend.connect_tcp("example.com", 443)
+    assert dialled["host"] == "93.184.216.34"
+    assert dialled["port"] == 443
+
+
+def test_sync_backend_blocks_private_ip(monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", _fake_getaddrinfo("10.0.0.1"))
+    backend = SyncSSRFSafeBackend()
+    with pytest.raises(SSRFBlockedError):
+        backend.connect_tcp("evil.example.com", 443)
+
+
+# --- SyncSSRFSafeTransport ---
+
+
+def test_sync_transport_rejects_unsupported_scheme():
+    transport = SyncSSRFSafeTransport()
+    request = httpx.Request("GET", "ftp://example.com/x")
+    with pytest.raises(SSRFBlockedError, match="Unsupported scheme"):
+        transport.handle_request(request)
+
+
+def test_sync_transport_preserves_host_and_sni(monkeypatch):
+    """Transport pins the IP at the backend but keeps Host + SNI = hostname."""
+    captured: dict = {}
+
+    def fake_super_handle(self, request):
+        captured["host_header"] = request.headers.get("Host")
+        captured["sni"] = request.extensions.get("sni_hostname")
+        return httpx.Response(200, json={"ok": True})
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", fake_super_handle)
+    transport = SyncSSRFSafeTransport()
+    resp = transport.handle_request(httpx.Request("GET", "https://example.com/v1beta1/x"))
+    assert resp.status_code == 200
+    assert captured["host_header"] == "example.com"
+    assert captured["sni"] == "example.com"
+
+
+def test_get_ssrf_safe_sync_client_uses_sync_transport():
+    client = get_ssrf_safe_sync_client()
+    assert isinstance(client, httpx.Client)
+    assert isinstance(client._transport, SyncSSRFSafeTransport)
 
 
 # --- vet_api_base policy theo mode (spec D4) ---

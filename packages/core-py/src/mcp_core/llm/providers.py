@@ -18,6 +18,7 @@ PROVIDER_KEY_ENV: dict[str, str] = {
     "cohere": "COHERE_API_KEY",
     "xai": "XAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
+    "vertex_express": "GOOGLE_VERTEX_EXPRESS_API_KEY",
 }
 
 CURATED_PROVIDERS = frozenset(PROVIDER_KEY_ENV)
