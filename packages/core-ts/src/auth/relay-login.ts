@@ -180,7 +180,7 @@ function renderLoginForm(next: string, errorMsg?: string): string {
 
             <p class="form-title" id="form-title">Authenticate</p>
 
-            <form method="POST" action="/login" aria-labelledby="form-title">
+            <form method="POST" action="/login" aria-labelledby="form-title" novalidate>
                 <!-- nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format -- safeNext is escapeHtml(next) -->
                 <input type="hidden" name="next" value="${safeNext}">
                 <div class="field-group">
