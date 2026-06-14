@@ -9,11 +9,11 @@ KV) while stdio/VM deployments keep the on-disk layout via LocalFsBackend.
 from __future__ import annotations
 
 import os
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
 from urllib.parse import quote
+
+import httpx
 
 
 @runtime_checkable
@@ -97,30 +97,26 @@ class LocalFsBackend:
             path.unlink()
 
 
-class _UrllibHttp:
-    """Minimal HTTP client over urllib, returning (status, body)."""
+class _HttpxHttp:
+    """Minimal HTTP client over httpx, returning (status, body)."""
 
     def request(self, method: str, url: str, data: Optional[bytes], headers: dict) -> tuple[int, bytes]:
-        req = urllib.request.Request(url, data=data, method=method, headers=headers)
-        try:
-            with urllib.request.urlopen(req) as resp:
-                return (resp.status, resp.read())
-        except urllib.error.HTTPError as exc:
-            return (exc.code, b"")
+        resp = httpx.request(method, url, content=data, headers=headers, timeout=10.0)
+        return (resp.status_code, resp.content)
 
 
 class CfKvBackend:
     """Stores blobs in a Cloudflare Workers KV namespace over HTTP.
 
     Error contract: 200 -> data, 404 -> absent (None for get, no-op for delete).
-    Every other HTTP status, plus transport errors (URLError / socket errors from
-    the HTTP client), raises -- failures are loud, never silently returned as data.
+    Every other HTTP status, plus transport errors (httpx connection/timeout
+    errors), raises -- failures are loud, never silently returned as data.
     """
 
     def __init__(self, base_url: str, token: Optional[str] = None, http=None) -> None:
         self._base_url = base_url
         self._token = token
-        self._http = http if http is not None else _UrllibHttp()
+        self._http = http if http is not None else _HttpxHttp()
 
     def _url(self, key: str) -> str:
         return self._base_url.rstrip("/") + "/" + quote(key, safe="")

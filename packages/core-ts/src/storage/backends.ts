@@ -118,7 +118,7 @@ export interface Http {
  *
  * fetch resolves on 4xx/5xx and rejects only on network error, so status checks
  * in CfKvBackend handle HTTP errors while transport errors propagate -- matching
- * the Python urllib client behavior.
+ * the Python httpx client behavior.
  */
 const fetchHttp: Http = {
   async request(method, url, data, headers) {
