@@ -2,6 +2,151 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.3 (2026-06-14)
+
+### Bug Fixes
+
+- Apply ruff format to core-py JWT signing-seed tests
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Derive EdDSA in core-py OAuth-app factory fallback from CREDENTIAL_SECRET
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Drop secret-keyword from JWTIssuer startup log (SAST false positive)
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Pass through check_capability when litellm is unavailable
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Remove orphaned Qodo pr-agent config ([#439](https://github.com/n24q02m/mcp-core/pull/439),
+  [`a4afbe7`](https://github.com/n24q02m/mcp-core/commit/a4afbe71986241e1deeb49342e6a80b0f8a46f9a))
+
+- Sync cross-promo section and tagline to current descriptions
+  ([#442](https://github.com/n24q02m/mcp-core/pull/442),
+  [`8109f5a`](https://github.com/n24q02m/mcp-core/commit/8109f5ae146755e1b25079277f6ffad7dd034cc3))
+
+- Sync README tagline to current capability description
+  ([#441](https://github.com/n24q02m/mcp-core/pull/441),
+  [`33c5241`](https://github.com/n24q02m/mcp-core/commit/33c52415cb793d8ce62a933c39d27ad2e77bbd7e))
+
+- **deps**: Lock file maintenance ([#445](https://github.com/n24q02m/mcp-core/pull/445),
+  [`3a6f515`](https://github.com/n24q02m/mcp-core/commit/3a6f51517dbbe0f11ead316ffa62096b20ffb22f))
+
+- **deps**: Update cryptography to v49 ([#444](https://github.com/n24q02m/mcp-core/pull/444),
+  [`6de412e`](https://github.com/n24q02m/mcp-core/commit/6de412e28f001bbe2c81a6d771cdb68b355d3214))
+
+- **deps**: Update non-major dependencies ([#443](https://github.com/n24q02m/mcp-core/pull/443),
+  [`78c745a`](https://github.com/n24q02m/mcp-core/commit/78c745a6288689ad41cd29094666f16ffe5894a0))
+
+- **deps**: Update non-major dependencies ([#436](https://github.com/n24q02m/mcp-core/pull/436),
+  [`ebe952d`](https://github.com/n24q02m/mcp-core/commit/ebe952dce07a7da740faa62fdedaf81305a2936c))
+
+- **deps**: Update semgrep/semgrep Docker digest to f4791a5
+  ([#434](https://github.com/n24q02m/mcp-core/pull/434),
+  [`98ca225`](https://github.com/n24q02m/mcp-core/commit/98ca225a9f481545f1e396771c14b63cb90d6d6b))
+
+- **deps**: Update step-security/harden-runner digest to 9af89fc
+  ([#435](https://github.com/n24q02m/mcp-core/pull/435),
+  [`330dd5d`](https://github.com/n24q02m/mcp-core/commit/330dd5df98364e77ec1d64188a978e6c57e1ff20))
+
+### Features
+
+- Add accessible error state to relay login form
+  ([#440](https://github.com/n24q02m/mcp-core/pull/440),
+  [`698abac`](https://github.com/n24q02m/mcp-core/commit/698abac3c5f136aa9a9c0ef6e0d1a705f8f94184))
+
+- Add advisory capability check to vertex express adapter
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Add DNS-pinning sync SSRF-safe client to mcp_core.http
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Add HKDF JWT signing-seed derivation in core-py
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Add HKDF JWT signing-seed derivation in core-ts
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Add vertex express async and sync http entry points
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Add vertex express prefix detection and response dataclasses
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Bolt optimize bearer token extraction ([#437](https://github.com/n24q02m/mcp-core/pull/437),
+  [`25b444d`](https://github.com/n24q02m/mcp-core/commit/25b444d889f66529e4f462c3c442b1d9240b35e3))
+
+- Build vertex express generateContent request from openai messages
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Derive stable EdDSA JWT signing key from CREDENTIAL_SECRET in core-py
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Derive stable EdDSA JWT signing key from CREDENTIAL_SECRET in core-ts
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Export vertex express adapter from mcp_core.llm
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Harden vertex express adapter request building
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Improve form accessibility with aria-labelledby attribute
+  ([#447](https://github.com/n24q02m/mcp-core/pull/447),
+  [`20bd491`](https://github.com/n24q02m/mcp-core/commit/20bd4915445ed0f959ae0ad26af567f85576230c))
+
+- Map vertex_express prefix to GOOGLE_VERTEX_EXPRESS_API_KEY
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Mount JWKS endpoint and advertise jwks_uri in core-py
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Mount JWKS endpoint and advertise jwks_uri in core-ts
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Route vertex_express prefix to direct generateContent adapter
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Select EdDSA issuer mode from CREDENTIAL_SECRET in build_local_app
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Select EdDSA issuer mode from CREDENTIAL_SECRET in core-ts OAuth apps
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Stable OAuth JWT signing key derived from CREDENTIAL_SECRET
+  ([#484](https://github.com/n24q02m/mcp-core/pull/484),
+  [`23d6864`](https://github.com/n24q02m/mcp-core/commit/23d6864d60a8a1e07ac10b07c581dbba168471f5))
+
+- Translate vertex express generateContent response to chatcompletion shape
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+- Vertex AI Express generateContent passthrough adapter
+  ([#483](https://github.com/n24q02m/mcp-core/pull/483),
+  [`1ae4677`](https://github.com/n24q02m/mcp-core/commit/1ae4677f90b1e0cc29dbe8a5c8be1b546fc0194a))
+
+
 ## v1.18.0-beta.2 (2026-06-11)
 
 ### Features
