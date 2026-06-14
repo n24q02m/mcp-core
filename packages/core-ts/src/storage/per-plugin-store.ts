@@ -16,21 +16,12 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto'
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { backendFromEnv, type CredentialBackend } from './backends.js'
+import { getHomeDir } from './home-dir.js'
 
-// Module-level override for testing.
-let homeDirOverride: string | null = null
-
-/** Override the home directory used by this module. Pass null to reset. */
-export function setHomeDirForTesting(dir: string | null): void {
-  homeDirOverride = dir
-}
-
-function getHomeDir(): string {
-  return homeDirOverride ?? homedir()
-}
+export { setHomeDirForTesting } from './home-dir.js'
 
 export function credPath(pluginName: string, sub: string | null): string {
   const unsafe = /[^a-zA-Z0-9.-]/g
@@ -70,12 +61,17 @@ function deriveMultiUserKey(pluginName: string, sub: string): Buffer {
 
 export class PerPluginStore {
   readonly credPath: string
+  private readonly credKey: string
+  private readonly backend: CredentialBackend
 
   constructor(
     public pluginName: string,
-    public sub: string | null = null
+    public sub: string | null = null,
+    backend?: CredentialBackend
   ) {
     this.credPath = credPath(pluginName, sub)
+    this.credKey = sub ? `${pluginName}/subs/${sub}/config` : `${pluginName}/config`
+    this.backend = backend ?? backendFromEnv()
   }
 
   private async key(): Promise<Buffer> {
@@ -83,12 +79,8 @@ export class PerPluginStore {
   }
 
   async load(): Promise<Record<string, unknown> | null> {
-    let blob: Buffer
-    try {
-      blob = await readFile(this.credPath)
-    } catch {
-      return null
-    }
+    const blob = await this.backend.get(this.credKey)
+    if (blob === null) return null
     // Format: [12-byte IV][ciphertext][16-byte GCM tag]
     if (blob.length < 29) return null
     const iv = blob.subarray(0, 12)
@@ -105,20 +97,15 @@ export class PerPluginStore {
   }
 
   async save(payload: Record<string, unknown>): Promise<void> {
-    await mkdir(dirname(this.credPath), { recursive: true, mode: 0o700 })
     const iv = randomBytes(12)
     const cipher = createCipheriv('aes-256-gcm', await this.key(), iv, { authTagLength: 16 })
     const plaintext = Buffer.from(JSON.stringify(payload), 'utf-8')
     const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
     const tag = cipher.getAuthTag()
-    await writeFile(this.credPath, Buffer.concat([iv, ciphertext, tag]), { mode: 0o600 })
+    await this.backend.put(this.credKey, Buffer.concat([iv, ciphertext, tag]))
   }
 
   async clear(): Promise<void> {
-    try {
-      await unlink(this.credPath)
-    } catch {
-      // ignore if file does not exist
-    }
+    await this.backend.delete(this.credKey)
   }
 }
