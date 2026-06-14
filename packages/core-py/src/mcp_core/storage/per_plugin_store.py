@@ -84,11 +84,14 @@ class PerPluginStore:
         plugin_name: str,
         sub: Optional[str] = None,
         backend: Optional[CredentialBackend] = None,
+        sub_key: Optional[str] = None,
     ) -> None:
         self.plugin_name = plugin_name
         self.sub = sub
+        self.sub_key = sub_key
         self.cred_path = _cred_path(plugin_name, sub)
-        self.cred_key = f"{plugin_name}/subs/{sub}/config" if sub else f"{plugin_name}/config"
+        leaf = sub_key or "config"
+        self.cred_key = f"{plugin_name}/subs/{sub}/{leaf}" if sub else f"{plugin_name}/{leaf}"
         self._backend = backend if backend is not None else backend_from_env()
 
     def _key(self) -> bytes:

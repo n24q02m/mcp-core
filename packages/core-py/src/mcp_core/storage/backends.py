@@ -52,8 +52,10 @@ def _validate_component(name: str) -> str:
 def _key_to_path(key: str) -> Path:
     """Map a backend key to its on-disk path.
 
-    "<plugin>/config"            -> ~/.<plugin>-mcp/config.json
-    "<plugin>/subs/<sub>/config" -> ~/.<plugin>-mcp/subs/<sub>/config.json
+    "<plugin>/config"                     -> ~/.<plugin>-mcp/config.json
+    "<plugin>/subs/<sub>/config"          -> ~/.<plugin>-mcp/subs/<sub>/config.json
+    "<plugin>/tokens/<provider>"          -> ~/.<plugin>-mcp/tokens/<provider>.json
+    "<plugin>/subs/<sub>/tokens/<prov>"   -> ~/.<plugin>-mcp/subs/<sub>/tokens/<prov>.json
     """
     plugin, _, rest = key.partition("/")
     _validate_component(plugin)
@@ -64,6 +66,16 @@ def _key_to_path(key: str) -> Path:
         sub = rest[len("subs/") : -len("/config")]
         _validate_component(sub)
         path = base / "subs" / sub / "config.json"
+    elif rest.startswith("subs/") and "/tokens/" in rest:
+        mid = rest[len("subs/") :]
+        sub, _, provider = mid.partition("/tokens/")
+        _validate_component(sub)
+        _validate_component(provider)
+        path = base / "subs" / sub / "tokens" / f"{provider}.json"
+    elif rest.startswith("tokens/"):
+        provider = rest[len("tokens/") :]
+        _validate_component(provider)
+        path = base / "tokens" / f"{provider}.json"
     else:
         raise ValueError(f"Invalid backend key: {key}")
 
