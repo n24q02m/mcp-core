@@ -2,6 +2,61 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.4 (2026-06-14)
+
+### Bug Fixes
+
+- Make CfKvBackend fail loud on non-404 HTTP errors
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Use httpx instead of urllib in CfKvBackend HTTP client
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Validate MCP_KV_BASE_URL and cover CfKvBackend error paths
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Validate MCP_KV_BASE_URL in core-py for ts parity
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Validate path components in LocalFsBackend to block traversal
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+### Features
+
+- Add CfKvBackend HTTP credential backend in core-py
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Add CredentialBackend protocol and InMemoryBackend in core-py
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Add LocalFsBackend preserving on-disk credential layout
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Inject CredentialBackend into PerPluginStore (default LocalFs)
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Mirror CredentialBackend + CfKvBackend in core-ts
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Pluggable credential storage backend for serverless deploys
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+- Select credential backend from MCP_STORAGE_BACKEND env
+  ([#488](https://github.com/n24q02m/mcp-core/pull/488),
+  [`b720d5d`](https://github.com/n24q02m/mcp-core/commit/b720d5d3ca604dc5d416593c660be5ea4f313491))
+
+
 ## v1.18.0-beta.3 (2026-06-14)
 
 ### Bug Fixes
