@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.5 (2026-06-14)
+
+### Features
+
+- PerPluginStore token sub-key + LocalFs tokens namespace
+  ([#489](https://github.com/n24q02m/mcp-core/pull/489),
+  [`c77dd65`](https://github.com/n24q02m/mcp-core/commit/c77dd654c9fcf848d848723d3dcca8ed82b6fb98))
+
+
 ## v1.18.0-beta.4 (2026-06-14)
 
 ### Bug Fixes
