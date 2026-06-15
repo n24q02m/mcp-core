@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.6 (2026-06-15)
+
+### Bug Fixes
+
+- Correct storage and auth module descriptions in README
+  ([`f06502d`](https://github.com/n24q02m/mcp-core/commit/f06502d010cfa5bf62c435403938e2b383b11804))
+
+### Features
+
+- CfKvBackend.ready() readiness probe for CF outbound-interception race
+  ([#493](https://github.com/n24q02m/mcp-core/pull/493),
+  [`b041293`](https://github.com/n24q02m/mcp-core/commit/b0412938209ee321c5582ee88239da11eb52afbf))
+
+
 ## v1.18.0-beta.5 (2026-06-14)
 
 ### Features
