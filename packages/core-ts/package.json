@@ -44,8 +44,8 @@
       "types": "./build/crypto/index.d.ts"
     },
     "./storage": {
-      "import": "./build/storage/resolver.js",
-      "types": "./build/storage/resolver.d.ts"
+      "import": "./build/storage/index.js",
+      "types": "./build/storage/index.d.ts"
     },
     "./relay": {
       "import": "./build/relay/client.js",
