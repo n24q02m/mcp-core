@@ -15,6 +15,11 @@ from urllib.parse import quote
 
 import httpx
 
+# Reserved KV key for the readiness probe (E.1). The kv.internal outbound handler
+# answers a GET of this key with {"ready": true} only once outbound-interception
+# is wired, letting the container gate its first credential PUT on it.
+_READY_KEY = "__ready"
+
 
 @runtime_checkable
 class CredentialBackend(Protocol):
@@ -155,6 +160,32 @@ class CfKvBackend:
         status, _ = self._http.request("DELETE", self._url(key), None, self._headers())
         if status not in (200, 204, 404):
             raise RuntimeError(f"CfKvBackend delete failed: HTTP {status}")
+
+    def ready(self, retries: int = 8, delay: float = 0.5) -> bool:
+        """Poll the KV outbound handler's readiness probe (E.1 race gate).
+
+        On Cloudflare the container's first credential PUT can race
+        applyOutboundInterception(); the kv.internal handler answers a GET on the
+        reserved ``__ready`` key with ``{"ready": true}`` only once interception
+        is wired. Poll up to ``retries`` times (``delay`` seconds apart),
+        tolerating transport errors (a not-yet-wired host throws). Returns True
+        once ready, False if it never becomes ready within the budget (the caller
+        may proceed and rely on the client retry-on-500 backstop).
+        """
+        import json
+        import time
+
+        url = self._url(_READY_KEY)
+        for attempt in range(retries):
+            try:
+                status, body = self._http.request("GET", url, None, self._headers())
+                if status == 200 and json.loads(body or b"{}").get("ready") is True:
+                    return True
+            except Exception:
+                pass  # host not wired yet / transient transport error -> keep polling
+            if attempt + 1 < retries:
+                time.sleep(delay)
+        return False
 
 
 def backend_from_env() -> CredentialBackend:
