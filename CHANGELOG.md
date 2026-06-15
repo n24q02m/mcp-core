@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.7 (2026-06-15)
+
+### Bug Fixes
+
+- Expose storage barrel on the ./storage subpath for CF backends
+  ([#494](https://github.com/n24q02m/mcp-core/pull/494),
+  [`b090e27`](https://github.com/n24q02m/mcp-core/commit/b090e270545a78ac327fe1d873e1c6e81386c553))
+
+
 ## v1.18.0-beta.6 (2026-06-15)
 
 ### Bug Fixes
