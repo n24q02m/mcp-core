@@ -71,14 +71,29 @@ Identical public API in both languages:
 - **`crypto/`** — ECDH P-256, AES-256-GCM, HKDF-SHA256 primitives.
   Cross-language test vectors guarantee Python and TypeScript produce the
   same ciphertext for the same input.
-- **`storage/`** — encrypted config file (`config.enc`) backed by PBKDF2
-  600k + machine-id key derivation, plus session lock files and config
-  resolver helpers.
-- **`oauth/`** — OAuth 2.1 Authorization Server building blocks: `JWTIssuer`
-  (RS256), `OAuthProvider` (PKCE flow + relay session integration),
-  `SqliteUserStore` for multi-user mode.
+- **`storage/`** — `PerPluginStore`, the per-plugin encrypted credential
+  store. Single-user (stdio / HTTP) writes `~/.<plugin>-mcp/config.json`
+  encrypted with a machine-bound key; HTTP multi-user writes
+  `~/.<plugin>-mcp/subs/<sub>/config.json` encrypted with a key derived from
+  the `CREDENTIAL_SECRET` env var (salt `<plugin>:<sub>`). Pluggable
+  `CredentialBackend`s (`LocalFsBackend`, `CfKvBackend`) decouple the on-disk
+  layout from serverless deployments. Also ships session lock files and
+  config resolver helpers. The legacy shared `config.enc` file
+  (`storage.config_file`) is deprecated.
+- **`auth/`** — the self-hosted OAuth 2.1 Authorization Server that downstream
+  servers actually run: `create_local_oauth_app` (Starlette ASGI app serving
+  `/authorize`, `/token`, the `/.well-known/oauth-*` metadata, and the
+  browser-rendered credential form), `render_credential_form`, the optional
+  shared-password gate at `/login` (`MCP_RELAY_PASSWORD`, empty disables it),
+  and `create_delegated_oauth_app` for upstream-redirect / device-code
+  multi-user flows.
+- **`oauth/`** — OAuth 2.1 primitives consumed by `auth/`: `JWTIssuer`
+  (RS256), `SqliteUserStore` for multi-user mode, and `OAuthProvider`, the
+  legacy `mcp-relay-core` PKCE-over-relay provider retained for migration.
 - **`relay/`** — `RelaySession`, `create_session`, `poll_for_result`,
   `send_message` plus the EFF Diceware wordlist for passphrase generation.
+  This is the legacy `mcp-relay-core` ECDH relay-client path used by
+  `OAuthProvider`; the live setup UX is the `auth/` browser credential form.
 - **`schema/`** — `RelayConfigSchema` TypedDict that downstream servers use
   to declare their config form.
 - **`transport/`** — `StreamableHTTPServer` wrapper around FastMCP /
