@@ -1,0 +1,4 @@
+## 2025-03-26 - [Path Traversal bypass via stateful regex in TypeScript]
+**Vulnerability:** The regex `/[^a-zA-Z0-9.-]/g` used to validate input (`pluginName` and `sub`) in `credPath` function in `packages/core-ts/src/storage/per-plugin-store.ts` was stateful because of the `/g` flag. Calling `.test()` on it advanced the `lastIndex` property, potentially allowing a bypassed check on subsequent validations.
+**Learning:** In TypeScript/JavaScript, utilizing a regex with the `/g` flag for validation via `.test()` is an anti-pattern because the regex object retains state (`lastIndex`). This stateful nature causes successive calls with new (or the same) inputs to behave unpredictably, leading to potential security bypasses.
+**Prevention:** Remove the `/g` flag from validation regexes unless specifically required for iterating over matches using `.exec()` or `.matchAll()`. The regex `/.../` without `/g` is stateless and correctly performs validation.
