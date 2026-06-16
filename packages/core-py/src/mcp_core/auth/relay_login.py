@@ -104,20 +104,22 @@ async def require_relay_session(
 def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
     safe_next = html.escape(str(next_url))
     error_html = ""
-    aria_attributes = ""
+    aria_attributes = ' aria-describedby="relay-desc"'
     if error_msg:
         error_html = f"""
             <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">
                 {html.escape(error_msg)}
             </div>"""
-        aria_attributes = ' aria-invalid="true" aria-errormessage="login-error"'
+        aria_attributes = (
+            ' aria-invalid="true" aria-errormessage="login-error" aria-describedby="login-error relay-desc"'
+        )
 
     return f'''    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">Relay login</h1>
                 <div class="server-id">mcp-relay</div>
-                <p class="server-description">Enter the relay password shared by your deployer.</p>
+                <p class="server-description" id="relay-desc">Enter the relay password shared by your deployer.</p>
             </div>{error_html}
 
             <p class="form-title" id="form-title">Authenticate</p>

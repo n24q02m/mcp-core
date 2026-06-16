@@ -168,14 +168,16 @@ function renderLoginForm(next: string, errorMsg?: string): string {
     ? `\n            <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">\n                ${escapeHtml(errorMsg)}\n            </div>`
     : ''
 
-  const ariaAttributes = errorMsg ? ' aria-invalid="true" aria-errormessage="login-error"' : ''
+  const ariaAttributes = errorMsg
+    ? ' aria-invalid="true" aria-errormessage="login-error" aria-describedby="login-error relay-desc"'
+    : ' aria-describedby="relay-desc"'
 
   return `    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">Relay login</h1>
                 <div class="server-id">mcp-relay</div>
-                <p class="server-description">Enter the relay password shared by your deployer.</p>
+                <p class="server-description" id="relay-desc">Enter the relay password shared by your deployer.</p>
             </div>${errorHtml}
 
             <p class="form-title" id="form-title">Authenticate</p>

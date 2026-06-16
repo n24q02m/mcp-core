@@ -976,7 +976,7 @@ wheels = [
 
 [[package]]
 name = "n24q02m-mcp-core"
-version = "1.18.0b7"
+version = "1.18.0b9"
 source = { editable = "." }
 dependencies = [
     { name = "authlib" },

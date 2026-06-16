@@ -555,7 +555,8 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
         </section>`
   }
 
-  const descriptionHtml = description ? `<p class="server-description">${description}</p>` : ''
+  const descriptionHtml = description ? `<p class="server-description" id="server-desc">${description}</p>` : ''
+  const formAria = description ? ' aria-describedby="server-desc"' : ''
 
   // The body is wrapped in `renderFormShell` below. The shell injects the
   // `<head>` (with the shared `FORM_SHELL_CSS`) and the `<body>` opening +
@@ -570,7 +571,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
 
             <p class="form-title" id="form-title">Enter your credentials</p>
 
-            <form id="credential-form" aria-labelledby="form-title" novalidate>
+            <form id="credential-form" aria-labelledby="form-title"${formAria} novalidate>
                 ${fieldsHtml}
 
                 <button type="submit" class="submit-btn" id="submit-btn">
