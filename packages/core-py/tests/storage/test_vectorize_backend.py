@@ -12,9 +12,7 @@ def test_vectorize_query_caps_topk_at_50():
             return (200, json.dumps({"matches": [{"id": "v1", "score": 0.9}]}).encode())
 
     vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http())
-    assert vb.query([0.1, 0.2], top_k=100, metadata_filter={"sub": "u1"}) == [
-        {"id": "v1", "score": 0.9}
-    ]
+    assert vb.query([0.1, 0.2], top_k=100, metadata_filter={"sub": "u1"}) == [{"id": "v1", "score": 0.9}]
     assert seen["topK"] == 50 and seen["filter"] == {"sub": "u1"}
 
 

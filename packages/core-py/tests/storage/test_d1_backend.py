@@ -15,9 +15,7 @@ def test_d1_execute_returns_rows():
             return (200, json.dumps({"results": [{"id": "c1", "name": "alpha"}]}).encode())
 
     db = D1Backend(base_url="http://d1.internal", http=Http())
-    assert db.execute("SELECT * FROM memories WHERE category = ?", ["alpha"]) == [
-        {"id": "c1", "name": "alpha"}
-    ]
+    assert db.execute("SELECT * FROM memories WHERE category = ?", ["alpha"]) == [{"id": "c1", "name": "alpha"}]
 
 
 def test_d1_executemany_expands_values_tuple():
