@@ -77,6 +77,9 @@ class D1Backend:
                 values = ", ".join(tuple_sql for _ in batch)
                 batched_sql = sql[: match.start(1)] + values
                 flat = [v for row in batch for v in row]
+                # batched_sql only expands the ?-placeholder VALUES tuple; row
+                # data is bound via `flat` params, never interpolated -> safe.
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                 self.execute(batched_sql, flat)
             else:
                 for row in batch:
