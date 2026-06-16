@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.8 (2026-06-16)
+
+### Features
+
+- StringSession store + save-on-change session for serverless Telethon
+  ([#495](https://github.com/n24q02m/mcp-core/pull/495),
+  [`c77ba0c`](https://github.com/n24q02m/mcp-core/commit/c77ba0c6ba820c46151c912c981f92e914b75cfc))
+
+
 ## v1.18.0-beta.7 (2026-06-15)
 
 ### Bug Fixes
