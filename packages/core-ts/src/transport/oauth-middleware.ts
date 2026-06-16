@@ -55,18 +55,33 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
     return token.length > 0 ? token : null
   }
 
+  // ⚡ Bolt: Single-pass, allocation-free string matching for the Bearer scheme
   // Fallback for tricky cases (mixed case, leading whitespace, etc.)
-  const trimmed = authHeader.trim()
-  if (trimmed.length <= 6) return null
+  let start = 0
+  while (start < authHeader.length && authHeader.charCodeAt(start) <= 32) {
+    start++
+  }
 
-  const prefix = trimmed.substring(0, 6)
-  if (prefix.toLowerCase() !== 'bearer') return null
+  const remain = authHeader.length - start
+  if (remain <= 6) return null
 
-  const char6 = trimmed.charCodeAt(6)
+  // Fast case-insensitive comparison using bitwise OR to force lowercase (ASCII only)
+  const b = authHeader.charCodeAt(start) | 0x20
+  const e = authHeader.charCodeAt(start + 1) | 0x20
+  const a = authHeader.charCodeAt(start + 2) | 0x20
+  const r1 = authHeader.charCodeAt(start + 3) | 0x20
+  const e2 = authHeader.charCodeAt(start + 4) | 0x20
+  const r2 = authHeader.charCodeAt(start + 5) | 0x20
+
+  if (b !== 98 || e !== 101 || a !== 97 || r1 !== 114 || e2 !== 101 || r2 !== 114) {
+    return null
+  }
+
+  const char6 = authHeader.charCodeAt(start + 6)
   // Check if character 6 is whitespace (space=32, tab=9, newline=10, return=13)
   if (char6 !== 32 && char6 !== 9 && char6 !== 10 && char6 !== 13) return null
 
-  const token = trimmed.substring(7).trim()
+  const token = authHeader.substring(start + 7).trim()
   return token.length > 0 ? token : null
 }
 
