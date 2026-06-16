@@ -8,6 +8,10 @@ from mcp_core.storage.backends import (
     backend_from_env,
 )
 from mcp_core.storage.per_plugin_store import PerPluginStore
+from mcp_core.storage.string_session_store import (
+    SaveOnChangeStringSession,
+    StringSessionStore,
+)
 
 __all__ = [
     "PerPluginStore",
@@ -16,4 +20,6 @@ __all__ = [
     "LocalFsBackend",
     "CfKvBackend",
     "backend_from_env",
+    "StringSessionStore",
+    "SaveOnChangeStringSession",
 ]
