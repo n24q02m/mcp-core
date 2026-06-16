@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.9 (2026-06-16)
+
+### Features
+
+- Promote D1Backend + VectorizeBackend into mcp-core storage
+  ([#496](https://github.com/n24q02m/mcp-core/pull/496),
+  [`6d22bca`](https://github.com/n24q02m/mcp-core/commit/6d22bcab6142da7b8637941dde3df62de7d139cc))
+
+
 ## v1.18.0-beta.8 (2026-06-16)
 
 ### Features
