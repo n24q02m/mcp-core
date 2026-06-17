@@ -95,3 +95,10 @@ def test_register_open_relay_tool_stdio() -> None:
     result = registered_func()
     assert result["status"] == "stdio_unsupported"
     assert result["url"] == ""
+
+
+def test_handler_docstring_replacement() -> None:
+    handler = _build_open_relay_handler("my-special-server", "http://localhost")
+    if handler.__doc__ is not None:
+        assert "my-special-server" in handler.__doc__
+        assert "{server_name}" not in handler.__doc__
