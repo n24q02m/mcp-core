@@ -48,6 +48,32 @@ def test_path_traversal_protection():
         _cred_path("", None)
     with pytest.raises(ValueError, match="Invalid sub"):
         _cred_path("plugin", "")
+    # "." is allowed in the char class (version-style segments), so a bare ".."
+    # with no "/" is caught only by the explicit dotdot guard.
+    with pytest.raises(ValueError, match="Invalid sub"):
+        _cred_path("plugin", "a..b")
+    with pytest.raises(ValueError, match="Invalid plugin_name"):
+        _cred_path("plug..in", None)
+
+
+def test_token_urlsafe_sub_accepted():
+    # The OAuth AS mints sub = secrets.token_urlsafe(16); its base64url alphabet
+    # includes "_" and "-". Both must be accepted, else ~half of all per-sub
+    # credential saves fail with "Invalid sub" (regression: telegram CF, 2026-06-17).
+    sub = "oG5FyoFE-RWqI_aciDl4zA"  # contains both "-" and "_"
+    path = _cred_path("better-telegram", sub)
+    assert path.name == "config.json"
+    assert sub in path.parts  # the sub is a single, intact path segment
+    # "/" separators stay rejected so path traversal protection is unaffected.
+    with pytest.raises(ValueError, match="Invalid sub"):
+        _cred_path("plugin", "a/b")
+
+
+def test_underscore_sub_round_trips(store_factory, monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_SECRET", "test-master-secret")
+    store = store_factory("plugin", sub="ab_cd-EF_gh")
+    store.save({"token": "value"})
+    assert store.load() == {"token": "value"}
 
 
 def test_clear(store_factory):
