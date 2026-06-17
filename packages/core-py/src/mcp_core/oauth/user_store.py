@@ -35,14 +35,20 @@ class SqliteUserStore(IUserCredentialStore):
         self.db_path = db_path
         self._master_key = master_key
 
-        # Ensure directory exists with strict permissions (owner-only access).
-        # 0o700 = owner read+write+exec only; group/other denied. This is the
-        # secure default for a credential store directory.
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        if self.db_path.parent.exists() and os.name != "nt":
-            self.db_path.parent.chmod(0o700)
+        if self.db_path.is_dir():
+            raise RuntimeError(f"Database path cannot be a directory: {self.db_path}")
 
-        self._init_db()
+        try:
+            # Ensure directory exists with strict permissions (owner-only access).
+            # 0o700 = owner read+write+exec only; group/other denied. This is the
+            # secure default for a credential store directory.
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            if self.db_path.parent.exists() and os.name != "nt":
+                self.db_path.parent.chmod(0o700)
+
+            self._init_db()
+        except (OSError, sqlite3.Error) as e:
+            raise RuntimeError(f"Failed to initialize database at {self.db_path}: {e}") from e
 
     def _init_db(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
