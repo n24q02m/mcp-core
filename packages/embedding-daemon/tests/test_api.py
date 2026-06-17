@@ -34,6 +34,33 @@ def test_rerank_returns_501_with_roadmap_link() -> None:
     assert "not yet wired" in body["detail"]
 
 
+def test_embed_with_optional_fields() -> None:
+    client = TestClient(app)
+    resp = client.post(
+        "/embed",
+        json={
+            "model": "custom-model",
+            "input": ["hello", "world"],
+            "dims": 1024,
+        },
+    )
+    assert resp.status_code == 501
+
+
+def test_rerank_with_optional_fields() -> None:
+    client = TestClient(app)
+    resp = client.post(
+        "/rerank",
+        json={
+            "model": "custom-rerank-model",
+            "query": "find me stuff",
+            "documents": ["doc 1", "doc 2"],
+            "top_n": 5,
+        },
+    )
+    assert resp.status_code == 501
+
+
 def test_embed_validates_input_schema() -> None:
     client = TestClient(app)
     # Missing required `input` field.
@@ -45,4 +72,18 @@ def test_rerank_validates_input_schema() -> None:
     client = TestClient(app)
     # Missing required `query` and `documents` fields.
     resp = client.post("/rerank", json={})
+    assert resp.status_code == 422
+
+
+def test_embed_validates_types() -> None:
+    client = TestClient(app)
+    # `input` should be a list of strings, not a string.
+    resp = client.post("/embed", json={"input": "not a list"})
+    assert resp.status_code == 422
+
+
+def test_rerank_validates_types() -> None:
+    client = TestClient(app)
+    # `documents` should be a list of strings.
+    resp = client.post("/rerank", json={"query": "test", "documents": "not a list"})
     assert resp.status_code == 422
