@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.10 (2026-06-17)
+
+### Bug Fixes
+
+- Allow underscore in per-plugin-store sub + harden cred-path validation
+  ([#501](https://github.com/n24q02m/mcp-core/pull/501),
+  [`d48bf5f`](https://github.com/n24q02m/mcp-core/commit/d48bf5f8d64318d0a68f422eb01649665f983e3c))
+
+- Suppress false-positive raw-query SAST on D1 batch + format backend tests
+  ([#497](https://github.com/n24q02m/mcp-core/pull/497),
+  [`9a5f5ef`](https://github.com/n24q02m/mcp-core/commit/9a5f5eff658f195c3b235658f54f52d2d438bd56))
+
+
 ## v1.18.0-beta.9 (2026-06-16)
 
 ### Features
