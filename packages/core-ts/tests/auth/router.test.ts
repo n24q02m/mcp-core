@@ -1,6 +1,6 @@
-import { createServer } from 'node:http'
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createRouter, htmlResponse, jsonResponse, parseFormBody, parseJsonBody } from '../../src/auth/router.js'
 
 function startTestServer(handler: ReturnType<typeof createRouter>): Promise<{ url: string; close: () => void }> {
@@ -62,9 +62,65 @@ describe('createRouter', () => {
     try {
       const resp = await fetch(`${url}/fail`)
       expect(resp.status).toBe(500)
+      expect(await resp.json()).toEqual({ error: 'internal_error' })
     } finally {
       close()
     }
+  })
+
+  it('does not send 500 if headers were already sent', async () => {
+    const handler = createRouter([
+      {
+        method: 'GET',
+        path: '/fail-after',
+        handler: (_req, res) => {
+          res.writeHead(202)
+          res.write('part 1')
+          // res.end() is not called, but writeHead makes headersSent true
+          throw new Error('boom')
+        }
+      }
+    ])
+    const { url, close } = await startTestServer(handler)
+    try {
+      // fetch might fail if the connection is closed abruptly after error,
+      // but the point is it doesn't get a 500.
+      const resp = await fetch(`${url}/fail-after`)
+      expect(resp.status).toBe(202)
+    } finally {
+      close()
+    }
+  })
+
+  it('handles requests with missing properties using defaults', async () => {
+    // We call the handler directly to test the null/undefined branches
+    // which are hard to trigger with a real HTTP server.
+    const handler = createRouter([
+      {
+        method: 'GET',
+        path: '/',
+        handler: (_req, res) => {
+          res.writeHead(200)
+          res.end('ok')
+        }
+      }
+    ])
+
+    const mockReq = {
+      method: undefined,
+      url: undefined,
+      headers: {}
+    } as unknown as IncomingMessage
+
+    const mockRes = {
+      writeHead: vi.fn(),
+      end: vi.fn(),
+      headersSent: false
+    } as unknown as ServerResponse
+
+    await handler(mockReq, mockRes)
+
+    expect(mockRes.writeHead).toHaveBeenCalledWith(200)
   })
 
   it('routes different methods independently', async () => {
