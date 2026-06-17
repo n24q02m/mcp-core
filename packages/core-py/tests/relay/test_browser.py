@@ -1,6 +1,7 @@
 """Tests for cross-platform browser opening."""
 
 import base64
+import subprocess
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -107,12 +108,34 @@ class TestTryOpenBrowser:
             result = try_open_browser("https://example.com")
             assert result is False
 
+    def test_deduplication(self):
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                with patch("time.monotonic") as mock_time:
+                    url = "https://example.com"
+                    mock_time.return_value = 100.0
+                    mock_wb.open.return_value = True
+
+                    # First call
+                    assert try_open_browser(url) is True
+                    assert mock_wb.open.call_count == 1
+
+                    # Second call within window
+                    mock_time.return_value = 200.0
+                    assert try_open_browser(url) is True
+                    assert mock_wb.open.call_count == 1
+
+                    # Third call after window expires (5 minutes = 300 seconds)
+                    mock_time.return_value = 500.0
+                    assert try_open_browser(url) is True
+                    assert mock_wb.open.call_count == 2
+
 
 class TestOpenInWsl:
     def test_tries_wslview_first(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.run = MagicMock()
-            mock_sp.SubprocessError = Exception
+            mock_sp.SubprocessError = subprocess.SubprocessError
             from mcp_core.relay.browser import _open_in_wsl
 
             result = _open_in_wsl("https://example.com")
@@ -124,7 +147,7 @@ class TestOpenInWsl:
 
     def test_falls_back_to_powershell_exe(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
-            mock_sp.SubprocessError = Exception
+            mock_sp.SubprocessError = subprocess.SubprocessError
             call_count = 0
 
             def side_effect(*args, **kwargs):
@@ -143,12 +166,12 @@ class TestOpenInWsl:
             # Second call should be powershell
             args = mock_sp.run.call_args
             assert args[0][0][0] == "powershell.exe"
-            # WSLENV should NOT be present now
+            # env should NOT be present
             assert "env" not in args[1]
 
     def test_returns_false_when_all_methods_fail(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
-            mock_sp.SubprocessError = Exception
+            mock_sp.SubprocessError = subprocess.SubprocessError
             mock_sp.run = MagicMock(side_effect=FileNotFoundError)
             from mcp_core.relay.browser import _open_in_wsl
 
@@ -159,7 +182,7 @@ class TestOpenInWsl:
 class TestOpenInPowerShell:
     def test_uses_embedded_base64_url_and_noprofile(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
-            mock_sp.SubprocessError = Exception
+            mock_sp.SubprocessError = subprocess.SubprocessError
             from mcp_core.relay.browser import _open_in_powershell
 
             url = "https://example.com"
@@ -182,6 +205,36 @@ class TestOpenInPowerShell:
             assert "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String" in decoded
             assert "Start-Process $url" in decoded
 
-            # MCP_BROWSER_URL should NOT be in env if env is passed (kwargs might be empty or not contain it)
-            if "env" in kwargs:
-                assert "MCP_BROWSER_URL" not in kwargs["env"]
+            # env should NOT be present
+            assert "env" not in kwargs
+
+    def test_handles_subprocess_errors(self):
+        with patch("mcp_core.relay.browser.subprocess") as mock_sp:
+            mock_sp.SubprocessError = subprocess.SubprocessError
+            mock_sp.TimeoutExpired = subprocess.TimeoutExpired
+            from mcp_core.relay.browser import _open_in_powershell
+
+            # FileNotFoundError
+            mock_sp.run.side_effect = FileNotFoundError
+            assert _open_in_powershell("https://example.com") is False
+
+            # SubprocessError (generic)
+            mock_sp.run.side_effect = subprocess.SubprocessError()
+            assert _open_in_powershell("https://example.com") is False
+
+            # CalledProcessError (specific SubprocessError)
+            mock_sp.run.side_effect = subprocess.CalledProcessError(returncode=1, cmd=["powershell.exe"])
+            assert _open_in_powershell("https://example.com") is False
+
+            # TimeoutExpired
+            mock_sp.run.side_effect = subprocess.TimeoutExpired(cmd=["powershell.exe"], timeout=10)
+            assert _open_in_powershell("https://example.com") is False
+
+    def test_environment_inheritance(self):
+        with patch("mcp_core.relay.browser.subprocess") as mock_sp:
+            from mcp_core.relay.browser import _open_in_powershell
+
+            _open_in_powershell("https://example.com")
+            _, kwargs = mock_sp.run.call_args
+            # By not passing 'env', subprocess.run inherits the current environment
+            assert "env" not in kwargs
