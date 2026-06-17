@@ -37,6 +37,7 @@ describe('pre-fill renderer', () => {
     const html = renderField(SCHEMA_FIELDS[2], 'rt_xxx')
     expect(html).not.toContain('rt_xxx')
     expect(html).toMatch(/Re-authorize|reauthorize/i)
+    expect(html).toContain('aria-label="Re-authorize Refresh"')
   })
 
   it('merge preserves secret on empty', () => {
