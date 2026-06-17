@@ -738,7 +738,8 @@ def render_credential_form(
             </ul>
         </section>"""
 
-    description_html = f'<p class="server-description">{description}</p>' if description else ""
+    description_html = f'<p class="server-description" id="server-desc">{description}</p>' if description else ""
+    form_aria = ' aria-describedby="server-desc"' if description else ""
 
     body_html = f"""    <div class="container">
         <div class="card">
@@ -750,7 +751,7 @@ def render_credential_form(
 
             <p class="form-title" id="form-title">Enter your credentials</p>
 
-            <form id="credential-form" aria-labelledby="form-title" novalidate>
+            <form id="credential-form" aria-labelledby="form-title"{form_aria} novalidate>
                 {fields_html}
 
                 <button type="submit" class="submit-btn" id="submit-btn">
