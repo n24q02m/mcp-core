@@ -10,7 +10,7 @@ describe('cache path traversal', () => {
     // It should no longer contain '/'
     expect(filename).not.toContain('/')
     expect(filename).not.toContain('\\')
-    expect(filename).toBe('.._.._etc_passwd-80-1.0-1.0.tools.json')
+    expect(filename).toBe('______etc_passwd-80-1.0-1.0.tools.json')
 
     const dir = normalize('/tmp/mcp-cache')
     const fullPath = normalize(join(dir, filename))
@@ -28,6 +28,6 @@ describe('cache path traversal', () => {
 
   it('sanitizes version strings too', () => {
     const filename = cacheFilename('server', 80, '1.0/../2.0', 'v1.0')
-    expect(filename).toBe('server-80-1.0_.._2.0-v1.0.tools.json')
+    expect(filename).toBe('server-80-1.0____2.0-v1.0.tools.json')
   })
 })

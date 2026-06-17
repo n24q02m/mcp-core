@@ -9,7 +9,7 @@ def test_cache_traversal_sanitization():
     # It should no longer be a traversal path
     assert "/" not in filename
     assert "\\" not in filename
-    assert filename == ".._.._etc_passwd-80-1.0-1.0.tools.json"
+    assert filename == "______etc_passwd-80-1.0-1.0.tools.json"
 
     cache_dir = Path("/tmp/mcp-cache")
     full_path = cache_dir / filename
@@ -26,4 +26,4 @@ def test_dangerous_chars_sanitization():
 
 def test_version_sanitization():
     filename = cache_filename("server", 80, "1.0/../2.0", "v1.0")
-    assert filename == "server-80-1.0_.._2.0-v1.0.tools.json"
+    assert filename == "server-80-1.0____2.0-v1.0.tools.json"

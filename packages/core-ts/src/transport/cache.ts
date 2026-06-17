@@ -25,9 +25,9 @@ export function cacheDir(): string {
 }
 
 export function cacheFilename(serverName: string, port: number, srvVersion: string, coreVersion: string): string {
-  const safeName = serverName.replace(/[^a-zA-Z0-9.-]/g, '_')
-  const safeSrvVersion = srvVersion.replace(/[^a-zA-Z0-9.-]/g, '_')
-  const safeCoreVersion = coreVersion.replace(/[^a-zA-Z0-9.-]/g, '_')
+  const safeName = serverName.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/\.\./g, '__')
+  const safeSrvVersion = srvVersion.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/\.\./g, '__')
+  const safeCoreVersion = coreVersion.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/\.\./g, '__')
   return `${safeName}-${port}-${safeSrvVersion}-${safeCoreVersion}.tools.json`
 }
 
