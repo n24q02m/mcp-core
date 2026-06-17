@@ -101,3 +101,18 @@ def test_session_expires_exactly_at_limit(monkeypatch):
     )
     assert is_session_active() is False
     assert validate_session_token(info.token) is False
+
+
+def test_release_session_no_active():
+    # Ensure no session is active
+    release_session()
+    assert is_session_active() is False
+
+    # Call release_session again
+    release_session()
+    assert is_session_active() is False
+
+    # Call it multiple times
+    release_session()
+    release_session()
+    assert is_session_active() is False
