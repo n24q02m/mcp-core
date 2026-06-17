@@ -65,7 +65,7 @@ describe('tools cache', () => {
   it('load returns null when tools is not an array', () => {
     const name = cacheFilename('wet-mcp', 55317, '2.28.4', '1.11.0')
     const path = join(dir, name)
-    writeFileSync(path, JSON.stringify({ tools: 'not-array', srvVersion: '2.28.4', coreVersion: '1.11.0' }))
+    writeFileSync(path, JSON.stringify({ tools: 'not-array', srv_version: '2.28.4', core_version: '1.11.0' }))
     expect(loadToolsCache('wet-mcp', 55317, '2.28.4', '1.11.0')).toBeNull()
   })
 
