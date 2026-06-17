@@ -24,7 +24,13 @@ import { getHomeDir } from './home-dir.js'
 export { setHomeDirForTesting } from './home-dir.js'
 
 export function credPath(pluginName: string, sub: string | null): string {
-  const unsafe = /[^a-zA-Z0-9.-]/g
+  // Underscore is allowed because the OAuth AS mints sub = token_urlsafe(), whose
+  // base64url alphabet includes "_" and "-"; rejecting "_" failed ~half of all
+  // per-sub credential saves with "Invalid sub". Path traversal stays blocked by the
+  // explicit ".." check below and by "/" remaining outside the class. The regex is
+  // NOT global: a /g flag makes .test() stateful (lastIndex advances across the two
+  // calls below), which can bypass validation on the second input.
+  const unsafe = /[^a-zA-Z0-9._-]/
   if (!pluginName || unsafe.test(pluginName) || pluginName.includes('..')) {
     throw new Error('Invalid pluginName')
   }

@@ -44,6 +44,28 @@ describe('PerPluginStore', () => {
     expect(() => credPath('plugin', '../../evil')).toThrow(/Invalid sub/)
     expect(() => credPath('', null)).toThrow(/Invalid pluginName/)
     expect(() => credPath('plugin', '')).toThrow(/Invalid sub/)
+    // "." is allowed (version-style segments), so a bare ".." with no "/" is caught
+    // only by the explicit dotdot guard. The validation regex must NOT be global:
+    // a /g flag makes .test() stateful and could bypass the second check.
+    expect(() => credPath('plugin', 'a..b')).toThrow(/Invalid sub/)
+    expect(() => credPath('plug..in', null)).toThrow(/Invalid pluginName/)
+  })
+
+  it('accepts token_urlsafe subs (underscore + hyphen)', () => {
+    // The OAuth AS mints sub = token_urlsafe(16); its base64url alphabet includes
+    // "_" and "-". Both must be accepted, else ~half of all per-sub credential saves
+    // fail with "Invalid sub" (regression: telegram CF, 2026-06-17).
+    const sub = 'oG5FyoFE-RWqI_aciDl4zA'
+    expect(credPath('better-telegram', sub)).toContain(join('subs', sub, 'config.json'))
+    // "/" stays rejected so path traversal protection is unaffected.
+    expect(() => credPath('plugin', 'a/b')).toThrow(/Invalid sub/)
+  })
+
+  it('underscore sub round-trips', async () => {
+    process.env.CREDENTIAL_SECRET = 'test-master-secret'
+    const store = new PerPluginStore('plugin', 'ab_cd-EF_gh')
+    await store.save({ token: 'value' })
+    expect(await store.load()).toEqual({ token: 'value' })
   })
 
   it('clear', async () => {
