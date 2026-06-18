@@ -2,6 +2,81 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.11 (2026-06-18)
+
+### Bug Fixes
+
+- Add context-specific aria-labels to OAuth re-authorize buttons
+  ([`4ca81f3`](https://github.com/n24q02m/mcp-core/commit/4ca81f3f59df5f225739b4bd23ef3d5d9f52ae1b))
+
+- Add coverage for config_file legacy fallback, setup-complete flag, and reload-exit paths
+  ([`bbf2d55`](https://github.com/n24q02m/mcp-core/commit/bbf2d55652caeb7b9bf30261eb92f6c42b9bc626))
+
+- Add coverage for transport cache empty-list, corruption, and chmod paths
+  ([`d026408`](https://github.com/n24q02m/mcp-core/commit/d026408006d0a18a116cd0382ce75c24c1f89af5))
+
+- Add embedding-daemon API endpoint, version fallback, and entrypoint tests
+  ([`d4cccc0`](https://github.com/n24q02m/mcp-core/commit/d4cccc0e97887f37edbac88d94632b4c4f0af605))
+
+- Add idempotency test for release_session when no session is active
+  ([`c96cd87`](https://github.com/n24q02m/mcp-core/commit/c96cd872c47ef2168543bc4a45e5bb5937e42cff))
+
+- Add JWT rejection coverage for expired, cross-issuer, and malformed tokens in local-server
+  ([`7054d11`](https://github.com/n24q02m/mcp-core/commit/7054d11343bddeaad9399385e37d250432768c97))
+
+- Add rejection-sampling edge-case tests for generatePassphrase (core-ts)
+  ([`2d7810b`](https://github.com/n24q02m/mcp-core/commit/2d7810b8224a33894b22f38243c8b8984e851b34))
+
+- Align core-ts tools cache JSON keys to snake_case for core-py parity and add coverage
+  ([`9f599b1`](https://github.com/n24q02m/mcp-core/commit/9f599b1a5522ec90cef81185080b06257f38b58a))
+
+- Consolidate and extend local_oauth_app on_credentials_saved callback coverage
+  ([`0b85d3c`](https://github.com/n24q02m/mcp-core/commit/0b85d3c1e7091b309d71879750add6e9f7368ac9))
+
+- Cover _mark_config_setup_complete failure branches in local OAuth app
+  ([`474611d`](https://github.com/n24q02m/mcp-core/commit/474611d25d0d6532e2bb5c4f55241dc4e66e7a97))
+
+- Cover _open_in_powershell env inheritance, subprocess errors, and browser-open dedupe
+  ([`a6cc789`](https://github.com/n24q02m/mcp-core/commit/a6cc78919257f33127651f4ac688c852b7af02dc))
+
+- Cover best-effort cleanup in runHttpServer shutdown loop
+  ([`7247de9`](https://github.com/n24q02m/mcp-core/commit/7247de90a7c9af68b111e47a869483870af8539e))
+
+- Cover docstring {server_name} substitution branch in _build_open_relay_handler
+  ([`0223179`](https://github.com/n24q02m/mcp-core/commit/02231798f2f1a7384aef9cdd51add8ee5d7c0555))
+
+- Cover OSError/JSONDecodeError recovery paths in core-py session_lock
+  ([`d0bb9d3`](https://github.com/n24q02m/mcp-core/commit/d0bb9d3bdc51cb4bde9d67356abf3f8f695e881b))
+
+- Cover router internal error handling and default property fallbacks
+  ([`cd1e7a7`](https://github.com/n24q02m/mcp-core/commit/cd1e7a701cc027db8de020bf2d07f0ca325b55f6))
+
+- Harden cache_filename against path traversal (defense-in-depth)
+  ([`098b550`](https://github.com/n24q02m/mcp-core/commit/098b55093be9c90cac20b393879bd5aefb6d10e6))
+
+- Harden SqliteUserStore against invalid db paths with clearer init errors and tests
+  ([`76f7b6d`](https://github.com/n24q02m/mcp-core/commit/76f7b6d9448c948b63a1feaba5b9eeefdb18bb92))
+
+- Link form descriptions to inputs via aria-describedby in auth forms
+  ([`f939c3f`](https://github.com/n24q02m/mcp-core/commit/f939c3f440b8e767b3b5b4937b7ff1e120dd61b5))
+
+- Refresh lockfile (renovate maintenance)
+  ([`21bc0c5`](https://github.com/n24q02m/mcp-core/commit/21bc0c5d78d2608fc21aa4e150300bb2bee1d43d))
+
+- Update non-major dependencies
+  ([`f29621f`](https://github.com/n24q02m/mcp-core/commit/f29621f9c719a2bb05abbfd335288967a987c49e))
+
+### Features
+
+- Add aria-describedby context to authentication forms
+  ([`f939c3f`](https://github.com/n24q02m/mcp-core/commit/f939c3f440b8e767b3b5b4937b7ff1e120dd61b5))
+
+### Testing
+
+- Add comprehensive coverage for config_file.py
+  ([`bbf2d55`](https://github.com/n24q02m/mcp-core/commit/bbf2d55652caeb7b9bf30261eb92f6c42b9bc626))
+
+
 ## v1.18.0-beta.10 (2026-06-17)
 
 ### Bug Fixes
