@@ -701,6 +701,7 @@ def render_credential_form(
     submit_url: str,
     page_title: str | None = None,
     prefill: dict[str, str] | None = None,
+    include_username_field: bool = False,
 ) -> str:
     """Render a dark-themed HTML credential form from a RelayConfigSchema dict.
 
@@ -728,6 +729,23 @@ def render_credential_form(
     prefill = prefill or {}
     fields_html = "".join(_render_field(f, prefill.get(f.get("key", ""), "")) for f in fields)
 
+    # Optional workspace-username field (opt-in via include_username_field). It has
+    # the .field-input class so the form's field collector picks it up into the POST
+    # JSON as __sub_username; the local OAuth AS pops it and derives a STABLE sub.
+    username_html = ""
+    if include_username_field:
+        username_html = (
+            '<div class="field-group">'
+            '<label for="field-__sub_username" class="field-label">Workspace / username'
+            ' <span class="optional-badge" aria-hidden="true">Optional</span></label>'
+            '<input id="field-__sub_username" type="text" name="__sub_username"'
+            ' class="field-input" placeholder="e.g. alice"'
+            ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />'
+            '<p class="field-help">Leave blank for a one-off session. Set the same value on'
+            " every device to keep your saved data (one shared bucket per username).</p>"
+            "</div>"
+        )
+
     capabilities_html = ""
     if capability_info:
         items_html = "".join(_render_capability(c) for c in capability_info)
@@ -752,7 +770,7 @@ def render_credential_form(
             <p class="form-title" id="form-title">Enter your credentials</p>
 
             <form id="credential-form" aria-labelledby="form-title"{form_aria} novalidate>
-                {fields_html}
+                {username_html}{fields_html}
 
                 <button type="submit" class="submit-btn" id="submit-btn">
                     Connect
