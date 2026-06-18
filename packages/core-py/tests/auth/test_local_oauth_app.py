@@ -66,6 +66,65 @@ def client(app_and_issuer):
     return TestClient(app, base_url="http://localhost")
 
 
+def _run_username_flow(*, stable_sub_enabled: bool, username: str | None):
+    """Drive GET->POST /authorize once; return {sub, creds} the callback saw."""
+    import re as _re
+
+    captured: dict = {}
+
+    def on_saved(creds: dict[str, str], context: dict[str, str]) -> None:
+        captured["creds"] = dict(creds)
+        captured["sub"] = context["sub"]
+
+    app, _ = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=on_saved,
+        stable_sub_enabled=stable_sub_enabled,
+    )
+    client = TestClient(app, base_url="http://localhost")
+    _verifier, challenge = _pkce_pair()
+    resp = client.get(
+        "/authorize",
+        params={
+            "client_id": "c",
+            "redirect_uri": "http://localhost/callback",
+            "state": "s",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    nonce = _re.search(r'nonce=([^"&]+)', resp.text).group(1)
+    body: dict[str, str] = {"API_KEY": "x"}
+    if username is not None:
+        body["__sub_username"] = username
+    client.post(f"/authorize?nonce={nonce}", json=body)
+    return captured
+
+
+def test_stable_sub_when_username_and_enabled(monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_SECRET", "k")
+    a = _run_username_flow(stable_sub_enabled=True, username="alice")
+    b = _run_username_flow(stable_sub_enabled=True, username="alice")
+    assert a["sub"] == b["sub"]  # stable across two independent authorizes
+    assert "__sub_username" not in a["creds"]  # reserved key stripped
+
+
+def test_random_sub_when_username_blank(monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_SECRET", "k")
+    a = _run_username_flow(stable_sub_enabled=True, username="")
+    b = _run_username_flow(stable_sub_enabled=True, username="")
+    assert a["sub"] != b["sub"]  # blank -> random per-authorize
+
+
+def test_username_ignored_when_disabled(monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_SECRET", "k")
+    a = _run_username_flow(stable_sub_enabled=False, username="alice")
+    b = _run_username_flow(stable_sub_enabled=False, username="alice")
+    assert a["sub"] != b["sub"]  # off by default: still random
+    assert "__sub_username" not in a["creds"]  # still stripped
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
