@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.12 (2026-06-18)
+
+### Features
+
+- Add derive_stable_sub helper for username-keyed subjects
+  ([`b025ba3`](https://github.com/n24q02m/mcp-core/commit/b025ba3c27d0fcadeaa9781e8a82accb430f5a0d))
+
+- Derive stable JWT sub from optional workspace username
+  ([`b025ba3`](https://github.com/n24q02m/mcp-core/commit/b025ba3c27d0fcadeaa9781e8a82accb430f5a0d))
+
+- Optional workspace-username field in default credential form
+  ([`b025ba3`](https://github.com/n24q02m/mcp-core/commit/b025ba3c27d0fcadeaa9781e8a82accb430f5a0d))
+
+- Thread stable_sub_enabled through run_http_server wrapper
+  ([`508b1df`](https://github.com/n24q02m/mcp-core/commit/508b1dfa4ea9cdcccd0f01a62fa3db5b4dc2dd2a))
+
+- Username-keyed stable subject for data-bearing local-form servers
+  ([`b025ba3`](https://github.com/n24q02m/mcp-core/commit/b025ba3c27d0fcadeaa9781e8a82accb430f5a0d))
+
+
 ## v1.18.0-beta.11 (2026-06-18)
 
 ### Bug Fixes
