@@ -112,6 +112,38 @@ class TestBuildLocalApp:
         route_paths = {getattr(r, "path", "") for r in app.routes}
         assert "/mcp" in route_paths
 
+    def test_threads_stable_sub_enabled_to_form(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
+        """stable_sub_enabled must reach the credential form via create_local_oauth_app."""
+        import base64
+        import hashlib
+        import secrets as _secrets
+
+        def _authorize_html(enabled: bool) -> str:
+            app, _ = build_local_app(
+                mcp=mcp,
+                server_name="test-local-server",
+                relay_schema=relay_schema,
+                jwt_keys_dir=tmp_path / f"jwt-{enabled}",
+                stable_sub_enabled=enabled,
+            )
+            verifier = _secrets.token_urlsafe(64)
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+            client = TestClient(app, base_url="http://localhost")
+            resp = client.get(
+                "/authorize",
+                params={
+                    "client_id": "c",
+                    "redirect_uri": "http://localhost/cb",
+                    "state": "s",
+                    "code_challenge": challenge,
+                    "code_challenge_method": "S256",
+                },
+            )
+            return resp.text
+
+        assert 'name="__sub_username"' in _authorize_html(True)
+        assert 'name="__sub_username"' not in _authorize_html(False)
+
     def test_mcp_route_rejects_unauthenticated(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         app, _ = build_local_app(
             mcp=mcp,
