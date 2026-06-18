@@ -37,6 +37,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
 from mcp_core.auth.credential_form import is_oauth_field, is_secret_field, render_credential_form
+from mcp_core.auth.stable_sub import derive_stable_sub
 from mcp_core.auth.relay_login import (
     configure_relay_login,
     login_get_handler,
@@ -106,6 +107,7 @@ def create_local_oauth_app(
     on_step_submitted: StepCallback | None = None,
     jwt_issuer: JWTIssuer | None = None,
     custom_credential_form_html: Callable[..., str] | None = None,
+    stable_sub_enabled: bool = False,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create OAuth 2.1 Authorization Server Starlette app.
 
@@ -266,7 +268,12 @@ def create_local_oauth_app(
         if custom_credential_form_html is not None:
             html_content = custom_credential_form_html(relay_schema, submit_url, prefill=prefill)
         else:
-            html_content = render_credential_form(relay_schema, submit_url=submit_url, prefill=prefill)
+            html_content = render_credential_form(
+                relay_schema,
+                submit_url=submit_url,
+                prefill=prefill,
+                include_username_field=stable_sub_enabled,
+            )
         return HTMLResponse(html_content)
 
     async def authorize_post(request: Request) -> JSONResponse:
@@ -294,6 +301,15 @@ def create_local_oauth_app(
                 {"error": "invalid_request", "error_description": "Invalid JSON body"},
                 status_code=400,
             )
+
+        # Reserved partition key: pop it so it is never persisted as a provider
+        # credential. When stable-sub is enabled and a username was supplied,
+        # override the random per-authorize sub with a STABLE one derived from it
+        # (same username -> same per-sub bucket across re-auth and devices).
+        # Blank username or disabled flag -> keep the random sub (unchanged).
+        _username = str(credentials.pop("__sub_username", "")).strip()
+        if stable_sub_enabled and _username:
+            session["sub"] = derive_stable_sub(_username, server_name, os.environ.get("CREDENTIAL_SECRET"))
 
         # Reset stale completion markers from previous authorize submits.
         # _setup_status is closure-scoped, so a key flipped to "complete"

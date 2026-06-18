@@ -4,6 +4,25 @@ import re
 
 from mcp_core.auth.credential_form import render_credential_form
 
+_USERNAME_SCHEMA = {
+    "server": "wet",
+    "displayName": "Wet",
+    "fields": [{"key": "JINA_AI_API_KEY", "label": "Jina key", "required": True}],
+}
+
+
+def test_username_field_absent_by_default():
+    html = render_credential_form(_USERNAME_SCHEMA, submit_url="/authorize?nonce=x")
+    assert 'name="__sub_username"' not in html
+
+
+def test_username_field_present_when_enabled():
+    html = render_credential_form(_USERNAME_SCHEMA, submit_url="/authorize?nonce=x", include_username_field=True)
+    assert html.count('name="__sub_username"') == 1
+    i = html.index('name="__sub_username"')
+    attrs = html[max(0, i - 200) : i + 60]
+    assert "required" not in attrs  # optional field
+
 
 def test_render_form_posts_step_to_otp_url():
     """Step submit JS must fetch() with POST method targeting /otp URL."""
