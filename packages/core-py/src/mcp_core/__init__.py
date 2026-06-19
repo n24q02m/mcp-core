@@ -18,6 +18,14 @@ from mcp_core.crypto.ecdh import (
 )
 from mcp_core.crypto.kdf import derive_aes_key
 
+# Capability provider-chain primitives (search/embed/rerank/browser resolution).
+from mcp_core.chains import (
+    Backend,
+    local_enabled_from_env,
+    resolve_backend,
+    run_with_fallback,
+)
+
 # Delegated OAuth 2.1 AS (upstream redirect / device code) for remote multi-user.
 from mcp_core.auth.delegated_oauth_app import (
     FlowType,
@@ -73,6 +81,10 @@ __all__ = [
     "decrypt",
     "derive_aes_key",
     "derive_shared_secret",
+    "Backend",
+    "resolve_backend",
+    "local_enabled_from_env",
+    "run_with_fallback",
     "export_public_key",
     "generate_key_pair",
     "import_public_key",
