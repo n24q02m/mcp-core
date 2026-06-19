@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.13 (2026-06-19)
+
+### Features
+
+- Add capability provider-chain primitive + search-chain relay widget
+  ([#506](https://github.com/n24q02m/mcp-core/pull/506),
+  [`94cee14`](https://github.com/n24q02m/mcp-core/commit/94cee14e4f68bd680e667eb964a02a240e703113))
+
+
 ## v1.18.0-beta.12 (2026-06-18)
 
 ### Features
