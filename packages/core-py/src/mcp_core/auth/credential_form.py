@@ -58,7 +58,15 @@ _MODEL_CHAIN_SCRIPT = """
             var i = model.indexOf("/");
             return i === -1 ? "openai" : model.slice(0, i);
         }
-        function keyEnvFor(model) {
+        function keyEnvFor(model, w) {
+            // search-chain widgets carry an explicit backend -> ENV-var map
+            // (named backends, no model-prefix inference). A backend absent
+            // from the map (e.g. searxng) needs no credential -> returns null.
+            var explicit = w && w.getAttribute("data-provider-keys");
+            if (explicit) {
+                var map = JSON.parse(explicit);
+                return Object.prototype.hasOwnProperty.call(map, model) ? map[model] : null;
+            }
             var p = providerOf(model);
             return PROVIDER_KEY[p] || (p.toUpperCase() + "_API_KEY");
         }
@@ -72,7 +80,10 @@ _MODEL_CHAIN_SCRIPT = """
         function deriveKeys() {
             var needed = {};
             widgets.forEach(function (w) {
-                getChips(w).forEach(function (m) { needed[keyEnvFor(m)] = true; });
+                getChips(w).forEach(function (m) {
+                    var k = keyEnvFor(m, w);
+                    if (k) needed[k] = true;
+                });
             });
             document.querySelectorAll("[data-provider-key]").forEach(function (grp) {
                 var k = grp.getAttribute("data-provider-key");
@@ -86,9 +97,11 @@ _MODEL_CHAIN_SCRIPT = """
         function updateBadge(w, models) {
             var badge = document.getElementById("mc-badge-" + w.getAttribute("data-key"));
             if (models.length > 0) { badge.textContent = ""; return; }
+            var noun = w.getAttribute("data-noun") || "models";
+            var localLabel = w.getAttribute("data-local-label") || "local ONNX";
             badge.textContent = (w.getAttribute("data-has-local") === "true")
-                ? "No models -> local ONNX (no key needed)"
-                : "No models -> this feature is disabled";
+                ? ("No " + noun + " -> " + localLabel + " (no key needed)")
+                : ("No " + noun + " -> this feature is disabled");
         }
         function setChips(w, models) {
             var hidden = document.getElementById("field-" + w.getAttribute("data-key"));
@@ -604,11 +617,21 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
     # --- model-chain widget: chip combobox + drag-reorder; the JS keeps a
     # hidden ``.field-input`` synced with the CSV so the existing submit
     # handler picks it up unchanged.
-    if field_type == "model-chain":
+    if field_type in ("model-chain", "search-chain"):
         task = _escape(field.get("task", ""))
         has_local = "true" if field.get("hasLocal", False) else "false"
         suggested = field.get("suggestedModels", [])
         suggested_json = _escape(json.dumps(suggested))
+        # search-chain uses explicit named backends (no model-prefix inference):
+        # ``providerKeys`` (backend -> ENV var) drives derive-keys, and
+        # ``noun``/``localLabel`` customize the empty-chain badge. Absent for a
+        # model-chain field -> the widget falls back to prefix inference + the
+        # default "models"/"local ONNX" badge, so model-chain output is byte-for-
+        # byte unchanged.
+        provider_keys = field.get("providerKeys")
+        provider_keys_attr = f' data-provider-keys="{_escape(json.dumps(provider_keys))}"' if provider_keys else ""
+        noun_attr = f' data-noun="{_escape(field["noun"])}"' if field.get("noun") else ""
+        local_label_attr = f' data-local-label="{_escape(field["localLabel"])}"' if field.get("localLabel") else ""
         return f"""
         <div class="field-group">
             <label class="field-label" for="mc-input-{key}">
@@ -619,7 +642,7 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
                  data-model-chain="{task}"
                  data-key="{key}"
                  data-has-local="{has_local}"
-                 data-suggested="{suggested_json}">
+                 data-suggested="{suggested_json}"{provider_keys_attr}{noun_attr}{local_label_attr}>
                 <div class="mc-chips" id="mc-chips-{key}" role="list"></div>
                 <input id="mc-input-{key}" class="mc-typeahead" type="text"
                        placeholder="{placeholder or "add model…"}"
