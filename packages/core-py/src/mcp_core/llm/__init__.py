@@ -19,6 +19,11 @@ from mcp_core.llm.dispatch import (
     embedding,
     rerank,
 )
+from mcp_core.llm.key_rotation import (
+    is_rotatable_error,
+    rotate_keys,
+    split_keys,
+)
 from mcp_core.llm.vertex_express import (
     VertexExpressError,
     acompletion_express,
@@ -42,8 +47,11 @@ __all__ = [
     "completion_express",
     "embedding",
     "is_express_model",
+    "is_rotatable_error",
     "list_models",
     "rerank",
+    "rotate_keys",
+    "split_keys",
     "suggest_models",
     "supports_vision",
 ]
