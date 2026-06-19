@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.15 (2026-06-19)
+
+### Bug Fixes
+
+- Sync uv.lock editable self-version to released 1.18.0b14
+  ([`07db16e`](https://github.com/n24q02m/mcp-core/commit/07db16ebcaafbf225ca64dabb13e62333b8cddc6))
+
+
 ## v1.18.0-beta.14 (2026-06-19)
 
 ### Features
