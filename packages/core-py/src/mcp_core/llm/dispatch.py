@@ -18,10 +18,14 @@ pure litellm delegation.
 
 from __future__ import annotations
 
+import os
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from mcp_core.http import vet_api_base
 from mcp_core.llm.catalog import _get_litellm, check_capability
+from mcp_core.llm.key_rotation import rotate_keys, split_keys
+from mcp_core.llm.providers import key_env_for_model
 from mcp_core.llm.vertex_express import (
     acompletion_express,
     completion_express,
@@ -52,6 +56,27 @@ def _opt(api_base: str | None, api_key: str | None) -> dict[str, Any]:
     return out
 
 
+async def _maybe_rotate(
+    model: str,
+    api_key: str | None,
+    single: Callable[[str | None], Awaitable[Any]],
+) -> Any:
+    """Resolve the provider key(s) for an async dispatch call.
+
+    An explicit ``api_key`` is honoured as-is (one call). Otherwise the model's
+    provider key env is read as CSV: more than one key rotates on a key-specific
+    failure (HTTP 429/401/403, via ``key_rotation.rotate_keys``); a single (or
+    absent) key keeps today's behaviour — ``api_key=None`` so litellm reads the
+    env itself, with no extra HTTP or behaviour change.
+    """
+    if api_key is not None:
+        return await single(api_key)
+    keys = split_keys(os.getenv(key_env_for_model(model)))
+    if len(keys) <= 1:
+        return await single(None)
+    return await rotate_keys(keys, single, label=model)
+
+
 async def acompletion(
     *,
     model: str,
@@ -68,7 +93,11 @@ async def acompletion(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, _CHAT_MODES)
-    return await litellm.acompletion(model=model, messages=messages, **_opt(api_base, api_key), **kwargs)
+
+    async def single(key: str | None) -> Any:
+        return await litellm.acompletion(model=model, messages=messages, **_opt(api_base, key), **kwargs)
+
+    return await _maybe_rotate(model, api_key, single)
 
 
 async def aembedding(
@@ -82,7 +111,11 @@ async def aembedding(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("embedding",))
-    return await litellm.aembedding(model=model, input=input, **_opt(api_base, api_key), **kwargs)
+
+    async def single(key: str | None) -> Any:
+        return await litellm.aembedding(model=model, input=input, **_opt(api_base, key), **kwargs)
+
+    return await _maybe_rotate(model, api_key, single)
 
 
 async def arerank(
@@ -97,7 +130,11 @@ async def arerank(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("rerank",))
-    return await litellm.arerank(model=model, query=query, documents=documents, **_opt(api_base, api_key), **kwargs)
+
+    async def single(key: str | None) -> Any:
+        return await litellm.arerank(model=model, query=query, documents=documents, **_opt(api_base, key), **kwargs)
+
+    return await _maybe_rotate(model, api_key, single)
 
 
 async def aimage_generation(
@@ -111,7 +148,11 @@ async def aimage_generation(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("image_generation", "image_edit"))
-    return await litellm.aimage_generation(model=model, prompt=prompt, **_opt(api_base, api_key), **kwargs)
+
+    async def single(key: str | None) -> Any:
+        return await litellm.aimage_generation(model=model, prompt=prompt, **_opt(api_base, key), **kwargs)
+
+    return await _maybe_rotate(model, api_key, single)
 
 
 async def avideo_generation(
@@ -125,7 +166,11 @@ async def avideo_generation(
     litellm = _get_litellm()
     api_base = _prep_api_base(api_base)
     check_capability(model, ("video_generation",))
-    return await litellm.avideo_generation(model=model, prompt=prompt, **_opt(api_base, api_key), **kwargs)
+
+    async def single(key: str | None) -> Any:
+        return await litellm.avideo_generation(model=model, prompt=prompt, **_opt(api_base, key), **kwargs)
+
+    return await _maybe_rotate(model, api_key, single)
 
 
 async def avideo_status(*, video_id: str, api_key: str | None = None, **kwargs: Any) -> Any:
