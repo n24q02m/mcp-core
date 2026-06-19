@@ -865,12 +865,22 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     const header = req.headers.cookie
     if (!header) return {}
     const out: Record<string, string> = {}
-    for (const part of header.split(';')) {
-      const idx = part.indexOf('=')
-      if (idx < 0) continue
-      const k = part.slice(0, idx).trim()
-      const v = part.slice(idx + 1).trim()
-      if (k.length > 0) out[k] = decodeURIComponent(v)
+    // ⚡ Bolt: Single-pass while loop avoids array allocations from split(';') in hot path
+    let pos = 0
+    while (pos < header.length) {
+      let end = header.indexOf(';', pos)
+      if (end === -1) end = header.length
+
+      const eq = header.indexOf('=', pos)
+      if (eq !== -1 && eq < end) {
+        const k = header.substring(pos, eq).trim()
+        if (k.length > 0) {
+          const v = header.substring(eq + 1, end).trim()
+          out[k] = decodeURIComponent(v)
+        }
+      }
+
+      pos = end + 1
     }
     return out
   }
