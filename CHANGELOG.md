@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.16 (2026-06-20)
+
+### Bug Fixes
+
+- Relock uv.lock self-version in the release build_command
+  ([`cb432a2`](https://github.com/n24q02m/mcp-core/commit/cb432a2a4b3b1035c8ac460babdd3ed3fe738b57))
+
+
 ## v1.18.0-beta.15 (2026-06-19)
 
 ### Bug Fixes
