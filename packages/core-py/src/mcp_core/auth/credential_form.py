@@ -600,7 +600,7 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
     required_badge = (
         '<span class="required-badge" aria-hidden="true">Required</span>'
         if required
-        else '<span class="optional-badge">Optional</span>'
+        else '<span class="optional-badge" aria-hidden="true">Optional</span>'
     )
 
     value_attr = f' value="{_escape(value)}"' if value else ""
@@ -636,7 +636,7 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
         <div class="field-group">
             <label class="field-label" for="mc-input-{key}">
                 {label}
-                <span class="optional-badge">Optional</span>
+                <span class="optional-badge" aria-hidden="true">Optional</span>
             </label>
             <div class="model-chain" id="mc-{key}"
                  data-model-chain="{task}"
@@ -663,7 +663,7 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
         <div class="field-group" data-provider-key="{key}" style="display:none">
             <label for="field-{key}" class="field-label">
                 {label}
-                <span class="optional-badge">Optional</span>
+                <span class="optional-badge" aria-hidden="true">Optional</span>
             </label>
             <input
                 id="field-{key}"
