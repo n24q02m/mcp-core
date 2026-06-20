@@ -182,7 +182,7 @@ wheels = [
 
 [[package]]
 name = "mcp-embedding-daemon"
-version = "1.18.0b9"
+version = "1.18.0b15"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
@@ -288,7 +288,9 @@ dependencies = [
     { name = "protobuf" },
 ]
 wheels = [
+    { url = "https://files.pythonhosted.org/packages/8f/8d/6509743801131f1d3791f638ae31edef7701e93c7a4523d74115247dd7d1/onnxruntime_gpu-1.27.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7e6eb554d35706ee154b583dd32e4167a93aa55d3670f59754f43860fd649b92", size = 220304092, upload-time = "2026-06-18T18:27:31.18Z" },
     { url = "https://files.pythonhosted.org/packages/ac/86/8865182eba89cde187163daacfa7f1eb64958616cd080dfb3482be4c8a36/onnxruntime_gpu-1.27.0-cp313-cp313-win_amd64.whl", hash = "sha256:ac352199fb6ac3e366b45a690bb47c9b1c92b1be0e3958149dd1a30285832b9f", size = 213623636, upload-time = "2026-06-15T22:43:10.548Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/e6/16f5ba0f91bd8db5b2881ef1ec57d532c8f297b31b6a95ceab606f471c0a/onnxruntime_gpu-1.27.0-cp313-cp313t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3b5652761f14bc74729ffbc8fdc01767e541e163459f2e10aa65af61d5db64c8", size = 220331411, upload-time = "2026-06-18T18:27:39.738Z" },
 ]
 
 [[package]]

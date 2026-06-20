@@ -6,6 +6,17 @@ version_toml = [
 tag_format = "v{version}"
 commit_message = "chore(release): v{version}"
 major_on_zero = false
+# PSR bumps the two pyproject versions but does NOT relock, so the editable
+# self-version recorded in each uv.lock drifts (e.g. a lock said 1.18.0b9 while
+# the release was 1.18.0b14). Re-lock after the version stamp so the lock
+# self-version matches the released version, and commit the locks as release
+# assets. uv is not in the PSR action image, so install it first; `uv lock` (no
+# --upgrade) only updates the editable self-version, not the resolved dep pins.
+build_command = "pip install uv && uv --directory packages/core-py lock && uv --directory packages/embedding-daemon lock"
+assets = [
+    "packages/core-py/uv.lock",
+    "packages/embedding-daemon/uv.lock",
+]
 
 [semantic_release.changelog]
 changelog_file = "CHANGELOG.md"
