@@ -12,7 +12,7 @@ class ConfigField(TypedDict, total=False):
     key: str
     label: str
     # 'text' | 'password' | 'number' | 'tel' | 'url' | 'email' | 'select'
-    # | 'model-chain'
+    # | 'model-chain' | 'search-chain'
     type: str
     placeholder: str
     helpUrl: str
@@ -21,12 +21,17 @@ class ConfigField(TypedDict, total=False):
     choices: list[str]
     required: bool
     validation: str
-    # --- model-chain widget only ---
-    task: str  # 'embedding' | 'rerank' | 'chat' | 'summary' | 'understand'
-    suggestedModels: list[str]  # curated provider/model suggestions
-    hasLocal: bool  # True -> empty chain falls back to local ONNX
+    # --- model-chain / search-chain widget (shared chip+drag+derive-keys UI) ---
+    task: str  # 'embedding' | 'rerank' | 'chat' | 'summary' | 'understand' | 'search'
+    suggestedModels: list[str]  # model-chain: curated provider/model suggestions;
+    # search-chain: the selectable named backends (e.g. ['searxng','tavily',...])
+    hasLocal: bool  # True -> empty chain falls back to a local leg
+    # --- search-chain widget only (named backends, no model-prefix inference) ---
+    providerKeys: dict[str, str]  # backend name -> credential ENV var (drives derive-keys)
+    noun: str  # empty-chain badge noun (default 'models'); e.g. 'backends'
+    localLabel: str  # empty-chain badge local-leg label (default 'local ONNX')
     # --- derived credential field only ---
-    derived: bool  # True -> hidden until a model-chain chip references it
+    derived: bool  # True -> hidden until a chain chip references its provider
 
 
 class ConfigMode(TypedDict):

@@ -2,6 +2,39 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.16 (2026-06-20)
+
+### Bug Fixes
+
+- Relock uv.lock self-version in the release build_command
+  ([`cb432a2`](https://github.com/n24q02m/mcp-core/commit/cb432a2a4b3b1035c8ac460babdd3ed3fe738b57))
+
+
+## v1.18.0-beta.15 (2026-06-19)
+
+### Bug Fixes
+
+- Sync uv.lock editable self-version to released 1.18.0b14
+  ([`07db16e`](https://github.com/n24q02m/mcp-core/commit/07db16ebcaafbf225ca64dabb13e62333b8cddc6))
+
+
+## v1.18.0-beta.14 (2026-06-19)
+
+### Features
+
+- Per-provider API key rotation on rate-limit (CSV multi-key)
+  ([`6157e98`](https://github.com/n24q02m/mcp-core/commit/6157e981fae1a6abdc6d86a1f5ed2bf157d7f80a))
+
+
+## v1.18.0-beta.13 (2026-06-19)
+
+### Features
+
+- Add capability provider-chain primitive + search-chain relay widget
+  ([#506](https://github.com/n24q02m/mcp-core/pull/506),
+  [`94cee14`](https://github.com/n24q02m/mcp-core/commit/94cee14e4f68bd680e667eb964a02a240e703113))
+
+
 ## v1.18.0-beta.12 (2026-06-18)
 
 ### Features
