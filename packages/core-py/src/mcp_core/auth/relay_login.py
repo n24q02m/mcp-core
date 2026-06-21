@@ -46,6 +46,18 @@ def configure_relay_login(password: str) -> None:
     _configured_password = password or ""
 
 
+def _timing_safe_equal(a: bytes, b: bytes) -> bool:
+    """Compare two byte strings safely, mitigating length-leaking timing attacks.
+
+    hmac.compare_digest returns early if lengths differ, which leaks the
+    length of the secret. This ensures compare_digest is always called with
+    equal-length inputs, hiding the true length of the secret.
+    """
+    is_length_equal = len(a) == len(b)
+    compare_b = b if is_length_equal else a
+    return hmac.compare_digest(a, compare_b) and is_length_equal
+
+
 def _bump_fail(ip: str) -> tuple[bool, int]:
     """Record a failed login attempt; return ``(blocked, retry_after_s)``."""
     now = time.time()
@@ -179,7 +191,7 @@ async def login_post_handler(form: dict, ip: str) -> Response:
         )
     password = str(form.get("password", ""))
     next_ = _get_safe_next(form.get("next"))
-    if not _configured_password or not hmac.compare_digest(password.encode(), _configured_password.encode()):
+    if not _configured_password or not _timing_safe_equal(password.encode(), _configured_password.encode()):
         _bump_fail(ip)
         return HTMLResponse(
             render_form_shell("Relay login", _render_login_form(next_, "Invalid password. Please try again.")),
