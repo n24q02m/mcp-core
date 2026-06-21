@@ -548,8 +548,8 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
   if (capabilityInfo.length > 0) {
     const itemsHtml = capabilityInfo.map(renderCapability).join('')
     capabilitiesHtml = `
-        <section class="capabilities-section">
-            <h2 class="capabilities-title">Capabilities Requested</h2>
+        <section class="capabilities-section" aria-labelledby="capabilities-title">
+            <h2 class="capabilities-title" id="capabilities-title">Capabilities Requested</h2>
             <ul class="capabilities-list">${itemsHtml}
             </ul>
         </section>`

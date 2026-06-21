@@ -832,8 +832,8 @@ def render_credential_form(
     if capability_info:
         items_html = "".join(_render_capability(c) for c in capability_info)
         capabilities_html = f"""
-        <section class="capabilities-section">
-            <h2 class="capabilities-title">Capabilities Requested</h2>
+        <section class="capabilities-section" aria-labelledby="capabilities-title">
+            <h2 class="capabilities-title" id="capabilities-title">Capabilities Requested</h2>
             <ul class="capabilities-list">{items_html}
             </ul>
         </section>"""
