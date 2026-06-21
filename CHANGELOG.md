@@ -2,6 +2,41 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.17 (2026-06-21)
+
+### Bug Fixes
+
+- Make relay model-chain a searchable combobox (free-text + catalog-backed)
+  ([#518](https://github.com/n24q02m/mcp-core/pull/518),
+  [`4285650`](https://github.com/n24q02m/mcp-core/commit/4285650dd14fdd874b88026c67a7779568f36af3))
+
+- **a11y**: Add aria-hidden="true" to optional badges
+  ([#516](https://github.com/n24q02m/mcp-core/pull/516),
+  [`46c1a50`](https://github.com/n24q02m/mcp-core/commit/46c1a502e3d6b4d5a1100c575d5dffeacdecd4d2))
+
+- **deps**: Update @types/node to v26 ([#511](https://github.com/n24q02m/mcp-core/pull/511),
+  [`92ec965`](https://github.com/n24q02m/mcp-core/commit/92ec9653679025366d882aed84f1c0ca80866c8f))
+
+- **deps**: Update non-major dependencies ([#510](https://github.com/n24q02m/mcp-core/pull/510),
+  [`dd8e6f1`](https://github.com/n24q02m/mcp-core/commit/dd8e6f14d68a983cb0e316ccad4513ffc45a1f95))
+
+- **deps**: Update semgrep/semgrep Docker digest to c180f0c
+  ([#509](https://github.com/n24q02m/mcp-core/pull/509),
+  [`a6b45b0`](https://github.com/n24q02m/mcp-core/commit/a6b45b0180b32db313bd1d90570d712f496518ca))
+
+### Chores
+
+- **deps**: Bump the uv group across 2 directories with 1 update
+  ([#515](https://github.com/n24q02m/mcp-core/pull/515),
+  [`4ecfcc4`](https://github.com/n24q02m/mcp-core/commit/4ecfcc484ea93abd767912adb472513cb4d2fa7d))
+
+### Features
+
+- Add role='alert' to transient server status box for accessibility
+  ([#505](https://github.com/n24q02m/mcp-core/pull/505),
+  [`151aa18`](https://github.com/n24q02m/mcp-core/commit/151aa18bb1025fda1301692d9d1553868811f16d))
+
+
 ## v1.18.0-beta.16 (2026-06-20)
 
 ### Bug Fixes
