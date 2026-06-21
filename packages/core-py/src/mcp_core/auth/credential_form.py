@@ -58,6 +58,12 @@ _MODEL_CHAIN_SCRIPT = """
             var i = model.indexOf("/");
             return i === -1 ? "openai" : model.slice(0, i);
         }
+        function looksLikeModel(m) {
+            // Loose shape gate: "provider/model" or a bare model id. Lets any
+            // litellm-supported (or registry-missing) model through the relay
+            // form via free text, instead of caging the user to suggestions.
+            return /^[\\w.-]+(\\/[\\w.:-]+)?$/.test((m || "").trim());
+        }
         function keyEnvFor(model, w) {
             // search-chain widgets carry an explicit backend -> ENV-var map
             // (named backends, no model-prefix inference). A backend absent
@@ -155,12 +161,19 @@ _MODEL_CHAIN_SCRIPT = """
                 box.appendChild(chip);
             });
         }
-        function buildDropdown(w) {
+        function buildDropdown(w, filter) {
             var dd = document.getElementById("mc-dropdown-" + w.getAttribute("data-key"));
             while (dd.firstChild) dd.removeChild(dd.firstChild);
             var suggested = JSON.parse(w.getAttribute("data-suggested") || "[]");
+            var catalog = JSON.parse(w.getAttribute("data-catalog") || "[]");
+            var seen = {}, options = [];
+            suggested.concat(catalog).forEach(function (m) {
+                if (m && !seen[m]) { seen[m] = true; options.push(m); }
+            });
+            var f = (filter || "").toLowerCase();
+            if (f) options = options.filter(function (m) { return m.toLowerCase().indexOf(f) !== -1; });
             var current = getChips(w);
-            suggested.forEach(function (m) {
+            options.slice(0, 50).forEach(function (m) {
                 var lbl = document.createElement("label");
                 var cb = document.createElement("input");
                 cb.type = "checkbox";
@@ -183,18 +196,21 @@ _MODEL_CHAIN_SCRIPT = """
             var input = w.querySelector(".mc-typeahead");
             var dd = document.getElementById("mc-dropdown-" + w.getAttribute("data-key"));
             setChips(w, getChips(w));
-            input.addEventListener("focus", function () { buildDropdown(w); });
+            input.addEventListener("focus", function () { buildDropdown(w, input.value.trim()); });
+            input.addEventListener("input", function () { buildDropdown(w, input.value.trim()); });
             input.addEventListener("keydown", function (e) {
                 if (e.key === "Enter" && input.value.trim()) {
                     e.preventDefault();
                     var m = input.value.trim();
-                    var suggested = JSON.parse(w.getAttribute("data-suggested") || "[]");
-                    if (suggested.indexOf(m) === -1) { return; }
+                    // Accept any shape-valid provider/model (open passthrough),
+                    // not only curated suggestions -- searchable combobox, not
+                    // a fixed whitelist.
+                    if (!looksLikeModel(m)) { return; }
                     var models = getChips(w);
                     if (models.indexOf(m) === -1) models.push(m);
                     setChips(w, models);
                     input.value = "";
-                    buildDropdown(w);
+                    buildDropdown(w, "");
                 }
             });
             document.addEventListener("click", function (e) {
@@ -581,6 +597,43 @@ def render_form_shell(title: str, body_html: str) -> str:
 </html>"""
 
 
+# Map a model-chain ``task`` to the litellm catalog ``mode``(s) used to back
+# the searchable dropdown. search-chain tasks (named backends, no litellm
+# models) are absent -> empty catalog.
+_TASK_CATALOG_MODES: dict[str, tuple[str, ...]] = {
+    "embedding": ("embedding",),
+    "rerank": ("rerank",),
+    "chat": ("chat",),
+    "summary": ("chat",),
+    "understand": ("chat",),
+}
+
+
+def _catalog_models_for_task(task: str, limit: int = 100) -> list[str]:
+    """Best-effort model-id list for a model-chain ``task``'s catalog mode.
+
+    Backs the relay dropdown's search with the real litellm catalog
+    (``mcp_core.llm.catalog.list_models``) so a user can discover the full
+    provider/model space, not just the server's curated ``suggestedModels``.
+    Returns ``[]`` gracefully when the ``[llm]`` extra / litellm is
+    unavailable or the task has no model mode, so the form still renders for
+    every server (including non-LLM ones).
+    """
+    modes = _TASK_CATALOG_MODES.get(task)
+    if not modes:
+        return []
+    try:
+        from mcp_core.llm.catalog import list_models
+
+        return [
+            m["model"]
+            for m in list_models(modes=modes, configured_only=False, limit=limit)
+            if isinstance(m, dict) and m.get("model")
+        ]
+    except Exception:
+        return []
+
+
 def _render_field(field: dict[str, Any], value: str = "") -> str:
     """Render a single ConfigField as an HTML input block.
 
@@ -622,6 +675,12 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
         has_local = "true" if field.get("hasLocal", False) else "false"
         suggested = field.get("suggestedModels", [])
         suggested_json = _escape(json.dumps(suggested))
+        # Back the dropdown with the real litellm catalog so the widget is a
+        # searchable combobox, not a curated cage. Only for model-chain
+        # (prefix-inferred litellm models); search-chain (named backends) and
+        # any litellm-unavailable case fall back to an empty catalog.
+        catalog_models = _catalog_models_for_task(field.get("task", "")) if field_type == "model-chain" else []
+        catalog_json = _escape(json.dumps(catalog_models))
         # search-chain uses explicit named backends (no model-prefix inference):
         # ``providerKeys`` (backend -> ENV var) drives derive-keys, and
         # ``noun``/``localLabel`` customize the empty-chain badge. Absent for a
@@ -642,7 +701,7 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
                  data-model-chain="{task}"
                  data-key="{key}"
                  data-has-local="{has_local}"
-                 data-suggested="{suggested_json}"{provider_keys_attr}{noun_attr}{local_label_attr}>
+                 data-suggested="{suggested_json}" data-catalog="{catalog_json}"{provider_keys_attr}{noun_attr}{local_label_attr}>
                 <div class="mc-chips" id="mc-chips-{key}" role="list"></div>
                 <input id="mc-input-{key}" class="mc-typeahead" type="text"
                        placeholder="{placeholder or "add model…"}"
