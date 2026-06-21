@@ -878,12 +878,22 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     const header = req.headers.cookie
     if (!header) return {}
     const out: Record<string, string> = {}
-    for (const part of header.split(';')) {
-      const idx = part.indexOf('=')
-      if (idx < 0) continue
-      const k = part.slice(0, idx).trim()
-      const v = part.slice(idx + 1).trim()
-      if (k.length > 0) out[k] = decodeURIComponent(v)
+
+    // ⚡ Bolt: Use a single-pass loop instead of `split(';')` to avoid array
+    // allocations and intermediate string objects in this hot path.
+    let pos = 0
+    while (pos < header.length) {
+      let nextSemi = header.indexOf(';', pos)
+      if (nextSemi < 0) nextSemi = header.length
+
+      const eq = header.indexOf('=', pos)
+      if (eq >= 0 && eq < nextSemi) {
+        const k = header.substring(pos, eq).trim()
+        const v = header.substring(eq + 1, nextSemi).trim()
+        if (k.length > 0) out[k] = decodeURIComponent(v)
+      }
+
+      pos = nextSemi + 1
     }
     return out
   }
