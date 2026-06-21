@@ -67,7 +67,7 @@ _HTML_FORM_TEMPLATE = (
     "__FORM_FIELDS__"
     "<button type='submit'>Submit</button>"
     "</form>"
-    "<div id='status'></div>"
+    "<div id='status' role='alert'></div>"
     "<script>"
     "document.getElementById('title').textContent = __SERVER_NAME_JS__ + ' credentials';"
     "document.getElementById('relayForm').onsubmit = async function(e) {"
