@@ -62,11 +62,15 @@ for the rename table.
 All three packages share the same version (`semantic-release.toml` bumps both
 Python `pyproject.toml` files plus the npm `package.json` in lockstep).
 
+The Python core ships one optional extra for the LLM passthrough (litellm):
+`pip install 'n24q02m-mcp-core[llm]'`.
+
 ## What you get
 
 ### `n24q02m-mcp-core` (Python) and `@n24q02m/mcp-core` (TypeScript)
 
-Identical public API in both languages:
+These modules ship in **both** languages with a matching public API
+(cross-language test vectors keep the crypto byte-for-byte identical):
 
 - **`crypto/`** — ECDH P-256, AES-256-GCM, HKDF-SHA256 primitives.
   Cross-language test vectors guarantee Python and TypeScript produce the
@@ -101,9 +105,40 @@ Identical public API in both languages:
   `OAuthMiddleware` (RFC 6750 + RFC 9728 compliant Bearer validation).
 - **`lifecycle/`** — `LifecycleLock` cross-platform file lock that prevents
   two server instances from binding the same `(name, port)` pair.
-- **`install/`** (Python only) — `AgentInstaller` that writes MCP server
-  entries into Claude Code, Cursor, Codex, Windsurf, and OpenCode config
-  files.
+
+### Python-only modules (`n24q02m-mcp-core`)
+
+These have no TypeScript counterpart yet — they back the Python MCP servers
+(wet, mnemo, code-review-graph, telegram, imagine):
+
+- **`llm/`** — a thin passthrough over [litellm](https://github.com/BerriAI/litellm)
+  so every server talks to cloud providers the same way. Async + sync wrappers
+  for `completion`, `embedding`, `rerank`, `image_generation`,
+  `video_generation` / `video_status` / `video_content`; a graceful capability
+  check against the litellm registry (`check_capability`, `list_models`,
+  `suggest_models`, `supports_vision`); multi-key CSV rotation per provider
+  (`rotate_keys`, `split_keys`); and a direct Vertex AI **Express** adapter
+  (`completion_express`) that bypasses litellm where its `vertex_ai/` route
+  ignores the Express API key. Provider keys follow the litellm convention —
+  `GEMINI_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`, `ANTHROPIC_API_KEY`,
+  `COHERE_API_KEY`, `JINA_AI_API_KEY`, `GOOGLE_VERTEX_EXPRESS_API_KEY` (see
+  `llm.providers.PROVIDER_KEY_ENV`); any unlisted provider falls back to
+  `<PROVIDER>_API_KEY`. Requires the optional extra:
+  `pip install 'n24q02m-mcp-core[llm]'`.
+- **`chains.py`** — the capability provider-chain primitive every server shares
+  (exported at the top level): `resolve_backend` makes the 3-way
+  cloud / local / unavailable decision, `run_with_fallback` walks an ordered
+  list of providers and returns the first non-empty result, and
+  `local_enabled_from_env` reads the per-capability `DISABLE_LOCAL_<X>` toggle
+  (`DISABLE_LOCAL_SEARCH` / `DISABLE_LOCAL_BROWSER` / `DISABLE_LOCAL_EMBED` /
+  `DISABLE_LOCAL_RERANK`).
+- **`http/`** — SSRF-safe HTTP clients (`get_ssrf_safe_async_client`,
+  `get_ssrf_safe_sync_client`, `vet_api_base`) that block requests to private /
+  loopback / link-local addresses. Used to vet every user-supplied `api_base`
+  before it reaches an outbound provider call.
+- **`install/`** — `AgentInstaller` writes MCP server entries into Claude Code,
+  Cursor, Codex, Windsurf, and OpenCode config files. Ships the
+  `mcp-clean-state` console script for wiping local config / session state.
 
 ### `mcp-embedding-daemon`
 
