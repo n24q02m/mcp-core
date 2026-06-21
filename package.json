@@ -6,6 +6,6 @@
   ],
   "packageManager": "bun@1.2.21",
   "engines": {
-    "node": ">=24.16.0"
+    "node": ">=24.17.0"
   }
 }
