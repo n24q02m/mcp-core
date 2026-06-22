@@ -148,30 +148,61 @@ def test_search_chain_has_no_catalog():
 
 
 # --- F2-relay-search: full catalog (generate task + un-sliced understand) ----
+#
+# These exercise the catalog WIRING (task -> mode mapping + un-capped limit
+# passthrough) via a monkeypatched ``list_models``, so they are deterministic
+# and do NOT require the optional ``[llm]`` extra (litellm). That matters
+# because the e2e-t0 leg runs the suite without the extra, where the real
+# catalog is empty by design (graceful fallback).
 
 
-def test_generate_task_catalog_is_non_empty():
+def test_generate_task_is_mapped_to_generation_modes(monkeypatch):
     """imagine's GENERATE_MODELS field uses task='generate'. Before the fix the
     'generate' key was absent from _TASK_CATALOG_MODES so the catalog was empty
-    and only the 9 hardcoded suggestedModels were searchable. The generate task
-    must map to litellm's image/video generation mode(s) so the dropdown is
-    backed by the real catalog."""
-    from mcp_core.auth.credential_form import _catalog_models_for_task
+    and only the curated suggestedModels were searchable. The generate task must
+    map to litellm's image/video generation mode(s) and flow models through."""
+    import mcp_core.llm.catalog as catalog_mod
+    from mcp_core.auth.credential_form import _TASK_CATALOG_MODES, _catalog_models_for_task
 
-    catalog = _catalog_models_for_task("generate")
-    assert catalog, "generate task must yield a non-empty model catalog"
+    modes = _TASK_CATALOG_MODES.get("generate")
+    assert modes, "generate task must be mapped to litellm generation mode(s)"
+    assert "image_generation" in modes
+    assert "video_generation" in modes
+
+    captured: dict = {}
+
+    def _fake_list_models(**kw):
+        captured.update(kw)
+        return [{"model": "openai/dall-e-3", "provider": "openai", "mode": "image_generation"}]
+
+    monkeypatch.setattr(catalog_mod, "list_models", _fake_list_models)
+    result = _catalog_models_for_task("generate")
+    assert result == ["openai/dall-e-3"]
+    assert captured["modes"] == modes
 
 
-def test_understand_catalog_covers_beyond_first_100_alphabetical():
+def test_catalog_is_not_capped_at_100(monkeypatch):
     """The understand (chat) catalog was capped at 100 alphabetical models, so
     later-alphabet models (e.g. azure_ai/deepseek-*) fell off the slice and were
-    unsearchable. The catalog must cover the full list, not a 100-slice."""
+    unsearchable. The catalog limit must cover the full registry (a few thousand
+    models), and every model the registry returns must survive to the dropdown."""
+    import mcp_core.llm.catalog as catalog_mod
     from mcp_core.auth.credential_form import _catalog_models_for_task
 
-    catalog = _catalog_models_for_task("understand")
-    # deepseek chat models sort well past the first 100 entries; their presence
-    # proves the slice no longer truncates the catalog.
-    assert any("deepseek" in m.lower() for m in catalog), (
-        "understand catalog must include later-alphabet models (e.g. deepseek), "
-        "i.e. it must not be capped at the first 100 alphabetical entries"
-    )
+    # A synthetic registry larger than the old 100-slice, with a deepseek model
+    # parked past index 100 — it must survive an un-capped catalog.
+    big = [{"model": f"prov/model-{i:04d}", "provider": "prov", "mode": "chat"} for i in range(150)]
+    big.append({"model": "azure_ai/deepseek-v3.2", "provider": "azure_ai", "mode": "chat"})
+
+    captured: dict = {}
+
+    def _fake_list_models(**kw):
+        captured.update(kw)
+        return big
+
+    monkeypatch.setattr(catalog_mod, "list_models", _fake_list_models)
+    result = _catalog_models_for_task("understand")
+    # The limit passed must be high enough to cover the whole registry, not 100.
+    assert captured["limit"] >= len(big)
+    assert len(result) == len(big)
+    assert "azure_ai/deepseek-v3.2" in result
