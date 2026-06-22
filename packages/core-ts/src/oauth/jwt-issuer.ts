@@ -146,14 +146,21 @@ export class JWTIssuer {
   /**
    * Issue a JWT refresh token (typ="refresh") signed with the active alg.
    *
-   * Defaults to a 30-day (2592000s) lifetime so long-running MCP clients can
+   * Defaults to a 1-year (31536000s) lifetime so long-running MCP clients can
    * mint fresh access tokens without forcing the user back through the browser
-   * PKCE flow every hour. Same key / iss / aud as access tokens; the typ claim
-   * is the only thing distinguishing them, and verifyAccessToken rejects
-   * typ="refresh" so a refresh token can never be used as an access token at
-   * the /mcp resource.
+   * PKCE flow. The access token stays short-lived (1h); the refresh token is the
+   * renewal credential and is rotated on every use (the /token refresh handler
+   * issues a new refresh token each time), so the security control is rotation,
+   * not a short TTL. A short refresh TTL was the residual re-auth driver: a
+   * self-hosted server a user touches only intermittently (less than once a
+   * month) would silently expire its refresh token between sessions, forcing a
+   * fresh browser OAuth tab on the next use. With a 1-year floor, only a
+   * genuinely long idle gap re-prompts. Same key / iss / aud as access tokens;
+   * the typ claim is the only thing distinguishing them, and verifyAccessToken
+   * rejects typ="refresh" so a refresh token can never be used as an access
+   * token at the /mcp resource.
    */
-  async issueRefreshToken(sub: string, expiresInSeconds = 2592000): Promise<string> {
+  async issueRefreshToken(sub: string, expiresInSeconds = 31536000): Promise<string> {
     if (!this.privateKey) throw new Error('JWTIssuer not initialized')
     return new jose.SignJWT({ sub, typ: 'refresh' })
       .setProtectedHeader({ alg: this.alg, kid: this.kid })

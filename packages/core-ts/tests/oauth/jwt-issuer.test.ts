@@ -134,7 +134,12 @@ describe('JWTIssuer refresh tokens (issue #261)', () => {
     await expect(issuer.verifyRefreshToken('some-token')).rejects.toThrow('JWTIssuer not initialized')
   })
 
-  it('refresh token has a longer lifetime than the access token', async () => {
+  it('refresh token has a long (~1 year) default lifetime, much longer than the access token', async () => {
+    // The 1-year floor (raised from 30 days) is the residual fix for OAuth
+    // re-auth tab-spam: an intermittently-used self-hosted server must not
+    // silently expire its refresh token between sessions, which would force a
+    // fresh browser OAuth tab. Rotation on every refresh (not a short TTL) is
+    // the security control.
     const issuer = new JWTIssuer(serverName, tempDir)
     await issuer.init()
     const access = await issuer.verifyAccessToken(await issuer.issueAccessToken('u'))
@@ -142,7 +147,7 @@ describe('JWTIssuer refresh tokens (issue #261)', () => {
     const accessLifetime = (access.exp as number) - (access.iat as number)
     const refreshLifetime = (refresh.exp as number) - (refresh.iat as number)
     expect(refreshLifetime).toBeGreaterThan(accessLifetime)
-    expect(refreshLifetime).toBeGreaterThanOrEqual(2592000 - 5)
+    expect(refreshLifetime).toBeGreaterThanOrEqual(31536000 - 5)
   })
 
   it('verifyAccessToken() rejects a refresh token', async () => {
@@ -229,6 +234,39 @@ describe('JWTIssuer derived EdDSA mode (CREDENTIAL_SECRET set)', () => {
     const ja = await a.getJwks()
     const jb = await b.getJwks()
     expect((ja.keys[0] as { x: string }).x).toBe((jb.keys[0] as { x: string }).x)
+  })
+
+  it('tokens are mutually verifiable across separate instances with the same CREDENTIAL_SECRET', async () => {
+    // A token signed by one issuer instance MUST verify on a SEPARATE instance
+    // constructed later with the same secret. This is what makes OAuth tokens
+    // survive container recreation / multi-isolate fan-out: a client's stored
+    // refresh token keeps working across restarts, so no fresh browser OAuth
+    // tab. `b` uses a different keys dir to prove the match comes from the
+    // secret, not a shared on-disk key.
+    const a = new JWTIssuer(serverName, tempDir, SECRET)
+    await a.init()
+    const otherDir = await mkdtemp(join(tmpdir(), 'mcp-test-jwt-other-'))
+    try {
+      const b = new JWTIssuer(serverName, otherDir, SECRET)
+      await b.init()
+      const access = await a.issueAccessToken('cross-user')
+      const refresh = await a.issueRefreshToken('cross-user')
+      expect((await b.verifyAccessToken(access)).sub).toBe('cross-user')
+      expect((await b.verifyRefreshToken(refresh)).sub).toBe('cross-user')
+    } finally {
+      await rm(otherDir, { recursive: true, force: true })
+    }
+  })
+
+  it('tokens do NOT verify under a different CREDENTIAL_SECRET', async () => {
+    // The secret is the root of trust: a secret change is a deliberate (and
+    // detectable) invalidation, never a silent ephemeral flap.
+    const a = new JWTIssuer(serverName, tempDir, SECRET)
+    await a.init()
+    const b = new JWTIssuer(serverName, tempDir, 'a-different-secret')
+    await b.init()
+    const token = await a.issueAccessToken('u')
+    await expect(b.verifyAccessToken(token)).rejects.toThrow()
   })
 
   it('getJwks emits an OKP EdDSA key with thumbprint kid matching the parity vector', async () => {
