@@ -145,3 +145,33 @@ def test_search_chain_has_no_catalog():
     }
     html = _render_field(field, "")
     assert 'data-catalog="[]"' in html
+
+
+# --- F2-relay-search: full catalog (generate task + un-sliced understand) ----
+
+
+def test_generate_task_catalog_is_non_empty():
+    """imagine's GENERATE_MODELS field uses task='generate'. Before the fix the
+    'generate' key was absent from _TASK_CATALOG_MODES so the catalog was empty
+    and only the 9 hardcoded suggestedModels were searchable. The generate task
+    must map to litellm's image/video generation mode(s) so the dropdown is
+    backed by the real catalog."""
+    from mcp_core.auth.credential_form import _catalog_models_for_task
+
+    catalog = _catalog_models_for_task("generate")
+    assert catalog, "generate task must yield a non-empty model catalog"
+
+
+def test_understand_catalog_covers_beyond_first_100_alphabetical():
+    """The understand (chat) catalog was capped at 100 alphabetical models, so
+    later-alphabet models (e.g. azure_ai/deepseek-*) fell off the slice and were
+    unsearchable. The catalog must cover the full list, not a 100-slice."""
+    from mcp_core.auth.credential_form import _catalog_models_for_task
+
+    catalog = _catalog_models_for_task("understand")
+    # deepseek chat models sort well past the first 100 entries; their presence
+    # proves the slice no longer truncates the catalog.
+    assert any("deepseek" in m.lower() for m in catalog), (
+        "understand catalog must include later-alphabet models (e.g. deepseek), "
+        "i.e. it must not be capped at the first 100 alphabetical entries"
+    )
