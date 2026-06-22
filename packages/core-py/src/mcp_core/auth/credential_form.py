@@ -599,17 +599,27 @@ def render_form_shell(title: str, body_html: str) -> str:
 
 # Map a model-chain ``task`` to the litellm catalog ``mode``(s) used to back
 # the searchable dropdown. search-chain tasks (named backends, no litellm
-# models) are absent -> empty catalog.
+# models) are absent -> empty catalog. ``generate`` covers litellm's image +
+# video generation modes (imagine's GENERATE_MODELS chain) — ``image_edit`` is
+# included to match the dispatch capability check in ``mcp_core.llm.dispatch``.
 _TASK_CATALOG_MODES: dict[str, tuple[str, ...]] = {
     "embedding": ("embedding",),
     "rerank": ("rerank",),
     "chat": ("chat",),
     "summary": ("chat",),
     "understand": ("chat",),
+    "generate": ("image_generation", "video_generation", "image_edit"),
 }
 
+# Cap the catalog at the FULL litellm registry (a few thousand models) so the
+# dropdown is genuinely searchable across the whole provider/model space, not a
+# 100-entry alphabetical slice that hid most models (e.g. ``deepseek``). The
+# largest mode (chat, ~2.2k models) serializes to ~105 KB as the rendered
+# ``data-catalog`` attribute — a bounded, reasonable page-weight ceiling.
+_CATALOG_LIMIT = 5000
 
-def _catalog_models_for_task(task: str, limit: int = 100) -> list[str]:
+
+def _catalog_models_for_task(task: str, limit: int = _CATALOG_LIMIT) -> list[str]:
     """Best-effort model-id list for a model-chain ``task``'s catalog mode.
 
     Backs the relay dropdown's search with the real litellm catalog
