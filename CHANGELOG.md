@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.18 (2026-06-22)
+
+### Bug Fixes
+
+- Document llm/chains/http modules and correct API-parity claim in README
+  ([#519](https://github.com/n24q02m/mcp-core/pull/519),
+  [`a60ba47`](https://github.com/n24q02m/mcp-core/commit/a60ba47bc311c9516d841e596a9a664632bb39d0))
+
+- **deps**: Lock file maintenance ([#522](https://github.com/n24q02m/mcp-core/pull/522),
+  [`56684ef`](https://github.com/n24q02m/mcp-core/commit/56684eff22fb0bfc75c3bd381392e9d75b516979))
+
+- **deps**: Update actions/checkout action to v7
+  ([#521](https://github.com/n24q02m/mcp-core/pull/521),
+  [`746939c`](https://github.com/n24q02m/mcp-core/commit/746939cfa1b24fe816943c8a8cd6cd51cfadd7bd))
+
+- **deps**: Update non-major dependencies ([#520](https://github.com/n24q02m/mcp-core/pull/520),
+  [`fde4213`](https://github.com/n24q02m/mcp-core/commit/fde42133065e8945ff5c45534b0206fcef057c10))
+
+
 ## v1.18.0-beta.17 (2026-06-21)
 
 ### Bug Fixes
