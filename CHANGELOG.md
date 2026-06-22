@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.19 (2026-06-22)
+
+### Bug Fixes
+
+- Extend OAuth refresh-token TTL to 1 year to stop re-auth tab-spam
+  ([#525](https://github.com/n24q02m/mcp-core/pull/525),
+  [`67d5565`](https://github.com/n24q02m/mcp-core/commit/67d5565eb64a1b4a1c84390aac89b450b8bc509b))
+
+- Make model-chain catalog tests litellm-independent
+  ([#524](https://github.com/n24q02m/mcp-core/pull/524),
+  [`d76bac4`](https://github.com/n24q02m/mcp-core/commit/d76bac4a3541bf45dc06c80d1c2f1ebf4e267418))
+
+- Search full model catalog in relay model-chain (generate task + un-sliced)
+  ([#524](https://github.com/n24q02m/mcp-core/pull/524),
+  [`d76bac4`](https://github.com/n24q02m/mcp-core/commit/d76bac4a3541bf45dc06c80d1c2f1ebf4e267418))
+
+
 ## v1.18.0-beta.18 (2026-06-22)
 
 ### Bug Fixes
