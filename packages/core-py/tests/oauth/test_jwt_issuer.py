@@ -211,12 +211,19 @@ class TestRefreshTokenOperations:
         assert "exp" in payload
 
     def test_refresh_token_has_long_default_lifetime(self, issuer):
-        """Refresh token default exp ~30 days >> access token 1h."""
+        """Refresh token default exp ~1 year >> access token 1h.
+
+        The 1-year floor (raised from 30 days) is the residual fix for OAuth
+        re-auth tab-spam: an intermittently-used self-hosted server must not
+        silently expire its refresh token between sessions, which would force a
+        fresh browser OAuth tab. Rotation on every refresh (not a short TTL) is
+        the security control.
+        """
         access = issuer.verify_access_token(issuer.issue_access_token(sub="u"))
         refresh = issuer.verify_refresh_token(issuer.issue_refresh_token(sub="u"))
-        # exp - iat for refresh (~2592000s) must exceed access (~3600s).
+        # exp - iat for refresh (~31536000s) must exceed access (~3600s).
         assert (refresh["exp"] - refresh["iat"]) > (access["exp"] - access["iat"])
-        assert (refresh["exp"] - refresh["iat"]) >= 2592000 - 5
+        assert (refresh["exp"] - refresh["iat"]) >= 31536000 - 5
 
     def test_verify_access_token_rejects_refresh_token(self, issuer):
         """A refresh token MUST NOT be usable as an access token."""
@@ -292,6 +299,39 @@ class TestDerivedEdDSAMode:
         b = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
         assert a.get_jwks()["keys"][0]["x"] == b.get_jwks()["keys"][0]["x"]
         assert a._kid == b._kid
+
+    def test_tokens_are_mutually_verifiable_across_instances(self, keys_dir, tmp_path):
+        """A token signed by one issuer instance MUST verify on a SEPARATE
+        instance constructed later with the same CREDENTIAL_SECRET.
+
+        This is the property that makes OAuth tokens survive container
+        recreation / multi-replica fan-out: the signing key is derived from
+        CREDENTIAL_SECRET (not generated in-memory per process), so a token a
+        client minted against container A still verifies on container B and a
+        client's stored refresh token keeps working across restarts — no fresh
+        browser OAuth tab. Uses a different keys_dir for ``b`` to prove the
+        match comes from the secret, not a shared on-disk key.
+        """
+        a = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        b = JWTIssuer(server_name="wet-mcp", keys_dir=tmp_path / "other-keys", credential_secret=self.SECRET)
+
+        access = a.issue_access_token(sub="cross-user")
+        refresh = a.issue_refresh_token(sub="cross-user")
+
+        # b (a fresh instance, e.g. a recreated container) verifies a's tokens.
+        assert b.verify_access_token(access)["sub"] == "cross-user"
+        assert b.verify_refresh_token(refresh)["sub"] == "cross-user"
+
+    def test_tokens_differ_under_a_different_credential_secret(self, keys_dir):
+        """A token signed under one CREDENTIAL_SECRET MUST NOT verify under a
+        different one — the secret is the root of trust, so a secret change is a
+        deliberate (and detectable) invalidation, never a silent ephemeral flap.
+        """
+        a = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
+        b = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret="a-different-secret")
+        token = a.issue_access_token(sub="u")
+        with pytest.raises(jwt.InvalidTokenError):
+            b.verify_access_token(token)
 
     def test_jwks_is_okp_eddsa(self, keys_dir):
         issuer = JWTIssuer(server_name="wet-mcp", keys_dir=keys_dir, credential_secret=self.SECRET)
