@@ -10,9 +10,11 @@ export const LEGACY_PBKDF2_ITERATIONS = 100_000
  * Shared internal logic for PBKDF2 key derivation.
  */
 async function deriveKeyInternal(material: Uint8Array, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
-  const keyMaterial = await crypto.subtle.importKey('raw', material, 'PBKDF2', false, ['deriveKey'])
+  const keyMaterial = await crypto.subtle.importKey('raw', material as unknown as BufferSource, 'PBKDF2', false, [
+    'deriveKey'
+  ])
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as any, iterations },
+    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as unknown as BufferSource, iterations },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
