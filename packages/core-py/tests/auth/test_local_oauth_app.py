@@ -2,7 +2,9 @@
 
 import base64
 import hashlib
+import re
 import secrets
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from starlette.testclient import TestClient
@@ -42,6 +44,39 @@ def _pkce_pair() -> tuple[str, str]:
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     return verifier, challenge
+def _get_auth_code(
+    client: TestClient,
+    challenge: str,
+    state: str,
+    api_key: str = "key",
+    client_id: str = "test-client",
+    redirect_uri: str = "http://localhost/callback",
+) -> str:
+    """Helper to perform GET /authorize and POST /authorize to obtain an auth code."""
+    resp = client.get(
+        "/authorize",
+        params={
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+    )
+    assert resp.status_code == 200
+    nonce_match = re.search(r"nonce=([^\"&]+)", resp.text)
+    assert nonce_match is not None
+    nonce = nonce_match.group(1)
+
+    resp = client.post(
+        f"/authorize?nonce={nonce}",
+        json={"API_KEY": api_key},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("ok") is True
+    return parse_qs(urlparse(data["redirect_url"]).query)["code"][0]
+
 
 
 @pytest.fixture()
@@ -68,7 +103,7 @@ def client(app_and_issuer):
 
 def _run_username_flow(*, stable_sub_enabled: bool, username: str | None):
     """Drive GET->POST /authorize once; return {sub, creds} the callback saw."""
-    import re as _re
+
 
     captured: dict = {}
 
@@ -94,7 +129,7 @@ def _run_username_flow(*, stable_sub_enabled: bool, username: str | None):
             "code_challenge_method": "S256",
         },
     )
-    nonce = _re.search(r'nonce=([^"&]+)', resp.text).group(1)
+    nonce = re.search(r'nonce=([^"&]+)', resp.text).group(1)
     body: dict[str, str] = {"API_KEY": "x"}
     if username is not None:
         body["__sub_username"] = username
@@ -238,7 +273,7 @@ class TestAuthorizeEndpoint:
 
         # Extract nonce from the rendered form
         # The form's submit URL includes a nonce query param
-        import re
+
 
         nonce_match = re.search(r'nonce=([^"&]+)', resp.text)
         assert nonce_match is not None, "Form should contain a nonce in the submit URL"
@@ -268,7 +303,7 @@ class TestAuthorizeEndpoint:
         security incident). The test also confirms the JWT issued at /token
         matches the sub passed to the callback for each flow.
         """
-        import re
+
 
         from starlette.testclient import TestClient
 
@@ -348,43 +383,9 @@ class TestTokenExchange:
 
         verifier, challenge = _pkce_pair()
         redirect_uri = "http://localhost/callback"
-
-        # Step 1: GET /authorize
-        resp = client.get(
-            "/authorize",
-            params={
-                "client_id": "test-client",
-                "redirect_uri": redirect_uri,
-                "state": "pkce-state",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-            },
+        auth_code = _get_auth_code(
+            client, challenge, state="pkce-state", api_key="sk-test-456"
         )
-        assert resp.status_code == 200
-
-        import re
-
-        nonce_match = re.search(r'nonce=([^"&]+)', resp.text)
-        assert nonce_match is not None
-        nonce = nonce_match.group(1)
-
-        # Step 2: POST /authorize -> get auth code from redirect_url
-        resp = client.post(
-            f"/authorize?nonce={nonce}",
-            json={"API_KEY": "sk-test-456"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["ok"] is True
-
-        # Parse the auth code from the redirect URL
-        from urllib.parse import parse_qs, urlparse
-
-        parsed = urlparse(data["redirect_url"])
-        qs = parse_qs(parsed.query)
-        assert "code" in qs
-        assert qs["state"] == ["pkce-state"]
-        auth_code = qs["code"][0]
 
         # Step 3: POST /token with auth_code + code_verifier
         resp = client.post(
@@ -416,7 +417,6 @@ class TestTokenExchange:
         # The refresh token verifies as a refresh token and shares the subject.
         refresh_claims = issuer.verify_refresh_token(token_data["refresh_token"])
         assert refresh_claims["sub"] == claims["sub"]
-
     def test_token_invalid_code(self, client):
         """POST /token with a wrong/missing auth code returns 400."""
         verifier, _challenge = _pkce_pair()
@@ -436,35 +436,8 @@ class TestTokenExchange:
         app, _issuer, _saved = app_and_issuer
         client = TestClient(app, base_url="http://localhost")
 
-        verifier, challenge = _pkce_pair()
-
-        # Create a valid auth code
-        resp = client.get(
-            "/authorize",
-            params={
-                "client_id": "test-client",
-                "redirect_uri": "http://localhost/callback",
-                "state": "s",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-            },
-        )
-
-        import re
-
-        nonce_match = re.search(r'nonce=([^"&]+)', resp.text)
-        assert nonce_match is not None
-        nonce = nonce_match.group(1)
-
-        resp = client.post(
-            f"/authorize?nonce={nonce}",
-            json={"API_KEY": "key"},
-        )
-        data = resp.json()
-
-        from urllib.parse import parse_qs, urlparse
-
-        auth_code = parse_qs(urlparse(data["redirect_url"]).query)["code"][0]
+        _verifier, challenge = _pkce_pair()
+        auth_code = _get_auth_code(client, challenge, state="s")
 
         # Use WRONG verifier
         resp = client.post(
@@ -497,32 +470,7 @@ class TestTokenExchange:
         client = TestClient(app, base_url="http://localhost")
 
         verifier, challenge = _pkce_pair()
-
-        resp = client.get(
-            "/authorize",
-            params={
-                "client_id": "test-client",
-                "redirect_uri": "http://localhost/callback",
-                "state": "s",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-            },
-        )
-
-        import re
-
-        nonce_match = re.search(r'nonce=([^"&]+)', resp.text)
-        assert nonce_match is not None
-        nonce = nonce_match.group(1)
-
-        resp = client.post(
-            f"/authorize?nonce={nonce}",
-            json={"API_KEY": "key"},
-        )
-
-        from urllib.parse import parse_qs, urlparse
-
-        auth_code = parse_qs(urlparse(resp.json()["redirect_url"]).query)["code"][0]
+        auth_code = _get_auth_code(client, challenge, state="s")
 
         # First exchange: success
         resp1 = client.post(
@@ -554,23 +502,10 @@ class TestRefreshTokenGrant:
     @staticmethod
     def _complete_auth_code_flow(client: TestClient) -> dict:
         """Run the full authorization_code flow and return the /token JSON."""
-        import re
-        from urllib.parse import parse_qs, urlparse
-
         verifier, challenge = _pkce_pair()
-        resp = client.get(
-            "/authorize",
-            params={
-                "client_id": "test-client",
-                "redirect_uri": "http://localhost/callback",
-                "state": "rt-state",
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-            },
+        code = _get_auth_code(
+            client, challenge, state="rt-state", api_key="sk-rt"
         )
-        nonce = re.search(r'nonce=([^"&]+)', resp.text).group(1)
-        post = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "sk-rt"})
-        code = parse_qs(urlparse(post.json()["redirect_url"]).query)["code"][0]
         tok = client.post(
             "/token",
             data={
@@ -665,7 +600,7 @@ def _extract_nonce(client: TestClient) -> str:
 
     Issues a fresh GET /authorize with standard params to capture the nonce.
     """
-    import re
+
 
     resp = client.get("/authorize", params=_authorize_params())
     match = re.search(r'nonce=([^"&]+)', resp.text)
@@ -1024,7 +959,7 @@ class TestRootBootstrapsPKCE:
         location = resp.headers["location"]
         # Must target /authorize with all 4 required PKCE params.
         assert location.startswith("/authorize?")
-        from urllib.parse import parse_qs, urlparse
+
 
         parsed = urlparse(location)
         params = parse_qs(parsed.query)
@@ -1052,7 +987,7 @@ class TestRootBootstrapsPKCE:
         r1 = client.get("/", follow_redirects=False)
         r2 = client.get("/", follow_redirects=False)
         assert r1.status_code == 302 and r2.status_code == 302
-        from urllib.parse import parse_qs, urlparse
+
 
         p1 = parse_qs(urlparse(r1.headers["location"]).query)
         p2 = parse_qs(urlparse(r2.headers["location"]).query)
@@ -1126,7 +1061,7 @@ class TestSetupStatus:
         ever approved the new code. Each POST /authorize must reset all
         existing keys back to ``"idle"``.
         """
-        import re
+
 
         app, _issuer, _saved = app_and_issuer
         app.state.mark_setup_complete("outlook")
