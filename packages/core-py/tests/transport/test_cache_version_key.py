@@ -148,7 +148,7 @@ def test_atomic_write_chmod_non_nt(tmp_path, monkeypatch):
     monkeypatch.setattr("os.name", "posix")
     chmod_called = False
 
-    def fake_chmod(path, mode):
+    def fake_chmod(path, mode, **kwargs):
         nonlocal chmod_called
         chmod_called = True
         assert mode in (0o600, 0o700)
@@ -169,7 +169,7 @@ def test_atomic_write_no_chmod_on_nt(tmp_path, monkeypatch):
     monkeypatch.setattr("os.name", "nt")
     chmod_called = False
 
-    def fake_chmod(path, mode):
+    def fake_chmod(path, mode, **kwargs):
         nonlocal chmod_called
         chmod_called = True
 

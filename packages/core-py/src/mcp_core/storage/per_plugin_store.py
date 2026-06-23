@@ -57,7 +57,7 @@ def _load_or_generate_machine_key(plugin_name: str) -> bytes:
     secret_path = _machine_key_path(plugin_name)
     secret_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if secret_path.parent.exists() and os.name != "nt":
-        os.chmod(secret_path.parent, 0o700)
+        secret_path.parent.chmod(0o700)
     if secret_path.exists():
         return secret_path.read_bytes()
     key = secrets.token_bytes(32)
