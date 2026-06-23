@@ -61,7 +61,7 @@ def test_load_returns_none_on_version_mismatch(tmp_path, monkeypatch):
 
 
 def test_load_returns_none_on_internal_version_mismatch(tmp_path, monkeypatch):
-    """Test when the file exists but the JSON payload has mismatched versions (Line 79-80)."""
+    """Test when the file exists but the JSON payload has mismatched versions."""
     monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
 
     # Manually write a file with mismatched internal versions
@@ -75,7 +75,7 @@ def test_load_returns_none_on_internal_version_mismatch(tmp_path, monkeypatch):
 
 
 def test_load_returns_none_on_invalid_tools_type(tmp_path, monkeypatch):
-    """Test when the 'tools' key in the JSON payload is not a list (Line 82-83)."""
+    """Test when the 'tools' key in the JSON payload is not a list."""
     monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
 
     name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
@@ -88,7 +88,7 @@ def test_load_returns_none_on_invalid_tools_type(tmp_path, monkeypatch):
 
 
 def test_load_returns_none_on_corrupted_json(tmp_path, monkeypatch):
-    """Test when the cache file contains invalid JSON (Line 77-78)."""
+    """Test when the cache file contains invalid JSON."""
     monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
 
     name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
@@ -100,7 +100,7 @@ def test_load_returns_none_on_corrupted_json(tmp_path, monkeypatch):
 
 
 def test_load_returns_none_on_read_error(tmp_path, monkeypatch):
-    """Test when reading the cache file raises an OSError (Line 77-78)."""
+    """Test when reading the cache file raises an OSError."""
     monkeypatch.setattr("mcp_core.transport.cache._cache_dir", lambda: tmp_path)
 
     name = cache_filename("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0")
@@ -144,7 +144,7 @@ def test_persist_silent_on_oserror(tmp_path, monkeypatch, caplog):
 
 
 def test_atomic_write_chmod_non_nt(tmp_path, monkeypatch):
-    """Verify that os.chmod is called on non-Windows platforms (Line 42-43)."""
+    """Verify that os.chmod is called on non-Windows platforms."""
     monkeypatch.setattr("os.name", "posix")
     chmod_called = False
 
@@ -165,7 +165,7 @@ def test_atomic_write_chmod_non_nt(tmp_path, monkeypatch):
 
 
 def test_atomic_write_no_chmod_on_nt(tmp_path, monkeypatch):
-    """Verify that os.chmod is NOT called on Windows (Line 42-43)."""
+    """Verify that os.chmod is NOT called on Windows."""
     monkeypatch.setattr("os.name", "nt")
     chmod_called = False
 
@@ -182,3 +182,59 @@ def test_atomic_write_no_chmod_on_nt(tmp_path, monkeypatch):
 
     assert path.read_text() == "content"
     assert chmod_called is False
+
+
+def test_cache_traversal_sanitization():
+    malicious_name = "../../etc/passwd"
+    filename = cache_filename(malicious_name, 80, "1.0", "1.0")
+
+    # It should no longer be a traversal path
+    assert "/" not in filename
+    assert "\\" not in filename
+    assert filename == "______etc_passwd-80-1.0-1.0.tools.json"
+
+    cache_dir = Path("/tmp/mcp-cache")
+    full_path = cache_dir / filename
+
+    # The resulting path MUST be under cache_dir
+    assert full_path.parent == cache_dir
+
+
+def test_dangerous_chars_sanitization():
+    malicious_name = "server:name*with?chars"
+    filename = cache_filename(malicious_name, 80, "1.0", "1.0")
+    assert filename == "server_name_with_chars-80-1.0-1.0.tools.json"
+
+
+def test_version_sanitization():
+    filename = cache_filename("server", 80, "1.0/../2.0", "v1.0")
+    assert filename == "server-80-1.0____2.0-v1.0.tools.json"
+
+
+def test_cache_filename_absolute_path():
+    """Verify that absolute paths are sanitized."""
+    filename = cache_filename("/etc/passwd", 80, "1.0", "1.0")
+    assert not filename.startswith("/")
+    assert filename == "_etc_passwd-80-1.0-1.0.tools.json"
+
+
+def test_cache_filename_null_bytes():
+    """Verify that null bytes are sanitized."""
+    filename = cache_filename("server\0.json", 80, "1.0", "1.0")
+    assert "\0" not in filename
+    assert filename == "server_.json-80-1.0-1.0.tools.json"
+
+
+def test_cache_filename_neuters_dot_dot():
+    """Verify that '..' sequences are neutered."""
+    filename = cache_filename("..", 80, "..", "..")
+    assert ".." not in filename
+    assert filename == "__-80-__-__.tools.json"
+
+
+def test_cache_filename_windows_style_paths():
+    """Verify that Windows-style paths are sanitized."""
+    filename = cache_filename("C:\\Windows\\System32\\config", 80, "1.0", "1.0")
+    assert "\\" not in filename
+    assert ":" not in filename
+    assert filename == "C__Windows_System32_config-80-1.0-1.0.tools.json"
