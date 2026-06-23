@@ -62,6 +62,42 @@ def _open_in_wsl(url: str) -> bool:
     return _open_in_powershell(url)
 
 
+def _print_failure_banner(url: str) -> None:
+    """Print a terminal banner with the URL when auto-open fails."""
+    import sys
+
+    banner = f"""
+[93m╔{"═" * 78}╗
+║  [91mACTION REQUIRED: Browser auto-open failed.[93m {" " * 33}║
+║  [97mPlease manually open this URL to continue setup:[93m {" " * 27}║
+║  [36m{url:{74}s}[93m  ║
+╚{"═" * 78}╝[0m
+"""
+    print(banner, file=sys.stderr)
+
+
+def _open_browser_action(url: str) -> bool:
+    """Execute the cross-platform browser opening logic. Never raises."""
+    try:
+        # 1. WSL detection
+        if _is_wsl():
+            logger.debug("WSL detected, using WSL-specific browser opening")
+            if _open_in_wsl(url):
+                return True
+            logger.debug("WSL browser opening failed, falling through to webbrowser")
+
+        # 2. Standard webbrowser
+        result = webbrowser.open(url)
+        if result:
+            logger.debug("Opened browser via webbrowser.open()")
+        else:
+            logger.debug("webbrowser.open() returned False")
+        return result
+    except Exception as err:
+        logger.debug("Failed to open browser: %s", err)
+        return False
+
+
 def try_open_browser(url: str) -> bool:
     """Try to open URL in default browser. Returns True if likely succeeded.
 
@@ -89,37 +125,8 @@ def try_open_browser(url: str) -> bool:
         return True
     _recent_browser_opens[url] = now
 
-    try:
-        # 1. WSL detection
-        if _is_wsl():
-            logger.debug("WSL detected, using WSL-specific browser opening")
-            result = _open_in_wsl(url)
-            if result:
-                return True
-            logger.debug("WSL browser opening failed, falling through to webbrowser")
-
-        # 2. Standard webbrowser
-        result = webbrowser.open(url)
-        if result:
-            logger.debug("Opened browser via webbrowser.open()")
-        else:
-            logger.debug("webbrowser.open() returned False")
-        return result
-
-    except Exception as err:
-        logger.debug("Failed to open browser: %s", err)
-        result = False
-
+    result = _open_browser_action(url)
     if not result:
-        import sys
-
-        banner = f"""
-\x1b[93m╔{"═" * 78}╗
-║  \x1b[91mACTION REQUIRED: Browser auto-open failed.\x1b[93m {" " * 33}║
-║  \x1b[97mPlease manually open this URL to continue setup:\x1b[93m {" " * 27}║
-║  \x1b[36m{url:{74}s}\x1b[93m  ║
-╚{"═" * 78}╝\x1b[0m
-"""
-        print(banner, file=sys.stderr)
+        _print_failure_banner(url)
 
     return result
