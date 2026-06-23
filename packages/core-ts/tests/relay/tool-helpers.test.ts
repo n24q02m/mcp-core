@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, type Mock, vi } from 'vitest'
 import { tryOpenBrowser } from '../../src/relay/browser.js'
 import { buildOpenRelayHandler, registerOpenRelayTool, type ToolRegistrar } from '../../src/relay/tool-helpers.js'
 
@@ -14,9 +14,18 @@ describe('buildOpenRelayHandler -- HTTP mode', () => {
     })
     const result = await handler()
     expect(result.url).toBe('http://127.0.0.1:8080/authorize')
-    expect(result.status).toMatch(/configured|unconfigured/)
+    expect(result.status).toBe('unconfigured')
     expect(result.browserOpened).toBe(true)
     expect(tryOpenBrowser).toHaveBeenCalledWith('http://127.0.0.1:8080/authorize')
+  })
+
+  it('strips trailing slash in publicUrl', async () => {
+    const handler = buildOpenRelayHandler({
+      serverName: 'test-server',
+      publicUrl: 'http://127.0.0.1:8080/'
+    })
+    const result = await handler()
+    expect(result.url).toBe('http://127.0.0.1:8080/authorize')
   })
 
   it('returns stdio_unsupported in stdio mode (null publicUrl)', async () => {
@@ -24,6 +33,17 @@ describe('buildOpenRelayHandler -- HTTP mode', () => {
     const result = await handler()
     expect(result.status).toBe('stdio_unsupported')
     expect(result.url).toBe('')
+    expect(result.browserOpened).toBe(false)
+  })
+
+  it('browser open failure still returns url', async () => {
+    vi.mocked(tryOpenBrowser).mockResolvedValueOnce(false)
+    const handler = buildOpenRelayHandler({
+      serverName: 'test-server',
+      publicUrl: 'http://127.0.0.1:8080'
+    })
+    const result = await handler()
+    expect(result.url).toBe('http://127.0.0.1:8080/authorize')
     expect(result.browserOpened).toBe(false)
   })
 })
@@ -49,7 +69,7 @@ describe('registerOpenRelayTool', () => {
 
   it('registered handler works correctly', async () => {
     const mcp = {
-      tool: vi.fn()
+      tool: vi.fn() as Mock
     }
     registerOpenRelayTool(mcp as unknown as ToolRegistrar, 'test-server', 'https://example.com')
 
