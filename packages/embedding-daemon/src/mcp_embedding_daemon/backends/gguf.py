@@ -12,3 +12,6 @@ class GGUFBackend:
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         raise NotImplementedError("Wire to llama-cpp-python in a follow-up Phase I task")
+
+    def rerank(self, query: str, docs: list[str]) -> list[tuple[int, float]]:
+        raise NotImplementedError("Wire to llama-cpp-python in a follow-up Phase I task")
