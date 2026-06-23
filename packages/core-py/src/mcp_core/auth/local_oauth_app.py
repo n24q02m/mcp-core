@@ -320,8 +320,7 @@ def create_local_oauth_app(
         # "complete" within a few seconds and triggers a premature
         # redirect. Reset all keys to "idle" so each submit starts from
         # a clean state.
-        for _k in list(_setup_status.keys()):
-            _setup_status[_k] = "idle"
+        _setup_status.update(dict.fromkeys(_setup_status, "idle"))
 
         # Save credentials via callback. Callback may return a dict with
         # next_step info (e.g., GDrive OAuth device code to show in the form).
