@@ -209,8 +209,9 @@ _MODEL_CHAIN_SCRIPT = """
                     var models = getChips(w);
                     if (models.indexOf(m) === -1) models.push(m);
                     setChips(w, models);
-                    input.value = "";
-                    buildDropdown(w, "");
+                    // Keep the typed keyword so the user can keep adding matches
+                    // from the same search; re-filter the dropdown with it.
+                    buildDropdown(w, input.value.trim());
                 }
             });
             document.addEventListener("click", function (e) {

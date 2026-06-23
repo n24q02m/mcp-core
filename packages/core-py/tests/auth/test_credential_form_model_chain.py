@@ -274,3 +274,14 @@ def test_catalog_merge_graceful_when_provider_api_raises(monkeypatch):
     )
     out = _catalog_models_for_task("rerank")
     assert out == ["cohere/rerank-v3.5"]
+
+
+def test_enter_keeps_search_keyword():
+    """After adding a model via Enter, the typed keyword must remain in the input
+    (not be cleared) so the user can keep refining/adding from the same search."""
+    from mcp_core.auth.credential_form import _MODEL_CHAIN_SCRIPT
+
+    assert 'input.value = "";' not in _MODEL_CHAIN_SCRIPT  # no clear-on-Enter
+    assert 'buildDropdown(w, "");' not in _MODEL_CHAIN_SCRIPT  # no filter reset
+    # the dropdown is rebuilt with the SAME live keyword after a selection
+    assert "buildDropdown(w, input.value.trim());" in _MODEL_CHAIN_SCRIPT
