@@ -25,6 +25,7 @@ import base64
 import datetime
 import hashlib
 import logging
+import os
 from pathlib import Path
 
 import jwt
@@ -100,55 +101,61 @@ class JWTIssuer:
         self._kid = _b64url(hashlib.sha256(raw_pub).digest())[:16]
 
     def _load_or_generate_keys(self) -> None:
+        self._ensure_keys_dir()
+        if self.private_key_path.exists() and self.public_key_path.exists():
+            self._load_keys()
+        else:
+            self._generate_keys()
+
+    def _ensure_keys_dir(self) -> None:
         # mode=0o700 closes the TOCTOU window where a freshly-created keys dir
         # would briefly be world-readable before the chmod below; the chmod
         # still runs to fix an already-existing dir and to override umask.
         self.keys_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        import os
-
         if os.name != "nt":
             self.keys_dir.chmod(0o700)
 
-        if self.private_key_path.exists() and self.public_key_path.exists():
-            with open(self.private_key_path, "rb") as f:
-                loaded_private = serialization.load_pem_private_key(f.read(), password=None)
-            if not isinstance(loaded_private, RSAPrivateKey):
-                msg = f"Expected RSA private key at {self.private_key_path}, got {type(loaded_private).__name__}"
-                raise TypeError(msg)
-            self.private_key = loaded_private
+    def _load_keys(self) -> None:
+        with open(self.private_key_path, "rb") as f:
+            loaded_private = serialization.load_pem_private_key(f.read(), password=None)
+        if not isinstance(loaded_private, RSAPrivateKey):
+            msg = f"Expected RSA private key at {self.private_key_path}, got {type(loaded_private).__name__}"
+            raise TypeError(msg)
+        self.private_key = loaded_private
 
-            with open(self.public_key_path, "rb") as f:
-                loaded_public = serialization.load_pem_public_key(f.read())
-            if not isinstance(loaded_public, RSAPublicKey):
-                msg = f"Expected RSA public key at {self.public_key_path}, got {type(loaded_public).__name__}"
-                raise TypeError(msg)
-            self.public_key = loaded_public
-        else:
-            self.private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=2048,
+        with open(self.public_key_path, "rb") as f:
+            loaded_public = serialization.load_pem_public_key(f.read())
+        if not isinstance(loaded_public, RSAPublicKey):
+            msg = f"Expected RSA public key at {self.public_key_path}, got {type(loaded_public).__name__}"
+            raise TypeError(msg)
+        self.public_key = loaded_public
+
+    def _generate_keys(self) -> None:
+        self.private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+        self.public_key = self.private_key.public_key()
+
+        with open(self.private_key_path, "wb") as f:
+            f.write(
+                self.private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption(),
+                )
             )
-            self.public_key = self.private_key.public_key()
 
-            with open(self.private_key_path, "wb") as f:
-                f.write(
-                    self.private_key.private_bytes(
-                        encoding=serialization.Encoding.PEM,
-                        format=serialization.PrivateFormat.PKCS8,
-                        encryption_algorithm=serialization.NoEncryption(),
-                    )
+        with open(self.public_key_path, "wb") as f:
+            f.write(
+                self.public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
                 )
-
-            with open(self.public_key_path, "wb") as f:
-                f.write(
-                    self.public_key.public_bytes(
-                        encoding=serialization.Encoding.PEM,
-                        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                    )
-                )
-            # Ensure proper file permissions
-            self.private_key_path.chmod(0o600)
-            self.public_key_path.chmod(0o644)
+            )
+        # Ensure proper file permissions
+        self.private_key_path.chmod(0o600)
+        self.public_key_path.chmod(0o644)
 
     def get_jwks(self) -> dict:
         """Return JWKS payload for /.well-known/jwks.json.
