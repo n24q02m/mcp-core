@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  claimSession,
-  getActiveSession,
-  isSessionActive,
-  releaseSession,
-  validateSessionToken
-} from '../../src/relay/session.js'
+import { claimSession, isSessionActive, releaseSession, validateSessionToken } from '../../src/relay/session.js'
 
 describe('active form session', () => {
   beforeEach(() => releaseSession())

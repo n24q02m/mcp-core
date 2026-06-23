@@ -37,8 +37,8 @@ describe('setup-complete flag', () => {
     await markSetupComplete('demo')
     const saved = await readConfig('demo')
     expect(saved).not.toBeNull()
-    expect(saved![SETUP_COMPLETE_KEY]).toBe('true')
-    expect(saved!.API_KEY).toBe('k')
+    expect(saved?.[SETUP_COMPLETE_KEY]).toBe('true')
+    expect(saved?.API_KEY).toBe('k')
   })
 
   it('markSetupComplete works when no prior config exists', async () => {
@@ -51,8 +51,8 @@ describe('setup-complete flag', () => {
     await writeConfig('demo', { API_KEY: 'k1', [SETUP_COMPLETE_KEY]: 'true' })
     await writeConfig('demo', { API_KEY: 'k2' })
     const saved = await readConfig('demo')
-    expect(saved![SETUP_COMPLETE_KEY]).toBeUndefined()
-    expect(saved!.API_KEY).toBe('k2')
+    expect(saved?.[SETUP_COMPLETE_KEY]).toBeUndefined()
+    expect(saved?.API_KEY).toBe('k2')
   })
 
   it('markSetupComplete is idempotent', async () => {

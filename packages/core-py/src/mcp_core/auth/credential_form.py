@@ -517,6 +517,12 @@ _FORM_SHELL_CSS = """        *, *::before, *::after {
             border: 1px solid #2a2a2a;
             border-radius: 8px;
             padding: 0.75rem 1rem;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+
+        .capability-item:hover {
+            background-color: #161616;
+            border-color: #3a3a3a;
         }
 
         .capability-header {
