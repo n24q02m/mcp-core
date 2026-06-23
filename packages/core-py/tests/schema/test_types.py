@@ -83,8 +83,8 @@ class TestSchemaTypes:
         assert len(schema["modes"]) == 2
         assert schema["modes"][0]["id"] == "bot"
 
-    def test_dynamic_flow_schema(self):
-        entry_field: ConfigField = {
+    def _get_test_entry_field(self) -> ConfigField:
+        return {
             "key": "provider",
             "label": "Email Provider",
             "type": "select",
@@ -92,7 +92,8 @@ class TestSchemaTypes:
             "required": True,
         }
 
-        oauth_route: OAuthRoute = {
+    def _get_test_oauth_route(self) -> OAuthRoute:
+        return {
             "match": ["gmail"],
             "action": "oauth2_device_code",
             "message": "Sign in with Google",
@@ -102,7 +103,8 @@ class TestSchemaTypes:
             },
         }
 
-        cred_route: CredentialsRoute = {
+    def _get_test_cred_route(self) -> CredentialsRoute:
+        return {
             "match": ["custom"],
             "action": "credentials",
             "fields": [
@@ -132,6 +134,11 @@ class TestSchemaTypes:
                 },
             ],
         }
+
+    def test_dynamic_flow_schema(self):
+        entry_field = self._get_test_entry_field()
+        oauth_route = self._get_test_oauth_route()
+        cred_route = self._get_test_cred_route()
 
         flow: DynamicFlow = {
             "entryField": entry_field,
