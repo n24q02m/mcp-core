@@ -618,30 +618,60 @@ _TASK_CATALOG_MODES: dict[str, tuple[str, ...]] = {
 # ``data-catalog`` attribute — a bounded, reasonable page-weight ceiling.
 _CATALOG_LIMIT = 5000
 
+# Providers whose bare-named litellm ids must be prefixed so the widget derives
+# the right ``<PROVIDER>_API_KEY`` (a bare name infers ``openai``). Mirrors
+# ``mcp_core.llm.providers.PROVIDER_KEY_ENV``.
+_NORMALIZE_PREFIXES = frozenset({"cohere", "jina_ai", "openai", "gemini", "xai", "anthropic", "vertex_express"})
+
+
+def _normalize_litellm_id(model: str, provider: str) -> str:
+    """Prefix a bare curated-provider model id so prefix-inference derives the
+    correct key; leave already-prefixed and non-curated ids untouched."""
+    if "/" in model:
+        return model
+    if provider in _NORMALIZE_PREFIXES:
+        return f"{provider}/{model}"
+    return model
+
 
 def _catalog_models_for_task(task: str, limit: int = _CATALOG_LIMIT) -> list[str]:
     """Best-effort model-id list for a model-chain ``task``'s catalog mode.
 
-    Backs the relay dropdown's search with the real litellm catalog
-    (``mcp_core.llm.catalog.list_models``) so a user can discover the full
-    provider/model space, not just the server's curated ``suggestedModels``.
-    Returns ``[]`` gracefully when the ``[llm]`` extra / litellm is
-    unavailable or the task has no model mode, so the form still renders for
-    every server (including non-LLM ones).
+    Merges live special-provider models (``provider_catalog_models`` — e.g. Jina,
+    keyless) first, then the litellm registry with bare curated names normalized
+    to ``provider/model``. Deduped, order-preserving. Returns ``[]`` gracefully
+    when neither source yields models (no ``[llm]`` extra, unknown task), so the
+    form renders for every server (including non-LLM ones).
     """
     modes = _TASK_CATALOG_MODES.get(task)
     if not modes:
         return []
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _add(model_id: str) -> None:
+        if model_id and model_id not in seen:
+            seen.add(model_id)
+            out.append(model_id)
+
+    try:
+        from mcp_core.llm.provider_catalog import provider_catalog_models
+
+        for m in provider_catalog_models(task):
+            _add(m)
+    except Exception:
+        pass
+
     try:
         from mcp_core.llm.catalog import list_models
 
-        return [
-            m["model"]
-            for m in list_models(modes=modes, configured_only=False, limit=limit)
-            if isinstance(m, dict) and m.get("model")
-        ]
+        for m in list_models(modes=modes, configured_only=False, limit=limit):
+            if isinstance(m, dict) and m.get("model"):
+                _add(_normalize_litellm_id(str(m["model"]), str(m.get("provider", ""))))
     except Exception:
-        return []
+        pass
+
+    return out
 
 
 def _render_field(field: dict[str, Any], value: str = "") -> str:
