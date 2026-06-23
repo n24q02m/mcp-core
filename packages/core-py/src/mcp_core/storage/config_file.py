@@ -130,7 +130,7 @@ def _load_store() -> dict[str, Any]:
 
 def _save_store(store: dict[str, Any]) -> None:
     config_path = _get_config_path()
-    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if config_path.parent.exists() and os.name != "nt":
         config_path.parent.chmod(0o700)
 

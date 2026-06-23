@@ -42,7 +42,7 @@ class SqliteUserStore(IUserCredentialStore):
             # Ensure directory exists with strict permissions (owner-only access).
             # 0o700 = owner read+write+exec only; group/other denied. This is the
             # secure default for a credential store directory.
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self.db_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             if self.db_path.parent.exists() and os.name != "nt":
                 self.db_path.parent.chmod(0o700)
 

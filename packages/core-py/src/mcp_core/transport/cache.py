@@ -36,7 +36,9 @@ def cache_filename(server_name: str, port: int, srv_version: str, core_version: 
 
 def _atomic_write(path: Path, content: str) -> None:
     """Atomic write via .tmp + os.replace (Windows-safe)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if path.parent.exists() and os.name != "nt":
+        os.chmod(path.parent, 0o700)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(content, encoding="utf-8")
     if os.name != "nt":

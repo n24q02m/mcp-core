@@ -104,6 +104,8 @@ class LocalFsBackend:
     def put(self, key: str, blob: bytes) -> None:
         path = _key_to_path(key)
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if path.parent.exists() and os.name != "nt":
+            os.chmod(path.parent, 0o700)
         path.write_bytes(blob)
         if os.name != "nt":
             os.chmod(path, 0o600)

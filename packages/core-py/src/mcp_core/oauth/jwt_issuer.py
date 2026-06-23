@@ -25,6 +25,7 @@ import base64
 import datetime
 import hashlib
 import logging
+import os
 from pathlib import Path
 
 import jwt
@@ -104,8 +105,6 @@ class JWTIssuer:
         # would briefly be world-readable before the chmod below; the chmod
         # still runs to fix an already-existing dir and to override umask.
         self.keys_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        import os
-
         if os.name != "nt":
             self.keys_dir.chmod(0o700)
 
