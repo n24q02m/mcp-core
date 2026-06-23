@@ -1,7 +1,9 @@
 """HTTP client for Cloudflare D1 via the Worker outbound-handler (or REST fallback).
 
-Wire contract (matches src/worker.ts): POST {base}/query with JSON
-{"sql": str, "params": list} -> 200 {"results": [<row dicts>]}.
+Wire contract (matches src/worker.ts):
+- /query: POST {base}/query JSON {"sql": str, "params": list} -> 200 {"results": [<row dicts>]}
+- /batch: POST {base}/batch JSON [{"sql": str, "params": list}, ...] -> 200 [<results>]
+
 Prepared statements only (sql + bound params); raw SQL text is never sent.
 Fail-loud: any non-200 raises (no silent empty results).
 """
@@ -57,6 +59,13 @@ class D1Backend:
             raise RuntimeError(f"D1Backend query failed: HTTP {status}")
         return json.loads(data.decode()).get("results", [])
 
+    def _batch(self, queries: list[dict[str, Any]]) -> list[list[dict]]:
+        body = json.dumps(queries).encode()
+        status, data = self._http.request("POST", f"{self.base_url}/batch", body, self._headers())
+        if status != 200:
+            raise RuntimeError(f"D1Backend batch failed: HTTP {status}")
+        return json.loads(data.decode())
+
     def fetchall(self, sql: str, params: list[Any]) -> list[dict]:
         return self.execute(sql, params)
 
@@ -81,6 +90,8 @@ class D1Backend:
                 # data is bound via `flat` params, never interpolated -> safe.
                 # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                 self.execute(batched_sql, flat)
+            elif len(batch) > 1:
+                self._batch([{"sql": sql, "params": row} for row in batch])
             else:
                 for row in batch:
                     self.execute(sql, row)
