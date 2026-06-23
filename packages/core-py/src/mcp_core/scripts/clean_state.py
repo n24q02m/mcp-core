@@ -234,6 +234,55 @@ def _terminate_daemon(pid: int) -> None:
         pass
 
 
+def _clean_one_daemon(lock: Path, cache_dir: Path, verbose: bool) -> int:
+    """Kill one daemon and remove its lock + companion files.
+    Returns 1 if a daemon was killed, 0 otherwise."""
+    killed = 0
+    pid = _parse_lock_pid(lock)
+    if pid is not None and _is_pid_alive(pid):
+        _terminate_daemon(pid)
+        # Brief pause to let the OS reap the process so subsequent lock
+        # writes by mcp-core do not collide with the old PID's handle.
+        for _ in range(20):
+            if not _is_pid_alive(pid):
+                break
+            time.sleep(0.05)
+        killed = 1
+        if verbose:
+            print(f"killed: pid={pid} ({lock.name})")
+
+    try:
+        lock.unlink()
+        if verbose:
+            print(f"removed: {lock}")
+    except OSError as exc:
+        print(f"failed to remove {lock}: {exc}", file=sys.stderr)
+
+    # Companion tools cache lives at:
+    #   ~/.config/mcp/cache/<server>-<pid>-<protocol>-<core>.tools.json
+    # We match by server+pid prefix since protocol/core suffix varies.
+    if cache_dir.exists() and pid is not None:
+        stem_prefix = f"{lock.stem}-"  # e.g. "wet-mcp-1234-"
+        for cache_file in cache_dir.glob(f"{stem_prefix}*.tools.json"):
+            try:
+                cache_file.unlink()
+                if verbose:
+                    print(f"removed: {cache_file}")
+            except OSError as exc:
+                print(f"failed to remove {cache_file}: {exc}", file=sys.stderr)
+
+    # Sibling sentinel ``<lock>.tools-list-changed`` (if used by future code).
+    sentinel = lock.with_suffix(lock.suffix + ".tools-list-changed")
+    if sentinel.exists():
+        try:
+            sentinel.unlink()
+            if verbose:
+                print(f"removed: {sentinel}")
+        except OSError as exc:
+            print(f"failed to remove {sentinel}: {exc}", file=sys.stderr)
+    return killed
+
+
 def kill_daemons(verbose: bool = False) -> tuple[int, int]:
     """Terminate alive MCP daemons and remove their lock + companion files.
 
@@ -265,55 +314,14 @@ def kill_daemons(verbose: bool = False) -> tuple[int, int]:
     killed = 0
     removed = 0
     for lock in locks:
-        pid = _parse_lock_pid(lock)
-        if pid is not None and _is_pid_alive(pid):
-            _terminate_daemon(pid)
-            # Brief pause to let the OS reap the process so subsequent lock
-            # writes by mcp-core do not collide with the old PID's handle.
-            for _ in range(20):
-                if not _is_pid_alive(pid):
-                    break
-                time.sleep(0.05)
-            killed += 1
-            if verbose:
-                print(f"killed: pid={pid} ({lock.name})")
-
-        try:
-            lock.unlink()
-            removed += 1
-            if verbose:
-                print(f"removed: {lock}")
-        except OSError as exc:
-            print(f"failed to remove {lock}: {exc}", file=sys.stderr)
-
-        # Companion tools cache lives at:
-        #   ~/.config/mcp/cache/<server>-<pid>-<protocol>-<core>.tools.json
-        # We match by server+pid prefix since protocol/core suffix varies.
-        if cache_dir.exists() and pid is not None:
-            stem_prefix = f"{lock.stem}-"  # e.g. "wet-mcp-1234-"
-            for cache_file in cache_dir.glob(f"{stem_prefix}*.tools.json"):
-                try:
-                    cache_file.unlink()
-                    if verbose:
-                        print(f"removed: {cache_file}")
-                except OSError as exc:
-                    print(f"failed to remove {cache_file}: {exc}", file=sys.stderr)
-
-        # Sibling sentinel ``<lock>.tools-list-changed`` (if used by future code).
-        sentinel = lock.with_suffix(lock.suffix + ".tools-list-changed")
-        if sentinel.exists():
-            try:
-                sentinel.unlink()
-                if verbose:
-                    print(f"removed: {sentinel}")
-            except OSError as exc:
-                print(f"failed to remove {sentinel}: {exc}", file=sys.stderr)
+        killed += _clean_one_daemon(lock, cache_dir, verbose)
+        removed += 1
 
     print(f"Killed {killed} daemons; cleaned {removed} lock files.")
     return (killed, removed)
 
 
-def main(argv: list[str] | None = None) -> int:
+def _make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mcp-clean-state",
         description="Clear MCP server credentials, locks, and tools cache.",
@@ -338,6 +346,27 @@ def main(argv: list[str] | None = None) -> int:
             "(see docs/migration-2026-04-30.md). Runs before any other cleanup."
         ),
     )
+    return parser
+
+
+def _perform_removal(paths: list[Path], verbose: bool) -> int:
+    removed = 0
+    for p in paths:
+        try:
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+            if verbose:
+                print(f"removed: {p}")
+            removed += 1
+        except OSError as exc:
+            print(f"failed: {p} ({exc})", file=sys.stderr)
+    return removed
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _make_parser()
     args = parser.parse_args(argv)
 
     if args.kill_daemons:
@@ -366,19 +395,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Aborted.")
         return 1
 
-    removed = 0
-    for p in paths:
-        try:
-            if p.is_dir():
-                shutil.rmtree(p)
-            else:
-                p.unlink()
-            if args.verbose:
-                print(f"removed: {p}")
-            removed += 1
-        except OSError as exc:
-            print(f"failed: {p} ({exc})", file=sys.stderr)
-
+    removed = _perform_removal(paths, args.verbose)
     print(f"Removed {removed}/{len(paths)} path(s).")
     return 0
 
