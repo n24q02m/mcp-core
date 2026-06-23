@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.20 (2026-06-23)
+
+### Bug Fixes
+
+- Apply ruff format to model-chain test file ([#527](https://github.com/n24q02m/mcp-core/pull/527),
+  [`100d12c`](https://github.com/n24q02m/mcp-core/commit/100d12ce9f94460b939a7aff383cf368daa8a6b9))
+
+- Keep relay model-chain search keyword after selecting a model
+  ([#527](https://github.com/n24q02m/mcp-core/pull/527),
+  [`100d12c`](https://github.com/n24q02m/mcp-core/commit/100d12ce9f94460b939a7aff383cf368daa8a6b9))
+
+### Features
+
+- Live Jina model catalog (keyless) for relay embed/rerank search
+  ([#527](https://github.com/n24q02m/mcp-core/pull/527),
+  [`100d12c`](https://github.com/n24q02m/mcp-core/commit/100d12ce9f94460b939a7aff383cf368daa8a6b9))
+
+- Live provider catalog + normalized litellm + keep relay search keyword
+  ([#527](https://github.com/n24q02m/mcp-core/pull/527),
+  [`100d12c`](https://github.com/n24q02m/mcp-core/commit/100d12ce9f94460b939a7aff383cf368daa8a6b9))
+
+- Merge live provider catalog + normalize bare litellm ids in relay dropdown
+  ([#527](https://github.com/n24q02m/mcp-core/pull/527),
+  [`100d12c`](https://github.com/n24q02m/mcp-core/commit/100d12ce9f94460b939a7aff383cf368daa8a6b9))
+
+
 ## v1.18.0-beta.19 (2026-06-22)
 
 ### Bug Fixes
