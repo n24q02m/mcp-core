@@ -20,7 +20,7 @@ export async function deriveFileKey(
     ['deriveKey']
   )
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as any, iterations },
+    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -35,7 +35,7 @@ export async function derivePassphraseKey(
 ): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as any, iterations },
+    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
