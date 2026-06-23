@@ -6,6 +6,20 @@ export const LEGACY_EXPORT_SALT = encoder.encode('mcp-relay-export')
 export const PBKDF2_ITERATIONS = 600_000
 export const LEGACY_PBKDF2_ITERATIONS = 100_000
 
+async function deriveAESKeyFromPBKDF2(
+  keyMaterial: CryptoKey,
+  salt: Uint8Array,
+  iterations: number
+): Promise<CryptoKey> {
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as any, iterations },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  )
+}
+
 export async function deriveFileKey(
   machineId: string,
   username: string,
@@ -19,13 +33,7 @@ export async function deriveFileKey(
     false,
     ['deriveKey']
   )
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as any, iterations },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  )
+  return deriveAESKeyFromPBKDF2(keyMaterial, salt, iterations)
 }
 
 export async function derivePassphraseKey(
@@ -34,13 +42,7 @@ export async function derivePassphraseKey(
   iterations: number = PBKDF2_ITERATIONS
 ): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey'])
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as any, iterations },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  )
+  return deriveAESKeyFromPBKDF2(keyMaterial, salt, iterations)
 }
 
 export async function encryptData(key: CryptoKey, plaintext: string): Promise<Buffer> {
