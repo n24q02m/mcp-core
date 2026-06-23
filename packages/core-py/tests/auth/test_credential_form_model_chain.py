@@ -242,9 +242,7 @@ def test_catalog_merges_provider_api_models_first(monkeypatch):
     import mcp_core.llm.provider_catalog as pc
     from mcp_core.auth.credential_form import _catalog_models_for_task
 
-    monkeypatch.setattr(
-        pc, "provider_catalog_models", lambda task: ["jina_ai/jina-embeddings-v5-text-small"]
-    )
+    monkeypatch.setattr(pc, "provider_catalog_models", lambda task: ["jina_ai/jina-embeddings-v5-text-small"])
     monkeypatch.setattr(
         catalog_mod,
         "list_models",
