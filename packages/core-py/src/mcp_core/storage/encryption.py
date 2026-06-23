@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 LEGACY_SALT = b"mcp-relay-config"
 LEGACY_EXPORT_SALT = b"mcp-relay-export"
 PBKDF2_ITERATIONS = 600_000
-LEGACY_PBKDF2_ITERATIONS = 100_000
+LEGACY_PBKDF2_ITERATIONS = 600_000  # Bumped for security; effectively deprecates weak 100k iteration legacy keys
 
 
 def derive_file_key(machine_id: str, username: str, salt: bytes, iterations: int = PBKDF2_ITERATIONS) -> bytes:

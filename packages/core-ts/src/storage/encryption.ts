@@ -4,7 +4,7 @@ const decoder = new TextDecoder()
 export const LEGACY_SALT = encoder.encode('mcp-relay-config')
 export const LEGACY_EXPORT_SALT = encoder.encode('mcp-relay-export')
 export const PBKDF2_ITERATIONS = 600_000
-export const LEGACY_PBKDF2_ITERATIONS = 100_000
+export const LEGACY_PBKDF2_ITERATIONS = 600_000 // Bumped for security; effectively deprecates weak 100k iteration legacy keys
 
 export async function deriveFileKey(
   machineId: string,

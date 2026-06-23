@@ -4,7 +4,6 @@ import pytest
 from cryptography.exceptions import InvalidTag
 
 from mcp_core.storage.encryption import (
-    LEGACY_PBKDF2_ITERATIONS,
     PBKDF2_ITERATIONS,
     decrypt_data,
     derive_file_key,
@@ -119,14 +118,14 @@ class TestEncryptDecryptRoundtrip:
 class TestPBKDF2Iterations:
     def test_different_iterations_produce_different_keys(self):
         key_current = derive_file_key("m", "u", test_salt, PBKDF2_ITERATIONS)
-        key_legacy = derive_file_key("m", "u", test_salt, LEGACY_PBKDF2_ITERATIONS)
+        key_legacy = derive_file_key("m", "u", test_salt, 100_000)
 
         encrypted = encrypt_data(key_current, "secret")
         with pytest.raises(InvalidTag):
             decrypt_data(key_legacy, encrypted)
 
     def test_legacy_key_can_decrypt_legacy_data(self):
-        key_legacy = derive_file_key("m", "u", test_salt, LEGACY_PBKDF2_ITERATIONS)
+        key_legacy = derive_file_key("m", "u", test_salt, 100_000)
         plaintext = "migration test"
         encrypted = encrypt_data(key_legacy, plaintext)
         decrypted = decrypt_data(key_legacy, encrypted)
@@ -134,7 +133,7 @@ class TestPBKDF2Iterations:
 
     def test_passphrase_key_different_iterations(self):
         key_current = derive_passphrase_key("pass", test_salt, PBKDF2_ITERATIONS)
-        key_legacy = derive_passphrase_key("pass", test_salt, LEGACY_PBKDF2_ITERATIONS)
+        key_legacy = derive_passphrase_key("pass", test_salt, 100_000)
 
         encrypted = encrypt_data(key_current, "secret")
         with pytest.raises(InvalidTag):

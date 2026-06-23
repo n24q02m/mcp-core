@@ -4,7 +4,6 @@ import {
   deriveFileKey,
   derivePassphraseKey,
   encryptData,
-  LEGACY_PBKDF2_ITERATIONS,
   PBKDF2_ITERATIONS
 } from '../../src/storage/encryption.js'
 
@@ -102,14 +101,14 @@ describe('encrypt + decrypt roundtrip', () => {
 describe('PBKDF2 iterations', () => {
   it('different iterations produce different keys', async () => {
     const keyCurrent = await deriveFileKey('m', 'u', testSalt, PBKDF2_ITERATIONS)
-    const keyLegacy = await deriveFileKey('m', 'u', testSalt, LEGACY_PBKDF2_ITERATIONS)
+    const keyLegacy = await deriveFileKey('m', 'u', testSalt, 100_000)
 
     const encrypted = await encryptData(keyCurrent, 'secret')
     await expect(decryptData(keyLegacy, encrypted)).rejects.toThrow()
   }, 60000)
 
   it('legacy key can decrypt legacy-encrypted data', async () => {
-    const keyLegacy = await deriveFileKey('m', 'u', testSalt, LEGACY_PBKDF2_ITERATIONS)
+    const keyLegacy = await deriveFileKey('m', 'u', testSalt, 100_000)
     const encrypted = await encryptData(keyLegacy, 'migration test')
     const decrypted = await decryptData(keyLegacy, encrypted)
     expect(decrypted).toBe('migration test')
@@ -117,7 +116,7 @@ describe('PBKDF2 iterations', () => {
 
   it('passphrase key with different iterations produces different keys', async () => {
     const keyCurrent = await derivePassphraseKey('pass', testSalt, PBKDF2_ITERATIONS)
-    const keyLegacy = await derivePassphraseKey('pass', testSalt, LEGACY_PBKDF2_ITERATIONS)
+    const keyLegacy = await derivePassphraseKey('pass', testSalt, 100_000)
 
     const encrypted = await encryptData(keyCurrent, 'secret')
     await expect(decryptData(keyLegacy, encrypted)).rejects.toThrow()
