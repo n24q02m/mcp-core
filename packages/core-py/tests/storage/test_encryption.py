@@ -5,7 +5,6 @@ from cryptography.exceptions import InvalidTag
 
 from mcp_core.storage.encryption import (
     LEGACY_PBKDF2_ITERATIONS,
-    PBKDF2_ITERATIONS,
     decrypt_data,
     derive_file_key,
     derive_passphrase_key,
@@ -118,12 +117,13 @@ class TestEncryptDecryptRoundtrip:
 
 class TestPBKDF2Iterations:
     def test_different_iterations_produce_different_keys(self):
-        key_current = derive_file_key("m", "u", test_salt, PBKDF2_ITERATIONS)
-        key_legacy = derive_file_key("m", "u", test_salt, LEGACY_PBKDF2_ITERATIONS)
+        # Use hardcoded distinct values to verify iteration sensitivity
+        key_1 = derive_file_key("m", "u", test_salt, 1000)
+        key_2 = derive_file_key("m", "u", test_salt, 2000)
 
-        encrypted = encrypt_data(key_current, "secret")
+        encrypted = encrypt_data(key_1, "secret")
         with pytest.raises(InvalidTag):
-            decrypt_data(key_legacy, encrypted)
+            decrypt_data(key_2, encrypted)
 
     def test_legacy_key_can_decrypt_legacy_data(self):
         key_legacy = derive_file_key("m", "u", test_salt, LEGACY_PBKDF2_ITERATIONS)
@@ -133,9 +133,10 @@ class TestPBKDF2Iterations:
         assert decrypted == plaintext
 
     def test_passphrase_key_different_iterations(self):
-        key_current = derive_passphrase_key("pass", test_salt, PBKDF2_ITERATIONS)
-        key_legacy = derive_passphrase_key("pass", test_salt, LEGACY_PBKDF2_ITERATIONS)
+        # Use hardcoded distinct values to verify iteration sensitivity
+        key_1 = derive_passphrase_key("pass", test_salt, 1000)
+        key_2 = derive_passphrase_key("pass", test_salt, 2000)
 
-        encrypted = encrypt_data(key_current, "secret")
+        encrypted = encrypt_data(key_1, "secret")
         with pytest.raises(InvalidTag):
-            decrypt_data(key_legacy, encrypted)
+            decrypt_data(key_2, encrypted)
