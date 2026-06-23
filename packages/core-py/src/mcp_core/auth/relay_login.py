@@ -161,9 +161,7 @@ def _get_login_error_assets(error_msg: str | None) -> tuple[str, str]:
             <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">
                 {html.escape(error_msg)}
             </div>"""
-    aria_attributes = (
-        ' aria-invalid="true" aria-errormessage="login-error" aria-describedby="login-error relay-desc"'
-    )
+    aria_attributes = ' aria-invalid="true" aria-errormessage="login-error" aria-describedby="login-error relay-desc"'
     return error_html, aria_attributes
 
 
