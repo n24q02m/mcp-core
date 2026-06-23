@@ -206,3 +206,80 @@ def test_catalog_is_not_capped_at_100(monkeypatch):
     assert captured["limit"] >= len(big)
     assert len(result) == len(big)
     assert "azure_ai/deepseek-v3.2" in result
+
+
+# --- catalog: provider-API merge + bare-name normalization --------------------
+
+
+def test_catalog_normalizes_bare_cohere_name(monkeypatch):
+    """litellm returns bare 'embed-english-v3.0' (provider=cohere). The widget
+    infers provider from the prefix, so a bare name would derive the WRONG key
+    (openai). Normalize bare curated-provider ids to '<provider>/<name>'."""
+    import mcp_core.llm.catalog as catalog_mod
+    import mcp_core.llm.provider_catalog as pc
+    from mcp_core.auth.credential_form import _catalog_models_for_task
+
+    monkeypatch.setattr(pc, "provider_catalog_models", lambda task: [])
+    monkeypatch.setattr(
+        catalog_mod,
+        "list_models",
+        lambda **kw: [
+            {"model": "embed-english-v3.0", "provider": "cohere", "mode": "embedding"},
+            {"model": "cohere/embed-v4.0", "provider": "cohere", "mode": "embedding"},
+            {"model": "azure_ai/Cohere-embed-v3", "provider": "azure_ai", "mode": "embedding"},
+        ],
+    )
+    out = _catalog_models_for_task("embedding")
+    assert "cohere/embed-english-v3.0" in out  # bare -> prefixed
+    assert "cohere/embed-v4.0" in out  # already prefixed, unchanged
+    assert "azure_ai/Cohere-embed-v3" in out  # already prefixed, untouched
+    assert "embed-english-v3.0" not in out  # the bare form is gone
+
+
+def test_catalog_merges_provider_api_models_first(monkeypatch):
+    """Live provider-catalog (Jina) ids are merged in and listed before litellm."""
+    import mcp_core.llm.catalog as catalog_mod
+    import mcp_core.llm.provider_catalog as pc
+    from mcp_core.auth.credential_form import _catalog_models_for_task
+
+    monkeypatch.setattr(pc, "provider_catalog_models", lambda task: ["jina_ai/jina-embeddings-v5-text-small"])
+    monkeypatch.setattr(
+        catalog_mod,
+        "list_models",
+        lambda **kw: [{"model": "openai/text-embedding-3-large", "provider": "openai", "mode": "embedding"}],
+    )
+    out = _catalog_models_for_task("embedding")
+    assert out[0] == "jina_ai/jina-embeddings-v5-text-small"  # provider-API first
+    assert "openai/text-embedding-3-large" in out
+    # dedupe: a provider-API id also present in litellm appears once
+    assert out.count("jina_ai/jina-embeddings-v5-text-small") == 1
+
+
+def test_catalog_merge_graceful_when_provider_api_raises(monkeypatch):
+    """provider_catalog failure must not break the litellm catalog path."""
+    import mcp_core.llm.catalog as catalog_mod
+    import mcp_core.llm.provider_catalog as pc
+    from mcp_core.auth.credential_form import _catalog_models_for_task
+
+    def _boom(task):
+        raise RuntimeError("jina down")
+
+    monkeypatch.setattr(pc, "provider_catalog_models", _boom)
+    monkeypatch.setattr(
+        catalog_mod,
+        "list_models",
+        lambda **kw: [{"model": "cohere/rerank-v3.5", "provider": "cohere", "mode": "rerank"}],
+    )
+    out = _catalog_models_for_task("rerank")
+    assert out == ["cohere/rerank-v3.5"]
+
+
+def test_enter_keeps_search_keyword():
+    """After adding a model via Enter, the typed keyword must remain in the input
+    (not be cleared) so the user can keep refining/adding from the same search."""
+    from mcp_core.auth.credential_form import _MODEL_CHAIN_SCRIPT
+
+    assert 'input.value = "";' not in _MODEL_CHAIN_SCRIPT  # no clear-on-Enter
+    assert 'buildDropdown(w, "");' not in _MODEL_CHAIN_SCRIPT  # no filter reset
+    # the dropdown is rebuilt with the SAME live keyword after a selection
+    assert "buildDropdown(w, input.value.trim());" in _MODEL_CHAIN_SCRIPT
