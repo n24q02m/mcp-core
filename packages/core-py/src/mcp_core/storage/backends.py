@@ -7,6 +7,8 @@ KV) while stdio/VM deployments keep the on-disk layout via LocalFsBackend.
 """
 
 from __future__ import annotations
+import asyncio
+import json
 
 import os
 from pathlib import Path
@@ -161,7 +163,7 @@ class CfKvBackend:
         if status not in (200, 204, 404):
             raise RuntimeError(f"CfKvBackend delete failed: HTTP {status}")
 
-    def ready(self, retries: int = 8, delay: float = 0.5) -> bool:
+    async def ready(self, retries: int = 8, delay: float = 0.5) -> bool:
         """Poll the KV outbound handler's readiness probe (E.1 race gate).
 
         On Cloudflare the container's first credential PUT can race
@@ -172,8 +174,6 @@ class CfKvBackend:
         once ready, False if it never becomes ready within the budget (the caller
         may proceed and rely on the client retry-on-500 backstop).
         """
-        import json
-        import time
 
         url = self._url(_READY_KEY)
         for attempt in range(retries):
@@ -184,7 +184,7 @@ class CfKvBackend:
             except Exception:
                 pass  # host not wired yet / transient transport error -> keep polling
             if attempt + 1 < retries:
-                time.sleep(delay)
+                await asyncio.sleep(delay)
         return False
 
 

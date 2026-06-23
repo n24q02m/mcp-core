@@ -1,6 +1,7 @@
 """CfKvBackend.ready() — readiness probe gating the first credential PUT (E.1)."""
 
 import json
+import pytest
 
 from mcp_core.storage.backends import CfKvBackend
 
@@ -29,25 +30,29 @@ class _FlakyHttp(_Http):
         return (200, json.dumps({"ready": True}).encode())
 
 
-def test_ready_immediately_true():
+@pytest.mark.asyncio
+async def test_ready_immediately_true():
     http = _Http(ready_after=0)
-    assert CfKvBackend("http://kv.internal", http=http).ready(retries=3, delay=0) is True
+    assert await CfKvBackend("http://kv.internal", http=http).ready(retries=3, delay=0) is True
     assert http.get_calls == 1
 
 
-def test_ready_after_two_polls():
+@pytest.mark.asyncio
+async def test_ready_after_two_polls():
     http = _Http(ready_after=2)
-    assert CfKvBackend("http://kv.internal", http=http).ready(retries=5, delay=0) is True
+    assert await CfKvBackend("http://kv.internal", http=http).ready(retries=5, delay=0) is True
     assert http.get_calls == 3
 
 
-def test_ready_gives_up_returns_false():
+@pytest.mark.asyncio
+async def test_ready_gives_up_returns_false():
     http = _Http(ready_after=99)
-    assert CfKvBackend("http://kv.internal", http=http).ready(retries=3, delay=0) is False
+    assert await CfKvBackend("http://kv.internal", http=http).ready(retries=3, delay=0) is False
     assert http.get_calls == 3
 
 
-def test_ready_tolerates_transport_error_during_poll():
+@pytest.mark.asyncio
+async def test_ready_tolerates_transport_error_during_poll():
     http = _FlakyHttp()
-    assert CfKvBackend("http://kv.internal", http=http).ready(retries=3, delay=0) is True
+    assert await CfKvBackend("http://kv.internal", http=http).ready(retries=3, delay=0) is True
     assert http.get_calls == 2

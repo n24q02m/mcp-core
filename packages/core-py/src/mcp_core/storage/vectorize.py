@@ -9,6 +9,7 @@ before asserting search results. Fail-loud on non-200.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -48,14 +49,14 @@ class VectorizeBackend:
             raise RuntimeError(f"VectorizeBackend query failed: HTTP {status}")
         return json.loads(data.decode()).get("matches", [])
 
-    def wait_until_indexed(self, poll_interval: float = 1.0, max_wait: float = 30.0) -> bool:
+    async def wait_until_indexed(self, poll_interval: float = 1.0, max_wait: float = 30.0) -> bool:
         deadline = time.monotonic() + max_wait
         while time.monotonic() <= deadline:
             status, data = self._http.request("GET", self.base_url, None, self._headers())
             if status == 200 and json.loads(data.decode()).get("ready"):
                 return True
             if poll_interval:
-                time.sleep(poll_interval)
+                await asyncio.sleep(poll_interval)
         return False
 
 

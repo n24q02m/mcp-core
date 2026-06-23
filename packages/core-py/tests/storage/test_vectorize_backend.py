@@ -1,4 +1,5 @@
 import json
+import pytest
 
 from mcp_core.storage import VectorizeBackend, vectorize_backend_from_env
 
@@ -16,7 +17,8 @@ def test_vectorize_query_caps_topk_at_50():
     assert seen["topK"] == 50 and seen["filter"] == {"sub": "u1"}
 
 
-def test_vectorize_wait_until_indexed_polls_ready():
+@pytest.mark.asyncio
+async def test_vectorize_wait_until_indexed_polls_ready():
     polls = {"n": 0}
 
     class Http:
@@ -26,7 +28,7 @@ def test_vectorize_wait_until_indexed_polls_ready():
             return (200, json.dumps({"ready": ready}).encode())
 
     vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http())
-    assert vb.wait_until_indexed(poll_interval=0, max_wait=5) is True
+    assert await vb.wait_until_indexed(poll_interval=0, max_wait=5) is True
     assert polls["n"] >= 2
 
 
