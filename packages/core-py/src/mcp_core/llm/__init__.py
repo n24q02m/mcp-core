@@ -24,6 +24,7 @@ from mcp_core.llm.key_rotation import (
     rotate_keys,
     split_keys,
 )
+from mcp_core.llm.provider_catalog import provider_catalog_models
 from mcp_core.llm.vertex_express import (
     VertexExpressError,
     acompletion_express,
@@ -49,6 +50,7 @@ __all__ = [
     "is_express_model",
     "is_rotatable_error",
     "list_models",
+    "provider_catalog_models",
     "rerank",
     "rotate_keys",
     "split_keys",
