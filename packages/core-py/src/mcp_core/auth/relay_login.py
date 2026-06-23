@@ -113,20 +113,7 @@ async def require_relay_session(
     return RedirectResponse(url=f"/login?next={next_}", status_code=302)
 
 
-def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
-    safe_next = html.escape(str(next_url))
-    error_html = ""
-    aria_attributes = ' aria-describedby="relay-desc"'
-    if error_msg:
-        error_html = f"""
-            <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">
-                {html.escape(error_msg)}
-            </div>"""
-        aria_attributes = (
-            ' aria-invalid="true" aria-errormessage="login-error" aria-describedby="login-error relay-desc"'
-        )
-
-    return f'''    <div class="container">
+_LOGIN_FORM_TEMPLATE = """    <div class="container">
         <div class="card">
             <div class="server-header">
                 <h1 class="server-name">Relay login</h1>
@@ -162,7 +149,32 @@ def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
                 <button type="submit" class="submit-btn">Continue</button>
             </form>
         </div>
-    </div>'''
+    </div>"""
+
+
+def _get_login_error_assets(error_msg: str | None) -> tuple[str, str]:
+    """Generate the error HTML and ARIA attributes for the login form."""
+    if not error_msg:
+        return "", ' aria-describedby="relay-desc"'
+
+    error_html = f"""
+            <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">
+                {html.escape(error_msg)}
+            </div>"""
+    aria_attributes = (
+        ' aria-invalid="true" aria-errormessage="login-error" aria-describedby="login-error relay-desc"'
+    )
+    return error_html, aria_attributes
+
+
+def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
+    safe_next = html.escape(str(next_url))
+    error_html, aria_attributes = _get_login_error_assets(error_msg)
+    return _LOGIN_FORM_TEMPLATE.format(
+        error_html=error_html,
+        safe_next=safe_next,
+        aria_attributes=aria_attributes,
+    )
 
 
 async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
