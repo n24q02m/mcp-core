@@ -742,6 +742,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                     var done = document.createElement("div");
                                     done.className = "status-box success";
                                     done.style.display = "block";
+                                    done.setAttribute("role", "alert");
                                     done.textContent = "Setup complete! Redirecting...";
                                     container.appendChild(done);
                                     window.location.replace(data.redirect_url);
@@ -754,6 +755,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                     var done = document.createElement("div");
                                     done.className = "status-box success";
                                     done.style.display = "block";
+                                    done.setAttribute("role", "alert");
                                     done.textContent = "Setup complete! You can close this tab.";
                                     container.appendChild(done);
                                 }
