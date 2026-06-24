@@ -165,12 +165,13 @@ function getBaseUrl(req: IncomingMessage): string {
   const host = req.headers.host ?? 'localhost'
   const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true
   const forwardedProto = req.headers['x-forwarded-proto']
-  const protocol =
-    typeof forwardedProto === 'string' && forwardedProto.length > 0
-      ? forwardedProto.split(',')[0].trim()
-      : encrypted
-        ? 'https'
-        : 'http'
+  let protocol = encrypted ? 'https' : 'http'
+  // ⚡ Bolt: Use indexOf and substring instead of split(',') to avoid array
+  // allocations when parsing proxy headers in the hot path.
+  if (typeof forwardedProto === 'string' && forwardedProto.length > 0) {
+    const commaIdx = forwardedProto.indexOf(',')
+    protocol = (commaIdx >= 0 ? forwardedProto.substring(0, commaIdx) : forwardedProto).trim()
+  }
   return `${protocol}://${host}`
 }
 
@@ -887,8 +888,11 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
 
   function clientIp(req: IncomingMessage): string {
     const fwd = req.headers['x-forwarded-for']
+    // ⚡ Bolt: Use indexOf and substring instead of split(',') to avoid array
+    // allocations when parsing proxy headers in the hot path.
     if (typeof fwd === 'string' && fwd.length > 0) {
-      return fwd.split(',')[0].trim()
+      const commaIdx = fwd.indexOf(',')
+      return (commaIdx >= 0 ? fwd.substring(0, commaIdx) : fwd).trim()
     }
     return req.socket.remoteAddress ?? 'unknown'
   }

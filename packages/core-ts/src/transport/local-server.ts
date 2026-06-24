@@ -246,12 +246,13 @@ export async function runHttpServer(
       const reqHost = req.headers.host ?? 'localhost'
       const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true
       const forwardedProto = req.headers['x-forwarded-proto']
-      const protocol =
-        typeof forwardedProto === 'string' && forwardedProto.length > 0
-          ? forwardedProto.split(',')[0].trim()
-          : encrypted
-            ? 'https'
-            : 'http'
+      let protocol = encrypted ? 'https' : 'http'
+      // ⚡ Bolt: Use indexOf and substring instead of split(',') to avoid array
+      // allocations when parsing proxy headers in the hot path.
+      if (typeof forwardedProto === 'string' && forwardedProto.length > 0) {
+        const commaIdx = forwardedProto.indexOf(',')
+        protocol = (commaIdx >= 0 ? forwardedProto.substring(0, commaIdx) : forwardedProto).trim()
+      }
       base = `${protocol}://${reqHost}`
     }
     return `${base}/.well-known/oauth-protected-resource`
