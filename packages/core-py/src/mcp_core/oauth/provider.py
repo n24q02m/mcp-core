@@ -14,6 +14,17 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from mcp_core.crypto.ecdh import export_private_key, import_private_key
+
+def _timing_safe_equal(a: bytes, b: bytes) -> bool:
+    """Compare two byte strings safely, mitigating length-leaking timing attacks.
+
+    hmac.compare_digest returns early if lengths differ, which leaks the
+    length of the secret. This ensures compare_digest is always called with
+    equal-length inputs, hiding the true length of the secret.
+    """
+    is_length_equal = len(a) == len(b)
+    compare_b = b if is_length_equal else a
+    return hmac.compare_digest(a, compare_b) and is_length_equal
 from mcp_core.relay.client import RelaySession, create_session, poll_for_result
 from mcp_core.schema.types import RelayConfigSchema
 
@@ -142,10 +153,10 @@ class OAuthProvider:
         if pre_auth.code_challenge_method == "S256":
             digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
             expected_challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
-            if not hmac.compare_digest(expected_challenge, pre_auth.code_challenge):
+            if not _timing_safe_equal(expected_challenge.encode("ascii"), pre_auth.code_challenge.encode("ascii")):
                 raise ValueError("invalid_grant: PKCE verification failed")
         elif pre_auth.code_challenge_method == "plain":
-            if not hmac.compare_digest(code_verifier, pre_auth.code_challenge):
+            if not _timing_safe_equal(code_verifier.encode("ascii"), pre_auth.code_challenge.encode("ascii")):
                 raise ValueError("invalid_grant: PKCE plain verification failed")
         else:
             raise ValueError("unsupported_challenge_method")
