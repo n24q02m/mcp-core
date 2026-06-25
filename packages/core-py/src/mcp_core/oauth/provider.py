@@ -19,6 +19,7 @@ from mcp_core.schema.types import RelayConfigSchema
 
 from .jwt_issuer import JWTIssuer
 
+
 def _timing_safe_equal(a: bytes, b: bytes) -> bool:
     """Compare two byte strings safely, mitigating length-leaking timing attacks.
 
