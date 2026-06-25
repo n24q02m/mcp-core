@@ -248,7 +248,11 @@ export async function runHttpServer(
       const forwardedProto = req.headers['x-forwarded-proto']
       const protocol =
         typeof forwardedProto === 'string' && forwardedProto.length > 0
-          ? forwardedProto.split(',')[0].trim()
+          ? // ⚡ Bolt: Avoid array allocation by using substring to extract the first element
+            (forwardedProto.indexOf(',') !== -1
+              ? forwardedProto.substring(0, forwardedProto.indexOf(','))
+              : forwardedProto
+            ).trim()
           : encrypted
             ? 'https'
             : 'http'
