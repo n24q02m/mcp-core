@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from mcp_core.crypto.ecdh import export_private_key, import_private_key
+from mcp_core.relay.client import RelaySession, create_session, poll_for_result
+from mcp_core.schema.types import RelayConfigSchema
+
+from .jwt_issuer import JWTIssuer
 
 def _timing_safe_equal(a: bytes, b: bytes) -> bool:
     """Compare two byte strings safely, mitigating length-leaking timing attacks.
@@ -25,10 +29,6 @@ def _timing_safe_equal(a: bytes, b: bytes) -> bool:
     is_length_equal = len(a) == len(b)
     compare_b = b if is_length_equal else a
     return hmac.compare_digest(a, compare_b) and is_length_equal
-from mcp_core.relay.client import RelaySession, create_session, poll_for_result
-from mcp_core.schema.types import RelayConfigSchema
-
-from .jwt_issuer import JWTIssuer
 
 
 @dataclass
