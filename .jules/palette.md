@@ -6,3 +6,6 @@
 ## 2026-06-21 - Accessible Landmarks
 **Learning:** When using `<section>` elements for visual groupings (like Capabilities Requested), they need an accessible name (via `aria-labelledby`) to be exposed as proper region landmarks to screen readers.
 **Action:** Always pair `<section>` elements with `aria-labelledby` pointing to their heading's ID.
+## 2026-06-25 - Dynamically Created Alerts
+**Learning:** When dynamically creating and appending status messages (like success or error toasts) via JavaScript, they must be given `role="alert"` to be immediately announced by screen readers.
+**Action:** Always set `setAttribute("role", "alert")` on dynamically created status/notification DOM elements.
