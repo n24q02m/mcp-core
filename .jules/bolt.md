@@ -14,3 +14,7 @@
 ## 2024-05-24 - Cookie Parsing Hot Path Avoids Array Allocations
 **Learning:** In hot paths like HTTP cookie parsing (`parseCookies` in `local-oauth-app.ts` and `delegated-oauth-app.ts`), splitting strings via `split(';')` generates unnecessary array allocations and intermediate strings. A single-pass `while` loop using `indexOf` and `substring()` is demonstrably faster (~10% improvement in basic tests) and reduces GC pressure while avoiding additional dependencies.
 **Action:** Always prefer index-based scanning and substring extraction for parsing small text structures (like headers or cookies) in high-frequency functions. Ensure functional parity with extensive edge case tests for trailing symbols and missing separators.
+
+## 2026-06-26 - Optimize header parsing to avoid array allocations
+**Learning:** In hot paths handling HTTP headers (like parsing `x-forwarded-proto` or `x-forwarded-for`), using `split(',')[0]` incurs unnecessary memory allocations by creating intermediate arrays.
+**Action:** Use index-based scanning and substring extraction (`indexOf(',')` and `substring()_|) instead of `split` for parsing short header strings to reduce Garbage Collection (GC) pressure in high-frequency functions.
