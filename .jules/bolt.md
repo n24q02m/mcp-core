@@ -14,3 +14,7 @@
 ## 2024-05-24 - Cookie Parsing Hot Path Avoids Array Allocations
 **Learning:** In hot paths like HTTP cookie parsing (`parseCookies` in `local-oauth-app.ts` and `delegated-oauth-app.ts`), splitting strings via `split(';')` generates unnecessary array allocations and intermediate strings. A single-pass `while` loop using `indexOf` and `substring()` is demonstrably faster (~10% improvement in basic tests) and reduces GC pressure while avoiding additional dependencies.
 **Action:** Always prefer index-based scanning and substring extraction for parsing small text structures (like headers or cookies) in high-frequency functions. Ensure functional parity with extensive edge case tests for trailing symbols and missing separators.
+
+## 2025-06-27 - Converting sync methods to async is a breaking change
+**Learning:** Converting public synchronous methods (like `ready()` or `wait_until_indexed()`) to `async def` just to optimize `time.sleep` changes the API contract. Existing synchronous callers will receive a coroutine object instead of a boolean, which evaluates to `True` and bypasses the check entirely.
+**Action:** Never change a method's signature from sync to async (or vice-versa) for a "micro-optimization" unless you are also refactoring all call sites, and generally avoid it as it's a breaking API change.
