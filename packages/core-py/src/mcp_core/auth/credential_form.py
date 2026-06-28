@@ -1061,6 +1061,7 @@ def render_credential_form(
                                         container.removeChild(container.firstChild);
                                     }}
                                     var done = document.createElement("div");
+                                    done.setAttribute("role", "alert");
                                     done.className = "status-box success";
                                     done.style.display = "block";
                                     done.textContent = "Setup complete! Redirecting...";
@@ -1073,6 +1074,7 @@ def render_credential_form(
                                         container.removeChild(container.firstChild);
                                     }}
                                     var done = document.createElement("div");
+                                    done.setAttribute("role", "alert");
                                     done.className = "status-box success";
                                     done.style.display = "block";
                                     done.textContent = "Setup complete! You can close this tab.";
