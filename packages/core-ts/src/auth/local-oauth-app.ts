@@ -954,6 +954,13 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
         if (!('Content-Type' in headers)) {
           headers['Content-Type'] = 'text/html; charset=utf-8'
         }
+
+        // Anti-clickjacking for HTML responses
+        const ctype = headers['Content-Type'] as string
+        if (ctype && ctype.toLowerCase().includes('text/html')) {
+          headers['X-Frame-Options'] = 'DENY'
+        }
+
         res.writeHead(statusCode, headers)
         res.end(body === undefined ? '' : String(body))
         return adapter

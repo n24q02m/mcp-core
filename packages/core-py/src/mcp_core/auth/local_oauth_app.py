@@ -274,7 +274,7 @@ def create_local_oauth_app(
                 prefill=prefill,
                 include_username_field=stable_sub_enabled,
             )
-        return HTMLResponse(html_content)
+        return HTMLResponse(html_content, headers={"X-Frame-Options": "DENY"})
 
     async def authorize_post(request: Request) -> JSONResponse:
         """POST /authorize -- receive credentials, save, return redirect URL with auth code."""
@@ -772,7 +772,7 @@ def create_local_oauth_app(
             "<p>You can close this tab.</p>"
             "</div></body></html>"
         )
-        return HTMLResponse(html_content)
+        return HTMLResponse(html_content, headers={"X-Frame-Options": "DENY"})
 
     async def register_handler(request: Request) -> JSONResponse:
         """RFC 7591 Dynamic Client Registration (echo-style).
