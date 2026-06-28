@@ -165,12 +165,14 @@ function getBaseUrl(req: IncomingMessage): string {
   const host = req.headers.host ?? 'localhost'
   const encrypted = (req.socket as { encrypted?: boolean }).encrypted === true
   const forwardedProto = req.headers['x-forwarded-proto']
-  const protocol =
-    typeof forwardedProto === 'string' && forwardedProto.length > 0
-      ? forwardedProto.split(',')[0].trim()
-      : encrypted
-        ? 'https'
-        : 'http'
+  // ⚡ Bolt: avoid split() array allocations for hot header parsing
+  const protocol = (() => {
+    if (typeof forwardedProto === 'string' && forwardedProto.length > 0) {
+      const idx = forwardedProto.indexOf(',')
+      return (idx !== -1 ? forwardedProto.substring(0, idx) : forwardedProto).trim()
+    }
+    return encrypted ? 'https' : 'http'
+  })()
   return `${protocol}://${host}`
 }
 
@@ -888,7 +890,9 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
   function clientIp(req: IncomingMessage): string {
     const fwd = req.headers['x-forwarded-for']
     if (typeof fwd === 'string' && fwd.length > 0) {
-      return fwd.split(',')[0].trim()
+      // ⚡ Bolt: avoid split() array allocations for hot header parsing
+      const idx = fwd.indexOf(',')
+      return idx !== -1 ? fwd.substring(0, idx).trim() : fwd.trim()
     }
     return req.socket.remoteAddress ?? 'unknown'
   }
