@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderCredentialForm } from '../../src/auth/credential-form.js'
+import { renderCredentialForm, renderFormShell } from '../../src/auth/credential-form.js'
 
 describe('renderCredentialForm', () => {
   it('renders basic form with fields', () => {
@@ -263,5 +263,27 @@ describe('renderCredentialForm', () => {
     expect(html).toContain('indexOf("error:") === 0')
     expect(html).toContain('Google Drive authorization failed')
     expect(html).toContain('Please retry setup')
+  })
+})
+
+describe('renderFormShell', () => {
+  it('renders basic shell with title and body', () => {
+    const html = renderFormShell('Page Title', '<div id="test-body">Hello World</div>')
+    expect(html).toContain('<!DOCTYPE html>')
+    expect(html).toContain('<title>Page Title</title>')
+    expect(html).toContain('<div id="test-body">Hello World</div>')
+    expect(html).toContain('body {') // CSS
+  })
+
+  it('escapes XSS in title', () => {
+    const html = renderFormShell('<script>alert("xss")</script>', 'body')
+    expect(html).not.toContain('<script>alert')
+    expect(html).toContain('&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;')
+  })
+
+  it('inserts body verbatim without escaping', () => {
+    const rawHtml = '<div onclick="alert(1)">Click Me</div>'
+    const html = renderFormShell('Title', rawHtml)
+    expect(html).toContain(rawHtml)
   })
 })
