@@ -45,8 +45,12 @@ def _open_in_powershell(url: str) -> bool:
 
 
 def _open_in_wsl(url: str) -> bool:
-    """Open URL from inside WSL using wslview or powershell.exe."""
-    # Try wslview first (from wslu package, commonly available)
+    """Open URL from inside WSL using powershell.exe or wslview."""
+    # Try powershell.exe -EncodedCommand first (safer due to Base64 encoding)
+    if _open_in_powershell(url):
+        return True
+
+    # Fallback to wslview (from wslu package, commonly available)
     try:
         subprocess.run(
             ["wslview", url],
@@ -58,8 +62,7 @@ def _open_in_wsl(url: str) -> bool:
     except (FileNotFoundError, subprocess.SubprocessError):
         pass
 
-    # Fallback to powershell.exe -EncodedCommand
-    return _open_in_powershell(url)
+    return False
 
 
 def try_open_browser(url: str) -> bool:

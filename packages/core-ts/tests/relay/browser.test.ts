@@ -31,6 +31,8 @@ describe('tryOpenBrowser', () => {
       expect(await tryOpenBrowser('https://example.com$(whoami)')).toBe(false)
       expect(await tryOpenBrowser('https://example.com`whoami`')).toBe(false)
       expect(await tryOpenBrowser('https://example.com|nc localhost 4444')).toBe(false)
+      expect(await tryOpenBrowser("https://example.com/auth?q=$(whoami)")).toBe(false)
+      expect(await tryOpenBrowser("https://example.com/auth?q=(param)")).toBe(false)
     })
 
     it('rejects empty and malformed input', async () => {
@@ -216,7 +218,6 @@ describe('tryOpenBrowser', () => {
       const url = `https://example.com/wsl-fallback-${Date.now()}`
       await tryOpenBrowser(url)
 
-      expect(execFile).toHaveBeenCalledWith('wslview', [url], expect.any(Function))
       expect(execFile).toHaveBeenCalledWith(
         'powershell.exe',
         expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
@@ -276,7 +277,11 @@ describe('tryOpenBrowser', () => {
       const url = `https://example.com/wsl-${Date.now()}`
       await tryOpenBrowser(url)
 
-      expect(execFile).toHaveBeenCalledWith('wslview', [url], expect.any(Function))
+      expect(execFile).toHaveBeenCalledWith(
+        'powershell.exe',
+        expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
+        expect.any(Function)
+      )
     })
   })
 })

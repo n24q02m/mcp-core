@@ -12,3 +12,7 @@
 **Vulnerability:** The lock directory for lifecycle lockfiles was created using `mkdir(parents=True, exist_ok=True)` without an explicit `mode`. This allowed the directory to be created with overly broad permissions based on the system umask (often 0o775 or 0o777 in certain environments), creating a race condition window where an attacker could potentially access the directory before the subsequent `chmod(0o700)` call.
 **Learning:** Always use the `mode` parameter in `mkdir` when creating directories that will contain sensitive information (like tokens or lockfiles) to ensure they are created securely from the start.
 **Prevention:** Audit all `mkdir` calls in the codebase and ensure security-sensitive directories use `mode=0o700`.
+## 2024-06-21 - [SECURITY] Potential Command Injection via `execFile`
+**Vulnerability:** Too permissive URL validation regex allowed shell metacharacters (`$`, `(`, `)`) which could be interpreted by `wslview` in WSL environments.
+**Learning:** Even when using `execFile` (which avoids shell invocation), downstream utilities like `wslview` might pass arguments to a shell. Base64 encoding parameters (e.g., via PowerShell's `-EncodedCommand`) provides a much safer way to pass complex strings across the Linux/Windows boundary in WSL.
+**Prevention:** Tighten input validation regexes to exclude shell metacharacters. Prioritize safer execution methods that use encoding (like Base64) over direct parameter passing to utilities that might invoke a shell.

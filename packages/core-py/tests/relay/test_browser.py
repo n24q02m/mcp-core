@@ -132,7 +132,7 @@ class TestTryOpenBrowser:
 
 
 class TestOpenInWsl:
-    def test_tries_wslview_first(self):
+    def test_tries_powershell_first(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.run = MagicMock()
             mock_sp.SubprocessError = subprocess.SubprocessError
@@ -143,9 +143,9 @@ class TestOpenInWsl:
             assert result is True
             mock_sp.run.assert_called_once()
             args = mock_sp.run.call_args
-            assert args[0][0][0] == "wslview"
+            assert args[0][0][0] == "powershell.exe"
 
-    def test_falls_back_to_powershell_exe(self):
+    def test_falls_back_to_wslview(self):
         with patch("mcp_core.relay.browser.subprocess") as mock_sp:
             mock_sp.SubprocessError = subprocess.SubprocessError
             call_count = 0
@@ -163,9 +163,9 @@ class TestOpenInWsl:
             result = _open_in_wsl("https://example.com")
             assert result is True
             assert mock_sp.run.call_count == 2
-            # Second call should be powershell
+            # Second call should be wslview
             args = mock_sp.run.call_args
-            assert args[0][0][0] == "powershell.exe"
+            assert args[0][0][0] == "wslview"
             # env should NOT be present
             assert "env" not in args[1]
 
