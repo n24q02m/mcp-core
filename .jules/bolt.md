@@ -14,3 +14,7 @@
 ## 2024-05-24 - Cookie Parsing Hot Path Avoids Array Allocations
 **Learning:** In hot paths like HTTP cookie parsing (`parseCookies` in `local-oauth-app.ts` and `delegated-oauth-app.ts`), splitting strings via `split(';')` generates unnecessary array allocations and intermediate strings. A single-pass `while` loop using `indexOf` and `substring()` is demonstrably faster (~10% improvement in basic tests) and reduces GC pressure while avoiding additional dependencies.
 **Action:** Always prefer index-based scanning and substring extraction for parsing small text structures (like headers or cookies) in high-frequency functions. Ensure functional parity with extensive edge case tests for trailing symbols and missing separators.
+
+## 2024-05-27 - D1 Backend N+1 Batching Fix
+**Learning:** Cloudflare D1 HTTP interfaces typically provide both a single-statement `/query` and a multi-statement `/batch` endpoint. Falling back to a loop of individual network requests for non-optimizable SQL (like UPDATES) causes severe latency due to the network-bound nature of the D1 Worker or REST bridge.
+**Action:** Always prefer the `/batch` endpoint (sending an array of statement JSON) for `executemany` fallbacks when the specific SQL pattern (e.g., multi-row INSERT) cannot be rewritten into a single optimized statement. This collapses N+1 requests into a single network round-trip.

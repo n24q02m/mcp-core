@@ -1,7 +1,7 @@
 """HTTP client for Cloudflare D1 via the Worker outbound-handler (or REST fallback).
 
 Wire contract (matches src/worker.ts): POST {base}/query with JSON
-{"sql": str, "params": list} -> 200 {"results": [<row dicts>]}.
+{"sql": str, "params": list} -> 200 {"results": [<row dicts>]} or /batch with array of statement JSON -> 200 array of results.
 Prepared statements only (sql + bound params); raw SQL text is never sent.
 Fail-loud: any non-200 raises (no silent empty results).
 """
@@ -82,8 +82,13 @@ class D1Backend:
                 # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                 self.execute(batched_sql, flat)
             else:
-                for row in batch:
-                    self.execute(sql, row)
+                # ⚡ Bolt: Use /batch endpoint to avoid N+1 network requests for
+                # non-INSERT statements or when SQL-rewriting is not possible.
+                statements = [{"sql": sql, "params": row} for row in batch]
+                body = json.dumps(statements).encode()
+                status, _ = self._http.request("POST", f"{self.base_url}/batch", body, self._headers())
+                if status != 200:
+                    raise RuntimeError(f"D1Backend batch failed: HTTP {status}")
 
     def executescript(self, sql: str) -> None:
         # Migrations: split on ';' and run each non-empty statement.
