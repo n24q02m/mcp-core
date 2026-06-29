@@ -18,9 +18,9 @@ import httpx
 # SQLite bound-variable ceiling; D1 inherits it. Keep INSERT batches well under.
 _DEFAULT_MAX_ROWS_PER_INSERT = 100
 
-# Matches the trailing VALUES (?,?,...) tuple of a single-row INSERT so it can
-# be expanded into a multi-row INSERT for chunked batches.
-_VALUES_TUPLE_RE = re.compile(r"VALUES\s*(\([^)]*\))\s*$", re.IGNORECASE)
+# Matches a simple VALUES (?,?,...) tuple (only positional placeholders) of a
+# single-row INSERT so it can be expanded into a multi-row INSERT for efficiency.
+_SIMPLE_VALUES_TUPLE_RE = re.compile(r"VALUES\s*(\(\s*\?\s*(?:,\s*\?\s*)*\))\s*$", re.IGNORECASE)
 
 
 class _HttpxHttp:
@@ -50,12 +50,16 @@ class D1Backend:
             }
         return {"Content-Type": "application/json"}
 
-    def execute(self, sql: str, params: list[Any]) -> list[dict]:
-        body = json.dumps({"sql": sql, "params": params}).encode()
-        status, data = self._http.request("POST", f"{self.base_url}/query", body, self._headers())
+    def _call(self, endpoint: str, payload: Any) -> Any:
+        body = json.dumps(payload).encode()
+        status, data = self._http.request("POST", f"{self.base_url}/{endpoint}", body, self._headers())
         if status != 200:
-            raise RuntimeError(f"D1Backend query failed: HTTP {status}")
-        return json.loads(data.decode()).get("results", [])
+            raise RuntimeError(f"D1Backend {endpoint} failed: HTTP {status}")
+        return json.loads(data.decode())
+
+    def execute(self, sql: str, params: list[Any]) -> list[dict]:
+        res = self._call("query", {"sql": sql, "params": params})
+        return res.get("results", [])
 
     def fetchall(self, sql: str, params: list[Any]) -> list[dict]:
         return self.execute(sql, params)
@@ -65,11 +69,11 @@ class D1Backend:
         return rows[0] if rows else None
 
     def executemany(self, sql: str, rows: list[list[Any]]) -> None:
-        # D1 has no native executemany over HTTP; batch rows into multi-row
-        # INSERTs (one POST per chunk) by expanding the VALUES (...) tuple.
+        # D1 has no native executemany over HTTP. We optimize simple multi-row
+        # INSERTs via VALUES expansion, and use /batch for everything else.
         if not rows:
             return
-        match = _VALUES_TUPLE_RE.search(sql)
+        match = _SIMPLE_VALUES_TUPLE_RE.search(sql)
         for i in range(0, len(rows), self.max_rows_per_insert):
             batch = rows[i : i + self.max_rows_per_insert]
             if match and len(batch) > 1:
@@ -77,13 +81,13 @@ class D1Backend:
                 values = ", ".join(tuple_sql for _ in batch)
                 batched_sql = sql[: match.start(1)] + values
                 flat = [v for row in batch for v in row]
-                # batched_sql only expands the ?-placeholder VALUES tuple; row
-                # data is bound via `flat` params, never interpolated -> safe.
-                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+                # ⚡ Bolt: batched_sql only repeats the safe ?-placeholder tuple;
+                # row data is bound via 'flat' params, never interpolated.
                 self.execute(batched_sql, flat)
             else:
-                for row in batch:
-                    self.execute(sql, row)
+                # ⚡ Bolt: Use /batch endpoint to resolve N+1 query issues when
+                # multi-row VALUES expansion is not applicable.
+                self._call("batch", [{"sql": sql, "params": row} for row in batch])
 
     def executescript(self, sql: str) -> None:
         # Migrations: split on ';' and run each non-empty statement.
