@@ -888,8 +888,12 @@ def test_build_local_app_auth_scope_not_invoked_on_unauthed_request(tmp_path: Pa
 @pytest.mark.asyncio
 async def test_run_http_server_with_async_setup_hook(mcp, relay_schema, tmp_path):
     """run_http_server should support async setup_complete_hook."""
+    from mcp_core.storage.config_file import clear_key_cache_for_testing, set_config_path
     from mcp_core.transport.local_server import run_http_server
     import asyncio
+
+    set_config_path(str(tmp_path / "config.enc"))
+    clear_key_cache_for_testing()
 
     hook_called = False
 
@@ -909,3 +913,6 @@ async def test_run_http_server_with_async_setup_hook(mcp, relay_schema, tmp_path
         )
         assert hook_called is True
         mock_serve.assert_awaited_once()
+
+    set_config_path(None)
+    clear_key_cache_for_testing()
