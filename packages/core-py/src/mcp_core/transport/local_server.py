@@ -34,9 +34,7 @@ if TYPE_CHECKING:
 # isolation (remote-relay public URLs) key their credential store by
 # ``context["sub"]``; single-user consumers can simply ignore the arg.
 _CredentialsCallback = Callable[[dict[str, str], dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
-_StepCallback = Callable[[dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
-# Legacy alias retained for existing annotations in this module.
-_Callback = _CredentialsCallback
+_StepCallback = Callable[[dict[str, str], dict[str, str]], Union[dict | None, Awaitable[dict | None]]]
 
 # Middleware invoked after JWT verification. Receives the decoded claims dict
 # and a ``next`` coroutine that forwards to the MCP transport.
@@ -180,8 +178,8 @@ def build_local_app(
     *,
     server_name: str,
     relay_schema: dict[str, Any] | None = None,
-    on_credentials_saved: _Callback | None = None,
-    on_step_submitted: _Callback | None = None,
+    on_credentials_saved: _CredentialsCallback | None = None,
+    on_step_submitted: _StepCallback | None = None,
     jwt_keys_dir: Path | None = None,
     custom_credential_form_html: Callable[..., str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
@@ -400,8 +398,8 @@ async def run_http_server(
     port: int = 0,
     host: str | None = None,
     open_browser: bool = True,
-    on_credentials_saved: _Callback | None = None,
-    on_step_submitted: _Callback | None = None,
+    on_credentials_saved: _CredentialsCallback | None = None,
+    on_step_submitted: _StepCallback | None = None,
     setup_complete_hook: Callable[..., None] | None = None,
     jwt_keys_dir: Path | None = None,
     custom_credential_form_html: Callable[..., str] | None = None,
@@ -689,8 +687,8 @@ async def start_http_server_background(
     relay_schema: dict[str, Any] | None = None,
     port: int = 0,
     host: str | None = None,
-    on_credentials_saved: _Callback | None = None,
-    on_step_submitted: _Callback | None = None,
+    on_credentials_saved: _CredentialsCallback | None = None,
+    on_step_submitted: _StepCallback | None = None,
     setup_complete_hook: Callable[..., None] | None = None,
     jwt_keys_dir: Path | None = None,
     custom_credential_form_html: Callable[..., str] | None = None,
