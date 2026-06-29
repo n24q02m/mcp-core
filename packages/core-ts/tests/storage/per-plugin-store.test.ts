@@ -1,7 +1,9 @@
+import { createCipheriv, randomBytes, scryptSync } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { InMemoryBackend } from '../../src/storage/backends.js'
 import { credPath, PerPluginStore, setHomeDirForTesting } from '../../src/storage/per-plugin-store.js'
 
 describe('PerPluginStore', () => {
@@ -97,6 +99,41 @@ describe('PerPluginStore', () => {
     const tampered = Buffer.from(blob)
     tampered[tampered.length - 1] ^= 0xff // flip last byte
     writeFileSync(store.credPath, tampered)
+    expect(await store.load()).toBeNull()
+  })
+
+  it('load returns null on short blob', async () => {
+    const backend = new InMemoryBackend()
+    const store = new PerPluginStore('test-plugin', null, backend)
+    await backend.put('test-plugin/config', Buffer.allocUnsafe(28))
+    expect(await store.load()).toBeNull()
+  })
+
+  it('load returns null on invalid JSON', async () => {
+    const backend = new InMemoryBackend()
+    const pluginName = 'test-plugin'
+    const sub = 'test-sub'
+    const secret = 'test-secret'
+    process.env.CREDENTIAL_SECRET = secret
+
+    const store = new PerPluginStore(pluginName, sub, backend)
+
+    // Manually derive key using scrypt parameters from source
+    const key = scryptSync(secret, Buffer.from(`${pluginName}:${sub}`, 'utf-8'), 32, {
+      N: 16384,
+      r: 8,
+      p: 1
+    })
+
+    // Encrypt non-JSON string
+    const iv = randomBytes(12)
+    const cipher = createCipheriv('aes-256-gcm', key, iv, { authTagLength: 16 })
+    const plaintext = Buffer.from('not-json', 'utf-8')
+    const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
+    const tag = cipher.getAuthTag()
+
+    await backend.put(`${pluginName}/subs/${sub}/config`, Buffer.concat([iv, ciphertext, tag]))
+
     expect(await store.load()).toBeNull()
   })
 })
