@@ -6,7 +6,7 @@
  * with `WWW-Authenticate: Bearer resource_metadata="..."` per RFC 6750 +
  * RFC 9728 (OAuth 2.1 protected resource metadata discovery).
  *
- * Success attaches the validated claims to `(req as any).user` so
+ * Success attaches the validated claims to `AuthenticatedRequest.user` so
  * downstream handlers can read the subject without re-validating.
  */
 

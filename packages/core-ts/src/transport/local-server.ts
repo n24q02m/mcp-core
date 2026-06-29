@@ -45,7 +45,7 @@ import { readConfig } from '../storage/config-file.js'
 import { extractBearerToken } from './oauth-middleware.js'
 
 /** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
-export type JWTClaims = JWTPayload
+export type JWTClaims = JWTPayload & { anonymous?: boolean }
 
 export interface RunHttpServerOptions {
   /** Identifier used for JWT iss/aud and credential storage. */
@@ -261,7 +261,7 @@ export async function runHttpServer(
     // Bearer auth bypass for deployments behind an external auth boundary.
     // Caller (reverse proxy, API gateway) is trusted to enforce auth upstream.
     if (jwtIssuer && options.authDisabled) {
-      const anonymousClaims = { sub: 'anonymous', anonymous: true } as unknown as JWTClaims
+      const anonymousClaims: JWTClaims = { sub: 'anonymous', anonymous: true }
       if (options.authScope) {
         await options.authScope(anonymousClaims, async () => {
           await handleSessionRequest(req, res)
