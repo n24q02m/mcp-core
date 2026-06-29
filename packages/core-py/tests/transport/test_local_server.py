@@ -883,3 +883,29 @@ def test_build_local_app_auth_scope_not_invoked_on_unauthed_request(tmp_path: Pa
         resp = client.post("/mcp", json={})
         assert resp.status_code == 401
         assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_run_http_server_with_async_setup_hook(mcp, relay_schema, tmp_path):
+    """run_http_server should support async setup_complete_hook."""
+    from mcp_core.transport.local_server import run_http_server
+    import asyncio
+
+    hook_called = False
+
+    async def async_hook(mark_complete, mark_failed=None):
+        nonlocal hook_called
+        await asyncio.sleep(0.01)
+        hook_called = True
+        mark_complete()
+
+    # We need to mock uvicorn.Server.serve so it doesn't block forever
+    with patch("uvicorn.Server.serve", new_callable=AsyncMock) as mock_serve:
+        await run_http_server(
+            mcp,
+            server_name="test",
+            relay_schema=relay_schema,
+            setup_complete_hook=async_hook,
+        )
+        assert hook_called is True
+        mock_serve.assert_awaited_once()

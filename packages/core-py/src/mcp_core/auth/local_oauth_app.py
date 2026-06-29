@@ -106,7 +106,7 @@ def create_local_oauth_app(
     on_credentials_saved: CredentialsCallback | None = None,
     on_step_submitted: StepCallback | None = None,
     jwt_issuer: JWTIssuer | None = None,
-    custom_credential_form_html: Callable[..., str] | None = None,
+    custom_credential_form_html: Callable[..., Union[str, Awaitable[str]]] | None = None,
     stable_sub_enabled: bool = False,
 ) -> tuple[Starlette, JWTIssuer]:
     """Create OAuth 2.1 Authorization Server Starlette app.
@@ -267,6 +267,8 @@ def create_local_oauth_app(
         submit_url = f"{base}/authorize?nonce={nonce}"
         if custom_credential_form_html is not None:
             html_content = custom_credential_form_html(relay_schema, submit_url, prefill=prefill)
+            if inspect.isawaitable(html_content):
+                html_content = await html_content
         else:
             html_content = render_credential_form(
                 relay_schema,

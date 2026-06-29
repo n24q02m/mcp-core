@@ -183,7 +183,7 @@ def build_local_app(
     on_credentials_saved: _Callback | None = None,
     on_step_submitted: _Callback | None = None,
     jwt_keys_dir: Path | None = None,
-    custom_credential_form_html: Callable[..., str] | None = None,
+    custom_credential_form_html: Callable[..., Union[str, Awaitable[str]]] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
     auth_disabled: bool = False,
@@ -402,9 +402,9 @@ async def run_http_server(
     open_browser: bool = True,
     on_credentials_saved: _Callback | None = None,
     on_step_submitted: _Callback | None = None,
-    setup_complete_hook: Callable[..., None] | None = None,
+    setup_complete_hook: Callable[..., Union[None, Awaitable[None]]] | None = None,
     jwt_keys_dir: Path | None = None,
-    custom_credential_form_html: Callable[..., str] | None = None,
+    custom_credential_form_html: Callable[..., Union[str, Awaitable[str]]] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
     auth_disabled: bool = False,
@@ -552,9 +552,13 @@ async def run_http_server(
             arity = 2
 
         if arity >= 2 and mark_failed_fn is not None:
-            setup_complete_hook(mark_fn, mark_failed_fn)  # type: ignore[call-arg]
+            _res = setup_complete_hook(mark_fn, mark_failed_fn)
+            if _inspect.isawaitable(_res):
+                await _res  # type: ignore[call-arg]
         else:
-            setup_complete_hook(mark_fn)  # type: ignore[call-arg]
+            _res = setup_complete_hook(mark_fn)
+            if _inspect.isawaitable(_res):
+                await _res  # type: ignore[call-arg]
 
     # Issue a long-lived access token written into the lock file so any
     # in-process probe (e.g. health-check) can reach /mcp without going
@@ -691,9 +695,9 @@ async def start_http_server_background(
     host: str | None = None,
     on_credentials_saved: _Callback | None = None,
     on_step_submitted: _Callback | None = None,
-    setup_complete_hook: Callable[..., None] | None = None,
+    setup_complete_hook: Callable[..., Union[None, Awaitable[None]]] | None = None,
     jwt_keys_dir: Path | None = None,
-    custom_credential_form_html: Callable[..., str] | None = None,
+    custom_credential_form_html: Callable[..., Union[str, Awaitable[str]]] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
     stable_sub_enabled: bool = False,
@@ -770,9 +774,13 @@ async def start_http_server_background(
             arity = 2
 
         if arity >= 2 and mark_failed_fn is not None:
-            setup_complete_hook(mark_fn, mark_failed_fn)  # type: ignore[call-arg]
+            _res = setup_complete_hook(mark_fn, mark_failed_fn)
+            if _inspect.isawaitable(_res):
+                await _res  # type: ignore[call-arg]
         else:
-            setup_complete_hook(mark_fn)  # type: ignore[call-arg]
+            _res = setup_complete_hook(mark_fn)
+            if _inspect.isawaitable(_res):
+                await _res  # type: ignore[call-arg]
 
     uv_config = uvicorn.Config(app, host=actual_host, port=actual_port, log_level="warning")
     server = uvicorn.Server(uv_config)

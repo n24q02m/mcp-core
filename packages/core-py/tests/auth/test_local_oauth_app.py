@@ -1370,3 +1370,23 @@ def test_on_credentials_saved_async_exception():
     resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
     assert resp.status_code == 500
     assert resp.json()["error"] == "server_error"
+
+
+def test_authorize_get_with_async_custom_renderer(client_with_async_otp):
+    """GET /authorize should support async custom_credential_form_html."""
+    from mcp_core.auth.local_oauth_app import create_local_oauth_app
+
+    async def async_renderer(schema, submit_url, prefill=None):
+        return f"<html>Async renderer: {submit_url}</html>"
+
+    app, _ = create_local_oauth_app(
+        server_name="test",
+        relay_schema=RELAY_SCHEMA,
+        custom_credential_form_html=async_renderer,
+    )
+    client = TestClient(app)
+
+    # We need a valid session to trigger the renderer
+    resp = client.get("/authorize?client_id=c&redirect_uri=r&state=s&code_challenge=cc")
+    assert resp.status_code == 200
+    assert "Async renderer" in resp.text
