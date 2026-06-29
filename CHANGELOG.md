@@ -2,6 +2,75 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.21 (2026-06-29)
+
+### Bug Fixes
+
+- Add full test coverage for vectorize backend
+  ([#540](https://github.com/n24q02m/mcp-core/pull/540),
+  [`42f03c5`](https://github.com/n24q02m/mcp-core/commit/42f03c52a663d63ed9bfc920c97cc02da628d973))
+
+- Add role=alert to credential form for a11y
+  ([`1aa14ab`](https://github.com/n24q02m/mcp-core/commit/1aa14ab1910cc52cdec6ab630e38ac25b5811c62))
+
+- Add test coverage (mcp-core)
+  ([`197fba9`](https://github.com/n24q02m/mcp-core/commit/197fba93a72d251a7b6d84c03ce25edca0790807))
+
+- Add test coverage (mcp-core)
+  ([`794a583`](https://github.com/n24q02m/mcp-core/commit/794a5837cf2b3482ec6d9da492161c0ba5355b36))
+
+- Add test coverage (mcp-core)
+  ([`c3540e6`](https://github.com/n24q02m/mcp-core/commit/c3540e657d405b933bd7647bdb8e8f9b21bda51f))
+
+- Add test coverage (mcp-core)
+  ([`eb3d1a6`](https://github.com/n24q02m/mcp-core/commit/eb3d1a67ed45c158015eb9079e7c0f610a5d350c))
+
+- Add test coverage (mcp-core)
+  ([`ae6fc08`](https://github.com/n24q02m/mcp-core/commit/ae6fc08a06e71b8c3e4f3b6c0d56ee5dac43beb5))
+
+- Add test coverage (mcp-core)
+  ([`6a3a63f`](https://github.com/n24q02m/mcp-core/commit/6a3a63f6bf8593602b85f865ca2f4220872f53dc))
+
+- Add X-Frame-Options DENY to all HTML responses to prevent clickjacking
+  ([`f820433`](https://github.com/n24q02m/mcp-core/commit/f82043319c2877c4e92c7d619a68ef07521b0e91))
+
+- Consolidate cache tests without coverage loss
+  ([`11386e9`](https://github.com/n24q02m/mcp-core/commit/11386e9d9729abf653913e81d84ea81398de0219))
+
+- Consolidate embedding-daemon backend tests
+  ([`85937db`](https://github.com/n24q02m/mcp-core/commit/85937dbc40a1c17d268433a57a2e2e7c3d06a18b))
+
+- Drop now-unused ty:ignore in llm/catalog after ty bump
+  ([`0ea59a2`](https://github.com/n24q02m/mcp-core/commit/0ea59a2bd0316f378e8e3c040139a022206f56ea))
+
+- Length-hiding timing-safe compare for PKCE challenge verification
+  ([`59cc4ed`](https://github.com/n24q02m/mcp-core/commit/59cc4ed8130fa2c80923e6958d04c11b364bc339))
+
+- Prune expired oauth entries in-place ([#549](https://github.com/n24q02m/mcp-core/pull/549),
+  [`2db465e`](https://github.com/n24q02m/mcp-core/commit/2db465e0da5059a81501e5c7bf18f2e5e6c93c1a))
+
+- Replace unsafe any casts with typed assertions in core-ts
+  ([#557](https://github.com/n24q02m/mcp-core/pull/557),
+  [`a28c990`](https://github.com/n24q02m/mcp-core/commit/a28c9905d27e7e7cbaf822e2a4c6f9b60755c778))
+
+- Reset setup status via dict.fromkeys ([#542](https://github.com/n24q02m/mcp-core/pull/542),
+  [`5593006`](https://github.com/n24q02m/mcp-core/commit/559300648ba06b58054a6418f059122a625ea87c))
+
+- Update non-major dev dependencies + drop obsolete ty:ignore
+  ([`0ea59a2`](https://github.com/n24q02m/mcp-core/commit/0ea59a2bd0316f378e8e3c040139a022206f56ea))
+
+- **deps**: Update dawidd6/action-send-mail action to v18
+  ([#563](https://github.com/n24q02m/mcp-core/pull/563),
+  [`09f9a5f`](https://github.com/n24q02m/mcp-core/commit/09f9a5f23bc4f8198a2c792ef437884cbe07ffb0))
+
+- **deps**: Update non-major dependencies
+  ([`0ea59a2`](https://github.com/n24q02m/mcp-core/commit/0ea59a2bd0316f378e8e3c040139a022206f56ea))
+
+- **deps**: Update semgrep/semgrep Docker digest to 06938c1
+  ([#560](https://github.com/n24q02m/mcp-core/pull/560),
+  [`034e9cb`](https://github.com/n24q02m/mcp-core/commit/034e9cba72e705c178888719a09e48201ed9cf98))
+
+
 ## v1.18.0-beta.20 (2026-06-23)
 
 ### Bug Fixes
