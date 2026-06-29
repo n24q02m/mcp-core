@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 // Mock child_process and fs/promises before importing the module
 vi.mock('node:child_process', () => ({
-  execFile: // biome-ignore lint/suspicious/noExplicitAny: mocking vi.fn((...args: any[]) => {
+  execFile: vi.fn((...args: any[]) => {
     const _options = args[2]
     const cb = args[3]
     const callback = typeof _options === 'function' ? _options : cb
@@ -70,8 +70,6 @@ describe('tryOpenBrowser', () => {
     it('deduplicates browser opens within the window', async () => {
       vi.mocked(execFile).mockClear()
       Object.defineProperty(process, 'platform', { value: 'darwin' })
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
         const cb = args[3]
@@ -79,8 +77,6 @@ describe('tryOpenBrowser', () => {
         if (callback) {
           callback(null)
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
@@ -98,8 +94,6 @@ describe('tryOpenBrowser', () => {
     })
 
     it('never throws even when execFile fails', async () => {
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
         const cb = args[3]
@@ -107,8 +101,6 @@ describe('tryOpenBrowser', () => {
         if (callback) {
           callback(new Error('command not found'))
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
@@ -139,8 +131,6 @@ describe('tryOpenBrowser', () => {
   describe('WSL detection', () => {
     it('returns false when /proc/version is not found', async () => {
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'))
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
         const cb = args[3]
@@ -148,8 +138,6 @@ describe('tryOpenBrowser', () => {
         if (callback) {
           callback(new Error('command not found'))
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
@@ -162,8 +150,6 @@ describe('tryOpenBrowser', () => {
     it('returns false when powershell fails on win32', async () => {
       vi.mocked(execFile).mockClear()
       Object.defineProperty(process, 'platform', { value: 'win32' })
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
         const cb = args[3]
@@ -171,8 +157,6 @@ describe('tryOpenBrowser', () => {
         if (callback) {
           callback(new Error('fail'))
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
@@ -182,8 +166,6 @@ describe('tryOpenBrowser', () => {
     })
     it('uses powershell.exe with EncodedCommand and embedded URL on win32', async () => {
       Object.defineProperty(process, 'platform', { value: 'win32' })
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
         const cb = args[3]
@@ -191,8 +173,6 @@ describe('tryOpenBrowser', () => {
         if (callback) {
           callback(null)
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
@@ -202,7 +182,6 @@ describe('tryOpenBrowser', () => {
       expect(execFile).toHaveBeenCalledWith(
         'powershell.exe',
         expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         expect.any(Function)
       )
 
@@ -221,8 +200,6 @@ describe('tryOpenBrowser', () => {
     it('falls back to powershell on WSL when wslview fails', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockResolvedValue('linux version microsoft')
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const cmd = args[0]
         const _options = args[2]
@@ -235,8 +212,6 @@ describe('tryOpenBrowser', () => {
             callback(null)
           }
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
@@ -246,14 +221,11 @@ describe('tryOpenBrowser', () => {
       expect(execFile).toHaveBeenCalledWith(
         'powershell.exe',
         expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         expect.any(Function)
       )
     })
     it('uses open on darwin', async () => {
       Object.defineProperty(process, 'platform', { value: 'darwin' })
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
         const cb = args[3]
@@ -261,23 +233,18 @@ describe('tryOpenBrowser', () => {
         if (callback) {
           callback(null)
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
       const url = `https://example.com/darwin-${Date.now()}`
       await tryOpenBrowser(url)
 
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       expect(execFile).toHaveBeenCalledWith('open', [url], expect.any(Function))
     })
 
     it('uses xdg-open on linux when not WSL', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'))
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
         const cb = args[3]
@@ -285,23 +252,18 @@ describe('tryOpenBrowser', () => {
         if (callback) {
           callback(null)
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
       const url = `https://example.com/linux-${Date.now()}`
       await tryOpenBrowser(url)
 
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       expect(execFile).toHaveBeenCalledWith('xdg-open', [url], expect.any(Function))
     })
 
     it('uses wslview on WSL', async () => {
       Object.defineProperty(process, 'platform', { value: 'linux' })
       vi.mocked(readFile).mockResolvedValue('linux version microsoft')
-      // biome-ignore lint/suspicious/noExplicitAny: mocking
-      // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
       vi.mocked(execFile).mockImplementation((...args: any[]) => {
         const _options = args[2]
         const cb = args[3]
@@ -309,8 +271,6 @@ describe('tryOpenBrowser', () => {
         if (callback) {
           callback(null)
         }
-        // biome-ignore lint/suspicious/noExplicitAny: mocking
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         return {} as any
       })
 
@@ -320,7 +280,6 @@ describe('tryOpenBrowser', () => {
       expect(execFile).toHaveBeenCalledWith(
         'powershell.exe',
         expect.arrayContaining(['-NoProfile', '-EncodedCommand']),
-        // biome-ignore lint/suspicious/noExplicitAny: needed for mocking
         expect.any(Function)
       )
     })
