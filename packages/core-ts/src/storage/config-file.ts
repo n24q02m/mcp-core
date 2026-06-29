@@ -18,7 +18,7 @@ const paths = envPaths('mcp', { suffix: '' })
 const DEFAULT_CONFIG_PATH = join(paths.config, 'config.enc')
 const SALT_SIZE = 16
 
-interface ConfigStore {
+export interface ConfigStore {
   version: 1
   servers: Record<string, Record<string, string>>
 }
@@ -28,15 +28,15 @@ function validateAuth(config: Record<string, unknown>): boolean {
 }
 
 function validateServer(server: unknown): boolean {
-  if (!server || typeof server !== 'object') return false
+  if (!server || typeof server !== 'object' || Array.isArray(server)) return false
   return validateAuth(server as Record<string, unknown>)
 }
 
-function validateSchema(data: unknown): data is ConfigStore {
+export function validateSchema(data: unknown): data is ConfigStore {
   if (!data || typeof data !== 'object') return false
   const d = data as Record<string, unknown>
   if (d.version !== 1) return false
-  if (!d.servers || typeof d.servers !== 'object') return false
+  if (!d.servers || typeof d.servers !== 'object' || Array.isArray(d.servers)) return false
 
   const servers = d.servers as Record<string, unknown>
   for (const serverName in servers) {

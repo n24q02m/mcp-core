@@ -10,6 +10,7 @@ import {
   listConfigs,
   readConfig,
   setConfigPath,
+  validateSchema,
   writeConfig
 } from '../../src/storage/config-file.js'
 import {
@@ -196,6 +197,47 @@ describe('config validation', () => {
     await writeFile(join(tempDir, 'config.enc'), encrypted)
 
     await expect(readConfig('any')).rejects.toThrow('Invalid config schema')
+  })
+})
+
+describe('validateSchema', () => {
+  it('accepts valid config', () => {
+    const valid = {
+      version: 1,
+      servers: {
+        s1: { a: 'b' },
+        s2: {}
+      }
+    }
+    expect(validateSchema(valid)).toBe(true)
+  })
+
+  it('rejects null or non-object', () => {
+    expect(validateSchema(null)).toBe(false)
+    expect(validateSchema(undefined)).toBe(false)
+    expect(validateSchema('string')).toBe(false)
+    expect(validateSchema(123)).toBe(false)
+  })
+
+  it('rejects invalid version', () => {
+    expect(validateSchema({ version: 2, servers: {} })).toBe(false)
+    expect(validateSchema({ version: '1', servers: {} })).toBe(false)
+    expect(validateSchema({ servers: {} })).toBe(false)
+  })
+
+  it('rejects invalid servers property', () => {
+    expect(validateSchema({ version: 1, servers: null })).toBe(false)
+    expect(validateSchema({ version: 1, servers: [] })).toBe(false)
+    expect(validateSchema({ version: 1, servers: 'not-an-object' })).toBe(false)
+    expect(validateSchema({ version: 1 })).toBe(false)
+  })
+
+  it('rejects invalid server entry', () => {
+    expect(validateSchema({ version: 1, servers: { s1: null } })).toBe(false)
+    expect(validateSchema({ version: 1, servers: { s1: [] } })).toBe(false)
+    expect(validateSchema({ version: 1, servers: { s1: 'string' } })).toBe(false)
+    expect(validateSchema({ version: 1, servers: { s1: { key: 123 } } })).toBe(false)
+    expect(validateSchema({ version: 1, servers: { s1: { key: { nested: 'obj' } } } })).toBe(false)
   })
 })
 
