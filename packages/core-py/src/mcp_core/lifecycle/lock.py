@@ -186,7 +186,7 @@ class LifecycleLock:
         self._port = port
         self._token = token
         self._root = _locks_dir(root)
-        self._root.mkdir(parents=True, exist_ok=True)
+        self._root.mkdir(parents=True, exist_ok=True, mode=0o700)
         if sys.platform != "win32":
             self._root.chmod(0o700)
         self._lock_file = self._root / f"{name}-{port}.lock"
