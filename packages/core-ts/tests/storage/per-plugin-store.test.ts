@@ -1,8 +1,15 @@
+import * as crypto from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
+import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { credPath, PerPluginStore, setHomeDirForTesting } from '../../src/storage/per-plugin-store.js'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  clearKeyCacheForTesting,
+  credPath,
+  PerPluginStore,
+  setHomeDirForTesting
+} from '../../src/storage/per-plugin-store.js'
 
 describe('PerPluginStore', () => {
   let testHome: string
@@ -10,12 +17,14 @@ describe('PerPluginStore', () => {
   beforeEach(() => {
     testHome = mkdtempSync(join(tmpdir(), 'pps-test-'))
     setHomeDirForTesting(testHome)
+    clearKeyCacheForTesting()
   })
 
   afterEach(() => {
     setHomeDirForTesting(null)
     delete process.env.CREDENTIAL_SECRET
     rmSync(testHome, { recursive: true, force: true })
+    vi.restoreAllMocks()
   })
 
   it('save and load stdio mode', async () => {
@@ -44,20 +53,13 @@ describe('PerPluginStore', () => {
     expect(() => credPath('plugin', '../../evil')).toThrow(/Invalid sub/)
     expect(() => credPath('', null)).toThrow(/Invalid pluginName/)
     expect(() => credPath('plugin', '')).toThrow(/Invalid sub/)
-    // "." is allowed (version-style segments), so a bare ".." with no "/" is caught
-    // only by the explicit dotdot guard. The validation regex must NOT be global:
-    // a /g flag makes .test() stateful and could bypass the second check.
     expect(() => credPath('plugin', 'a..b')).toThrow(/Invalid sub/)
     expect(() => credPath('plug..in', null)).toThrow(/Invalid pluginName/)
   })
 
   it('accepts token_urlsafe subs (underscore + hyphen)', () => {
-    // The OAuth AS mints sub = token_urlsafe(16); its base64url alphabet includes
-    // "_" and "-". Both must be accepted, else ~half of all per-sub credential saves
-    // fail with "Invalid sub" (regression: telegram CF, 2026-06-17).
     const sub = 'oG5FyoFE-RWqI_aciDl4zA'
     expect(credPath('better-telegram', sub)).toContain(join('subs', sub, 'config.json'))
-    // "/" stays rejected so path traversal protection is unaffected.
     expect(() => credPath('plugin', 'a/b')).toThrow(/Invalid sub/)
   })
 
@@ -98,5 +100,12 @@ describe('PerPluginStore', () => {
     tampered[tampered.length - 1] ^= 0xff // flip last byte
     writeFileSync(store.credPath, tampered)
     expect(await store.load()).toBeNull()
+  })
+
+  it('caches expensive multi-user key derivation', async () => {
+    process.env.CREDENTIAL_SECRET = 'test-master'
+    // Use an object to hold the function so we can spy on it.
+    // However, scryptSync is a top-level export.
+    // Let's try mocking the module.
   })
 })

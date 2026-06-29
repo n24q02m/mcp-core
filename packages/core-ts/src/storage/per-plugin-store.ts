@@ -21,6 +21,16 @@ import { join } from 'node:path'
 import { backendFromEnv, type CredentialBackend } from './backends.js'
 import { getHomeDir } from './home-dir.js'
 
+// ⚡ Bolt: Cache machine-bound keys to avoid repeated disk I/O and randomBytes calls.
+const machineKeyCache = new Map<string, Buffer>()
+// ⚡ Bolt: Cache derived multi-user keys to avoid expensive scryptSync calls on every operation.
+const multiUserKeyCache = new Map<string, Buffer>()
+
+export function clearKeyCacheForTesting(): void {
+  machineKeyCache.clear()
+  multiUserKeyCache.clear()
+}
+
 export { setHomeDirForTesting } from './home-dir.js'
 
 export function credPath(pluginName: string, sub: string | null): string {
@@ -42,27 +52,39 @@ export function credPath(pluginName: string, sub: string | null): string {
 }
 
 async function loadOrGenMachineKey(pluginName: string): Promise<Buffer> {
+  const cached = machineKeyCache.get(pluginName)
+  if (cached) return cached
+
   const secretPath = join(getHomeDir(), `.${pluginName}-mcp`, '.secret')
   try {
-    return await readFile(secretPath)
+    const key = await readFile(secretPath)
+    machineKeyCache.set(pluginName, key)
+    return key
   } catch {
     const key = randomBytes(32)
     await mkdir(join(getHomeDir(), `.${pluginName}-mcp`), { recursive: true, mode: 0o700 })
     await writeFile(secretPath, key, { mode: 0o600 })
+    machineKeyCache.set(pluginName, key)
     return key
   }
 }
 
 function deriveMultiUserKey(pluginName: string, sub: string): Buffer {
+  const cacheKey = `${pluginName}:${sub}`
+  const cached = multiUserKeyCache.get(cacheKey)
+  if (cached) return cached
+
   const master = process.env.CREDENTIAL_SECRET
   if (!master) {
     throw new Error('CREDENTIAL_SECRET env required for HTTP multi-user mode')
   }
-  return scryptSync(master, Buffer.from(`${pluginName}:${sub}`, 'utf-8'), 32, {
+  const key = scryptSync(master, Buffer.from(`${pluginName}:${sub}`, 'utf-8'), 32, {
     N: 16384,
     r: 8,
     p: 1
   })
+  multiUserKeyCache.set(cacheKey, key)
+  return key
 }
 
 export class PerPluginStore {
