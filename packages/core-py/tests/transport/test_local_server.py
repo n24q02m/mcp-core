@@ -886,14 +886,10 @@ def test_build_local_app_auth_scope_not_invoked_on_unauthed_request(tmp_path: Pa
 
 
 @pytest.mark.asyncio
-async def test_run_http_server_with_async_setup_hook(mcp, relay_schema, tmp_path):
+async def test_run_http_server_with_async_setup_hook(mcp, relay_schema):
     """run_http_server should support async setup_complete_hook."""
-    from mcp_core.storage.config_file import clear_key_cache_for_testing, set_config_path
     from mcp_core.transport.local_server import run_http_server
     import asyncio
-
-    set_config_path(str(tmp_path / "config.enc"))
-    clear_key_cache_for_testing()
 
     hook_called = False
 
@@ -903,16 +899,16 @@ async def test_run_http_server_with_async_setup_hook(mcp, relay_schema, tmp_path
         hook_called = True
         mark_complete()
 
-    # We need to mock uvicorn.Server.serve so it doesn't block forever
-    with patch("uvicorn.Server.serve", new_callable=AsyncMock) as mock_serve:
-        await run_http_server(
-            mcp,
-            server_name="test",
-            relay_schema=relay_schema,
-            setup_complete_hook=async_hook,
-        )
-        assert hook_called is True
-        mock_serve.assert_awaited_once()
-
-    set_config_path(None)
-    clear_key_cache_for_testing()
+    # Mock read_config and mark_setup_complete to avoid config file access and InvalidTag errors.
+    with patch("mcp_core.storage.config_file.read_config", return_value={"api_key": "exists"}):
+        with patch("mcp_core.storage.config_file.mark_setup_complete"):
+            # We need to mock uvicorn.Server.serve so it doesn't block forever
+            with patch("uvicorn.Server.serve", new_callable=AsyncMock) as mock_serve:
+                await run_http_server(
+                    mcp,
+                    server_name="test",
+                    relay_schema=relay_schema,
+                    setup_complete_hook=async_hook,
+                )
+                assert hook_called is True
+                mock_serve.assert_awaited_once()

@@ -1372,13 +1372,9 @@ def test_on_credentials_saved_async_exception():
     assert resp.json()["error"] == "server_error"
 
 
-def test_authorize_get_with_async_custom_renderer(client_with_async_otp, tmp_path):
+def test_authorize_get_with_async_custom_renderer(client_with_async_otp):
     """GET /authorize should support async custom_credential_form_html."""
     from mcp_core.auth.local_oauth_app import create_local_oauth_app
-    from mcp_core.storage.config_file import clear_key_cache_for_testing, set_config_path
-
-    set_config_path(str(tmp_path / "config.enc"))
-    clear_key_cache_for_testing()
 
     async def async_renderer(schema, submit_url, prefill=None):
         return f"<html>Async renderer: {submit_url}</html>"
@@ -1390,10 +1386,9 @@ def test_authorize_get_with_async_custom_renderer(client_with_async_otp, tmp_pat
     )
     client = TestClient(app)
 
-    # We need a valid session to trigger the renderer
+    # Mocking config access is NOT needed here because authorize_get doesn't
+    # call read_config() or _load_store(). It only manages in-memory
+    # pending_sessions.
     resp = client.get("/authorize?client_id=c&redirect_uri=r&state=s&code_challenge=cc")
     assert resp.status_code == 200
     assert "Async renderer" in resp.text
-
-    set_config_path(None)
-    clear_key_cache_for_testing()
