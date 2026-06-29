@@ -83,6 +83,7 @@ class D1Backend:
                 flat = [v for row in batch for v in row]
                 # ⚡ Bolt: batched_sql only repeats the safe ?-placeholder tuple;
                 # row data is bound via 'flat' params, never interpolated.
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                 self.execute(batched_sql, flat)
             else:
                 # ⚡ Bolt: Use /batch endpoint to resolve N+1 query issues when

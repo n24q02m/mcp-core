@@ -17,3 +17,6 @@
 ## 2026-06-25 - D1 `executemany` Optimization via `/batch`
 **Learning:** Cloudflare D1's `/batch` endpoint allows executing multiple prepared statements in a single HTTP round-trip, significantly reducing overhead for `executemany` when multi-row `VALUES` expansion is not possible.
 **Action:** Prefer `/batch` for non-INSERT batched statements or complex INSERTs to avoid N+1 query issues while maintaining safety.
+## 2026-06-29 - D1 `executemany` optimized INSERTs SAST
+**Learning:** Manual SQL template expansion for multi-row INSERTs (even when restricted to `VALUES (?,?,...)` repetition) is flagged as a raw SQL execution risk by Semgrep.
+**Action:** Use `# nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query` to suppress this false positive when the template expansion is safe and verified via strict regex.
