@@ -26,7 +26,7 @@ def _get_litellm() -> Any:
     # Idempotent hardening: never log prompts/keys from inside litellm.
     # Upstream declares `suppress_debug_info = False` unannotated, so ty
     # infers Literal[False]; the assignment is valid at runtime.
-    litellm.suppress_debug_info = True  # ty: ignore[invalid-assignment]
+    litellm.suppress_debug_info = True
     litellm.turn_off_message_logging = True
     return litellm
 
