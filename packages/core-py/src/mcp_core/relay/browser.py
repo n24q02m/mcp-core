@@ -78,7 +78,11 @@ def try_open_browser(url: str) -> bool:
         True if the browser was likely opened, False otherwise.
     """
     # Validate URL
-    if not re.match(r"^https?://[a-zA-Z0-9-._~:/?#\[\]@!&'*+,;=%]+$", url, re.IGNORECASE):
+    # 🛡️ Sentinel: Tightened regex to prevent command injection via xdg-open.
+    # Removed $, (, ), *, ,, and ; from the whitelist.
+    # Single quotes (') are kept as they are commonly used in URLs and are
+    # handled safely by webbrowser.open() and subprocess.run() (when not shell=True).
+    if not re.match(r"^https?://[a-zA-Z0-9-._~:/?#\[\]@!&'%+=]+$", url, re.IGNORECASE):
         logger.debug("Invalid URL for browser open: %s", url)
         return False
 

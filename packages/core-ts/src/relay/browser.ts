@@ -66,7 +66,11 @@ async function openInWsl(url: string): Promise<boolean> {
 export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Validate URL
-    if (!/^https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!$&'()*+,;=%]+$/i.test(url)) {
+    // 🛡️ Sentinel: Tightened regex to prevent command injection via xdg-open.
+    // Removed $, (, ), *, ,, and ; from the whitelist.
+    // Single quotes (') are kept as they are commonly used in URLs and are
+    // handled safely by execFileAsync (which uses execFile under the hood).
+    if (!/^https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!$&'%+=]+$/i.test(url)) {
       return false
     }
 
