@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { JWTIssuer } from '../../src/oauth/jwt-issuer.js'
-import { OAuthMiddleware } from '../../src/transport/oauth-middleware.js'
+import { extractBearerToken, OAuthMiddleware } from '../../src/transport/oauth-middleware.js'
 
 function makeRequest(headers: Record<string, string> = {}): IncomingMessage {
   const req = new IncomingMessage(new Socket())
@@ -158,5 +158,53 @@ describe('OAuthMiddleware', () => {
       expect(ok).toBe(true)
       expect(getStatus()).toBe(200)
     })
+  })
+})
+
+describe('extractBearerToken', () => {
+  it('returns null for undefined or empty string', () => {
+    expect(extractBearerToken(undefined)).toBeNull()
+    expect(extractBearerToken('')).toBeNull()
+  })
+
+  it('returns null if only prefix is present', () => {
+    expect(extractBearerToken('Bearer ')).toBeNull()
+    expect(extractBearerToken('bearer ')).toBeNull()
+    expect(extractBearerToken('Bearer\t')).toBeNull()
+  })
+
+  it('extracts token from standard Bearer header', () => {
+    expect(extractBearerToken('Bearer token123')).toBe('token123')
+    expect(extractBearerToken('bearer token123')).toBe('token123')
+  })
+
+  it('handles leading and trailing whitespace', () => {
+    expect(extractBearerToken('  Bearer token123  ')).toBe('token123')
+  })
+
+  it('handles mixed case prefix in fallback path', () => {
+    expect(extractBearerToken('BEARER token123')).toBe('token123')
+    expect(extractBearerToken('bEaReR token123')).toBe('token123')
+  })
+
+  it('handles various whitespace separators', () => {
+    expect(extractBearerToken('Bearer\ttoken123')).toBe('token123')
+    expect(extractBearerToken('Bearer\ntoken123')).toBe('token123')
+    expect(extractBearerToken('Bearer\rtoken123')).toBe('token123')
+  })
+
+  it('preserves internal spaces in tokens', () => {
+    expect(extractBearerToken('Bearer token with spaces')).toBe('token with spaces')
+  })
+
+  it('returns null for wrong scheme', () => {
+    expect(extractBearerToken('Basic dXNlcjpwYXNz')).toBeNull()
+    expect(extractBearerToken('Token token123')).toBeNull()
+  })
+
+  it('returns null for malformed prefix or missing separator', () => {
+    expect(extractBearerToken('Bear token123')).toBeNull()
+    expect(extractBearerToken('Bearer')).toBeNull()
+    expect(extractBearerToken('Bearer-token123')).toBeNull()
   })
 })
