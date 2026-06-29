@@ -217,6 +217,7 @@ export async function loginGetHandler(
 ): Promise<void> {
   const next = getSafeNext(req.query?.next)
   res.set?.('Content-Type', 'text/html')
+  res.set?.('X-Frame-Options', 'DENY')
   res.send(renderFormShell('Relay login', renderLoginForm(next)))
 }
 
@@ -237,6 +238,7 @@ export async function loginPostHandler(
   if (!configuredPassword || !timingSafeEqual(password, configuredPassword)) {
     bumpFail(ip)
     res.set?.('Content-Type', 'text/html')
+    res.set?.('X-Frame-Options', 'DENY')
     res.status(401).send(renderFormShell('Relay login', renderLoginForm(next, 'Invalid password. Please try again.')))
     return
   }

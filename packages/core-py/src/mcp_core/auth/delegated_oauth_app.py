@@ -564,7 +564,7 @@ def create_delegated_oauth_app(
             user_code=user_code,
             verification_url=verification_url,
         )
-        return HTMLResponse(html)
+        return HTMLResponse(html, headers={"X-Frame-Options": "DENY"})
 
     # ------------------------------------------------------------------
     # Shared endpoints
@@ -761,7 +761,7 @@ def create_delegated_oauth_app(
             "<p>You can close this tab.</p>"
             "</div></body></html>"
         )
-        return HTMLResponse(html_content)
+        return HTMLResponse(html_content, headers={"X-Frame-Options": "DENY"})
 
     async def login_get(request: Request):
         """GET /login -- render the relay-password form."""

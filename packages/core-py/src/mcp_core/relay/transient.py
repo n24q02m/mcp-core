@@ -184,8 +184,8 @@ def _build_relay_app(
     async def setup_form(request: Request) -> HTMLResponse:
         token = request.query_params.get("token", "")
         if not secrets.compare_digest(token, expected_token):
-            return HTMLResponse("invalid token", status_code=401)
-        return HTMLResponse(body_template)
+            return HTMLResponse("invalid token", status_code=401, headers={"X-Frame-Options": "DENY"})
+        return HTMLResponse(body_template, headers={"X-Frame-Options": "DENY"})
 
     async def submit(request: Request) -> JSONResponse:
         auth = request.headers.get("authorization", "")

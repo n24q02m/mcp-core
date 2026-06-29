@@ -175,7 +175,7 @@ async def login_get_handler(next: str = "/authorize") -> HTMLResponse:
     gate works even with a strict CSP that blocks inline scripts.
     """
     next = _get_safe_next(next)
-    return HTMLResponse(render_form_shell("Relay login", _render_login_form(next)))
+    return HTMLResponse(render_form_shell("Relay login", _render_login_form(next)), headers={"X-Frame-Options": "DENY"})
 
 
 async def login_post_handler(form: dict, ip: str) -> Response:
@@ -196,6 +196,7 @@ async def login_post_handler(form: dict, ip: str) -> Response:
         return HTMLResponse(
             render_form_shell("Relay login", _render_login_form(next_, "Invalid password. Please try again.")),
             status_code=401,
+            headers={"X-Frame-Options": "DENY"},
         )
     _clear_fail(ip)
     sid = secrets.token_hex(32)
