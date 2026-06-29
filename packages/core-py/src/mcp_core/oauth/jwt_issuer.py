@@ -2,29 +2,30 @@
 
 Two signing modes, selected at construction:
 
-* LOCAL single-user (``credential_secret`` unset): RSA-2048, ``RS256``,
-  ``kid="key-1"``, keys generated on first run and persisted to disk
-  (``keys_dir``) so they survive restarts on a real machine. Behavior is
+* LOCAL single-user (credential_secret unset): RSA-2048, RS256,
+  kid="key-1", keys generated on first run and persisted to disk
+  (keys_dir) so they survive restarts on a real machine. Behavior is
   byte-for-byte unchanged from the pre-stability-fix implementation.
 
-* HTTP multi-user (``credential_secret`` set): Ed25519, ``EdDSA``, signing key
-  DERIVED deterministically from ``CREDENTIAL_SECRET`` via HKDF-SHA256
-  (``derive_jwt_signing_seed``). NO disk I/O. Every container replica converges
+* HTTP multi-user (credential_secret set): Ed25519, EdDSA, signing key
+  DERIVED deterministically from CREDENTIAL_SECRET via HKDF-SHA256
+  (derive_jwt_signing_seed). NO disk I/O. Every container replica converges
   on the same key without a shared volume or external secret store, so OAuth
-  tokens survive container recreation (Watchtower ``:latest`` redeploys). The
-  ``kid`` is the base64url SHA-256 thumbprint of the raw public key so a
-  ``CREDENTIAL_SECRET`` change yields a distinguishable kid.
+  tokens survive container recreation (Watchtower :latest redeploys). The
+  kid is the base64url SHA-256 thumbprint of the raw public key so a
+  CREDENTIAL_SECRET change yields a distinguishable kid.
 
-The two modes are different deployments that never exchange tokens (``iss`` /
-``aud`` are server-scoped), so the per-mode algorithm split is permanent and
+The two modes are different deployments that never exchange tokens (iss /
+aud are server-scoped), so the per-mode algorithm split is permanent and
 intentional, not a transition. Each process runs exactly one algorithm; the
-verify accept-list is a single-element list, never a ``{RS256, EdDSA}`` union.
+verify accept-list is a single-element list, never a {RS256, EdDSA} union.
 """
 
 import base64
 import datetime
 import hashlib
 import logging
+import os
 from pathlib import Path
 
 import jwt
@@ -100,60 +101,67 @@ class JWTIssuer:
         self._kid = _b64url(hashlib.sha256(raw_pub).digest())[:16]
 
     def _load_or_generate_keys(self) -> None:
+        self._ensure_keys_dir()
+        if self.private_key_path.exists() and self.public_key_path.exists():
+            self._load_keys()
+        else:
+            self._generate_keys()
+
+    def _ensure_keys_dir(self) -> None:
         # mode=0o700 closes the TOCTOU window where a freshly-created keys dir
         # would briefly be world-readable before the chmod below; the chmod
         # still runs to fix an already-existing dir and to override umask.
         self.keys_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        import os
-
         if os.name != "nt":
             self.keys_dir.chmod(0o700)
 
-        if self.private_key_path.exists() and self.public_key_path.exists():
-            with open(self.private_key_path, "rb") as f:
-                loaded_private = serialization.load_pem_private_key(f.read(), password=None)
-            if not isinstance(loaded_private, RSAPrivateKey):
-                msg = f"Expected RSA private key at {self.private_key_path}, got {type(loaded_private).__name__}"
-                raise TypeError(msg)
-            self.private_key = loaded_private
+    def _load_keys(self) -> None:
+        with open(self.private_key_path, "rb") as f:
+            loaded_private = serialization.load_pem_private_key(f.read(), password=None)
+        if not isinstance(loaded_private, RSAPrivateKey):
+            msg = f"Expected RSA private key at {self.private_key_path}, got {type(loaded_private).__name__}"
+            raise TypeError(msg)
+        self.private_key = loaded_private
 
-            with open(self.public_key_path, "rb") as f:
-                loaded_public = serialization.load_pem_public_key(f.read())
-            if not isinstance(loaded_public, RSAPublicKey):
-                msg = f"Expected RSA public key at {self.public_key_path}, got {type(loaded_public).__name__}"
-                raise TypeError(msg)
-            self.public_key = loaded_public
-        else:
-            self.private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=2048,
+        with open(self.public_key_path, "rb") as f:
+            loaded_public = serialization.load_pem_public_key(f.read())
+        if not isinstance(loaded_public, RSAPublicKey):
+            msg = f"Expected RSA public key at {self.public_key_path}, got {type(loaded_public).__name__}"
+            raise TypeError(msg)
+        self.public_key = loaded_public
+
+    def _generate_keys(self) -> None:
+        self.private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
+        )
+        self.public_key = self.private_key.public_key()
+
+        with open(self.private_key_path, "wb") as f:
+            f.write(
+                self.private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption(),
+                )
             )
-            self.public_key = self.private_key.public_key()
 
-            with open(self.private_key_path, "wb") as f:
-                f.write(
-                    self.private_key.private_bytes(
-                        encoding=serialization.Encoding.PEM,
-                        format=serialization.PrivateFormat.PKCS8,
-                        encryption_algorithm=serialization.NoEncryption(),
-                    )
+        with open(self.public_key_path, "wb") as f:
+            f.write(
+                self.public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
                 )
-
-            with open(self.public_key_path, "wb") as f:
-                f.write(
-                    self.public_key.public_bytes(
-                        encoding=serialization.Encoding.PEM,
-                        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-                    )
-                )
-            # Ensure proper file permissions
+            )
+        # Ensure proper file permissions
+        if os.name != "nt":
             self.private_key_path.chmod(0o600)
             self.public_key_path.chmod(0o644)
 
     def get_jwks(self) -> dict:
         """Return JWKS payload for /.well-known/jwks.json.
 
-        Always emits a ``keys`` array. In RS256 mode the single entry is an RSA
+        Always emits a keys array. In RS256 mode the single entry is an RSA
         JWK; in EdDSA mode it is an OKP JWK. The array shape is the same so the
         endpoint and clients can stay multi-key-aware for future rotation
         (publish current + optionally retired public keys).
@@ -193,7 +201,7 @@ class JWTIssuer:
         }
 
     def issue_access_token(self, sub: str, expires_in_seconds: int = 3600) -> str:
-        """Issue a JWT access token (``typ="access"``) signed with the active alg."""
+        """Issue a JWT access token (typ="access") signed with the active alg."""
         now = datetime.datetime.now(datetime.UTC)
         payload = {
             "iss": self.server_name,
@@ -206,22 +214,22 @@ class JWTIssuer:
         return jwt.encode(payload, self.private_key, algorithm=self.alg, headers={"kid": self._kid})
 
     def issue_refresh_token(self, sub: str, expires_in_seconds: int = 31536000) -> str:
-        """Issue a JWT refresh token (``typ="refresh"``) signed with the active alg.
+        """Issue a JWT refresh token (typ="refresh") signed with the active alg.
 
         Defaults to a 1-year (31536000s) lifetime so long-running MCP clients
         can mint fresh access tokens without forcing the user back through the
         browser PKCE flow. The access token stays short-lived (1h); the refresh
         token is the renewal credential and is rotated on every use
-        (``_handle_refresh_token`` issues a new refresh token each time), so the
+        (_handle_refresh_token issues a new refresh token each time), so the
         security control is rotation, not a short TTL. A short refresh TTL was
         the residual re-auth driver: a self-hosted server a user touches only
         intermittently (less than once a month) would silently expire its
         refresh token between sessions, forcing a fresh browser OAuth tab on the
         next use. With a 1-year floor, only a genuinely long idle gap re-prompts.
-        Same key / iss / aud as access tokens; the ``typ`` claim is the only
-        thing that distinguishes them, and ``verify_access_token`` rejects
-        ``typ="refresh"`` so a refresh token can never be used as an access token
-        at the ``/mcp`` resource.
+        Same key / iss / aud as access tokens; the typ claim is the only
+        thing that distinguishes them, and verify_access_token rejects
+        typ="refresh" so a refresh token can never be used as an access token
+        at the /mcp resource.
         """
         now = datetime.datetime.now(datetime.UTC)
         payload = {
@@ -239,10 +247,10 @@ class JWTIssuer:
 
         Raises standard PyJWT exceptions on failure (bad signature, wrong
         issuer/audience, expired). The accept-list is the single active
-        algorithm (``self.alg``), never a union. Additionally rejects tokens
-        whose ``typ`` claim is ``"refresh"`` with ``jwt.InvalidTokenError`` so a
+        algorithm (self.alg), never a union. Additionally rejects tokens
+        whose typ claim is "refresh" with jwt.InvalidTokenError so a
         refresh token cannot be replayed as an access token. Tokens with
-        ``typ="access"`` OR a missing ``typ`` claim are accepted (the latter
+        typ="access" OR a missing typ claim are accepted (the latter
         keeps already-issued pre-refresh-support tokens valid).
         """
         payload = jwt.decode(
@@ -260,14 +268,14 @@ class JWTIssuer:
     def verify_refresh_token(self, token: str) -> dict:
         """Verify a JWT refresh token and return its payload.
 
-        Same key / audience / issuer checks as ``verify_access_token`` and
+        Same key / audience / issuer checks as verify_access_token and
         raises the same standard PyJWT exceptions on failure. The accept-list is
-        the single active algorithm (``self.alg``). Additionally asserts
-        ``typ=="refresh"`` (raising ``jwt.InvalidTokenError`` otherwise) so an
+        the single active algorithm (self.alg). Additionally asserts
+        typ=="refresh" (raising jwt.InvalidTokenError otherwise) so an
         access token can never be exchanged at the refresh grant.
-        ``jwt.InvalidTokenError`` is the base class for the library's decode
-        errors, so existing ``except jwt.InvalidTokenError`` / ``except
-        jwt.PyJWTError`` clauses already catch it.
+        jwt.InvalidTokenError is the base class for the library's decode
+        errors, so existing except jwt.InvalidTokenError / except
+        jwt.PyJWTError clauses already catch it.
         """
         payload = jwt.decode(
             token,
