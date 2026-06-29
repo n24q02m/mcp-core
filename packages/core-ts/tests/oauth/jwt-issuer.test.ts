@@ -135,11 +135,10 @@ describe('JWTIssuer refresh tokens (issue #261)', () => {
   })
 
   it('refresh token has a long (~1 year) default lifetime, much longer than the access token', async () => {
-    // The 1-year floor (raised from 30 days) is the residual fix for OAuth
-    // re-auth tab-spam: an intermittently-used self-hosted server must not
-    // silently expire its refresh token between sessions, which would force a
-    // fresh browser OAuth tab. Rotation on every refresh (not a short TTL) is
-    // the security control.
+    // The 1-year floor (raised from 30 days) ensures that intermittently-used
+    // self-hosted servers do not silently expire their refresh tokens between
+    // sessions, which would force a fresh browser OAuth tab. Rotation on every
+    // refresh (not a short TTL) is the security control.
     const issuer = new JWTIssuer(serverName, tempDir)
     await issuer.init()
     const access = await issuer.verifyAccessToken(await issuer.issueAccessToken('u'))

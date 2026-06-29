@@ -30,6 +30,9 @@ import { deriveJwtSigningSeed } from '../crypto/kdf.js'
 
 const DEFAULT_KEYS_DIR = join(homedir(), '.mcp-core', 'jwt-keys')
 
+const DEFAULT_ACCESS_TOKEN_TTL = 3600
+const DEFAULT_REFRESH_TOKEN_TTL = 31536000 // 1 year
+
 // RFC 8410 PKCS8 DER prefix for an Ed25519 private key. Prepended to the
 // 32-byte HKDF seed to build an importable PKCS8 key (jose 6.2.3 cannot import
 // a raw seed via importJWK d-only).
@@ -132,7 +135,7 @@ export class JWTIssuer {
   }
 
   /** Issue a JWT access token (typ="access") signed with the active alg. */
-  async issueAccessToken(sub: string, expiresInSeconds = 3600): Promise<string> {
+  async issueAccessToken(sub: string, expiresInSeconds = DEFAULT_ACCESS_TOKEN_TTL): Promise<string> {
     if (!this.privateKey) throw new Error('JWTIssuer not initialized')
     return new jose.SignJWT({ sub, typ: 'access' })
       .setProtectedHeader({ alg: this.alg, kid: this.kid })
@@ -146,21 +149,20 @@ export class JWTIssuer {
   /**
    * Issue a JWT refresh token (typ="refresh") signed with the active alg.
    *
-   * Defaults to a 1-year (31536000s) lifetime so long-running MCP clients can
-   * mint fresh access tokens without forcing the user back through the browser
-   * PKCE flow. The access token stays short-lived (1h); the refresh token is the
-   * renewal credential and is rotated on every use (the /token refresh handler
-   * issues a new refresh token each time), so the security control is rotation,
-   * not a short TTL. A short refresh TTL was the residual re-auth driver: a
-   * self-hosted server a user touches only intermittently (less than once a
-   * month) would silently expire its refresh token between sessions, forcing a
-   * fresh browser OAuth tab on the next use. With a 1-year floor, only a
-   * genuinely long idle gap re-prompts. Same key / iss / aud as access tokens;
+   * Defaults to a 1-year lifetime so long-running MCP clients can mint fresh
+   * access tokens without forcing the user back through the browser PKCE flow.
+   * The access token stays short-lived (1h); the refresh token is the renewal
+   * credential and is rotated on every use (the /token refresh handler issues a
+   * new refresh token each time), so the security control is rotation, not a
+   * short TTL. A short refresh TTL would force a fresh browser OAuth tab if a
+   * self-hosted server is touched only intermittently (less than once a month).
+   * With a 1-year floor, only a genuinely long idle gap re-prompts. Same key /
+   * iss / aud as access tokens;
    * the typ claim is the only thing distinguishing them, and verifyAccessToken
    * rejects typ="refresh" so a refresh token can never be used as an access
    * token at the /mcp resource.
    */
-  async issueRefreshToken(sub: string, expiresInSeconds = 31536000): Promise<string> {
+  async issueRefreshToken(sub: string, expiresInSeconds = DEFAULT_REFRESH_TOKEN_TTL): Promise<string> {
     if (!this.privateKey) throw new Error('JWTIssuer not initialized')
     return new jose.SignJWT({ sub, typ: 'refresh' })
       .setProtectedHeader({ alg: this.alg, kid: this.kid })

@@ -536,7 +536,7 @@ def create_local_oauth_app(
         ``typ`` via the JWT issuer (no server-side store), extracts ``sub``,
         and issues a NEW access token AND a NEW refresh token (rotation). The
         refresh token is self-contained, so rotation here is stateless: the
-        old refresh token simply expires on its own 30-day clock; clients are
+        old refresh token simply expires on its own 1-year clock; clients are
         expected to replace it with the rotated one returned below.
         """
         refresh_token = form.get("refresh_token")

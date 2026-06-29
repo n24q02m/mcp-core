@@ -555,7 +555,7 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
    * issuer (no server-side store), extracts ``sub``, and issues a NEW access
    * token AND a NEW refresh token (rotation). The refresh token is
    * self-contained, so rotation here is stateless: the old refresh token simply
-   * expires on its own 30-day clock; clients replace it with the rotated one.
+   * expires on its own 1-year clock; clients replace it with the rotated one.
    */
   async function handleRefreshToken(res: ServerResponse, form: Record<string, string>): Promise<void> {
     const refreshToken = form.refresh_token

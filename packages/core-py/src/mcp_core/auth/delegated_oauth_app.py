@@ -618,7 +618,7 @@ def create_delegated_oauth_app(
         ``typ`` via the JWT issuer (no server-side store), extracts ``sub``,
         and issues a NEW access token AND a NEW refresh token (rotation). The
         refresh token is self-contained, so rotation here is stateless: the
-        old refresh token simply expires on its own 30-day clock.
+        old refresh token simply expires on its own 1-year clock.
         """
         refresh_token = form.get("refresh_token")
         if not refresh_token:

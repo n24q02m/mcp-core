@@ -14,3 +14,7 @@
 ## 2024-05-24 - Cookie Parsing Hot Path Avoids Array Allocations
 **Learning:** In hot paths like HTTP cookie parsing (`parseCookies` in `local-oauth-app.ts` and `delegated-oauth-app.ts`), splitting strings via `split(';')` generates unnecessary array allocations and intermediate strings. A single-pass `while` loop using `indexOf` and `substring()` is demonstrably faster (~10% improvement in basic tests) and reduces GC pressure while avoiding additional dependencies.
 **Action:** Always prefer index-based scanning and substring extraction for parsing small text structures (like headers or cookies) in high-frequency functions. Ensure functional parity with extensive edge case tests for trailing symbols and missing separators.
+
+## 2024-05-25 - Promote "Residual" Fixes to Standard Design
+**Learning:** Hardcoded constants and "residual fix" comments for critical UX behaviors (like long-lived OAuth refresh tokens to prevent tab-spam) should be refactored into named constants and standard documentation. This improves maintainability and ensures the intent is clear as "permanent design" rather than "temporary fix".
+**Action:** When encountering successful "residual fixes", promote them to standard design patterns by introducing named constants (e.g., `DEFAULT_REFRESH_TOKEN_TTL`) and updating documentation to reflect their permanent role.

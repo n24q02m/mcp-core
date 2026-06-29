@@ -46,6 +46,9 @@ logger = logging.getLogger(__name__)
 # Keys will be stored outside of the codebase to persist across server restarts
 DEFAULT_KEYS_DIR = Path.home() / ".mcp-relay" / "jwt-keys"
 
+DEFAULT_ACCESS_TOKEN_TTL = 3600
+DEFAULT_REFRESH_TOKEN_TTL = 31536000  # 1 year
+
 
 def _b64url(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
@@ -192,7 +195,7 @@ class JWTIssuer:
             "e": to_base64url(pn.e),
         }
 
-    def issue_access_token(self, sub: str, expires_in_seconds: int = 3600) -> str:
+    def issue_access_token(self, sub: str, expires_in_seconds: int = DEFAULT_ACCESS_TOKEN_TTL) -> str:
         """Issue a JWT access token (``typ="access"``) signed with the active alg."""
         now = datetime.datetime.now(datetime.UTC)
         payload = {
@@ -205,19 +208,16 @@ class JWTIssuer:
         }
         return jwt.encode(payload, self.private_key, algorithm=self.alg, headers={"kid": self._kid})
 
-    def issue_refresh_token(self, sub: str, expires_in_seconds: int = 31536000) -> str:
+    def issue_refresh_token(self, sub: str, expires_in_seconds: int = DEFAULT_REFRESH_TOKEN_TTL) -> str:
         """Issue a JWT refresh token (``typ="refresh"``) signed with the active alg.
 
-        Defaults to a 1-year (31536000s) lifetime so long-running MCP clients
+        Defaults to a 1-year lifetime so long-running MCP clients
         can mint fresh access tokens without forcing the user back through the
         browser PKCE flow. The access token stays short-lived (1h); the refresh
         token is the renewal credential and is rotated on every use
         (``_handle_refresh_token`` issues a new refresh token each time), so the
-        security control is rotation, not a short TTL. A short refresh TTL was
-        the residual re-auth driver: a self-hosted server a user touches only
-        intermittently (less than once a month) would silently expire its
-        refresh token between sessions, forcing a fresh browser OAuth tab on the
-        next use. With a 1-year floor, only a genuinely long idle gap re-prompts.
+        security control is rotation, not a short TTL. A short refresh TTL would
+        force a fresh browser OAuth tab if a self-hosted server is touched only intermittently (less than once a month). With a 1-year floor, only a genuinely long idle gap re-prompts.
         Same key / iss / aud as access tokens; the ``typ`` claim is the only
         thing that distinguishes them, and ``verify_access_token`` rejects
         ``typ="refresh"`` so a refresh token can never be used as an access token
