@@ -56,9 +56,6 @@ def test_register_open_relay_tool_http(monkeypatch) -> None:
     )
 
     mcp = MagicMock()
-    # mcp.tool is used as a decorator with arguments
-    # @mcp.tool(name=..., description=...)
-    # def func(): ...
 
     register_open_relay_tool(mcp, "test-server", "http://127.0.0.1:8080")
 
