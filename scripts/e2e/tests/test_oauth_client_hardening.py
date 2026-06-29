@@ -475,7 +475,7 @@ async def test_browser_form_no_creds_no_prefill_qs(
 
 
 # ---------------------------------------------------------------------------
-# Silent failure mode driver bug: flows must probe health BEFORE registration.
+# Regression tests for silent failure mode: flows must probe health BEFORE registration.
 # ---------------------------------------------------------------------------
 
 
