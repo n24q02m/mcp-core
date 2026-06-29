@@ -116,3 +116,45 @@ def test_release_session_no_active():
     release_session()
     release_session()
     assert is_session_active() is False
+
+
+def test_claim_session_thread_safety():
+    import threading
+    from queue import Queue
+
+    num_threads = 20
+    results = Queue()
+
+    def worker(client_id):
+        try:
+            # Add a tiny delay to increase chance of contention if lock was missing
+            # (though it's already there)
+            session = claim_session(client_id)
+            results.put(session)
+        except Exception as e:
+            results.put(e)
+
+    threads = []
+    for i in range(num_threads):
+        t = threading.Thread(target=worker, args=(f"bridge-{i}",))
+        threads.append(t)
+
+    for t in threads:
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    sessions = []
+    while not results.empty():
+        res = results.get()
+        if isinstance(res, Exception):
+            raise res
+        sessions.append(res)
+
+    assert len(sessions) == num_threads
+    first_session = sessions[0]
+    for s in sessions[1:]:
+        # All should have the same token and same client_id (the winner's)
+        assert s.token == first_session.token
+        assert s.client_id == first_session.client_id
