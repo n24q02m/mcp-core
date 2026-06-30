@@ -41,7 +41,13 @@ async function openInPowerShell(url: string): Promise<boolean> {
 }
 
 async function openInWsl(url: string): Promise<boolean> {
-  // Try wslview first (from wslu package, commonly available)
+  // Try powershell.exe -EncodedCommand first (safer due to Base64 encoding)
+  const result = await openInPowerShell(url)
+  if (result) {
+    return true
+  }
+
+  // Fallback to wslview (from wslu package, commonly available)
   try {
     await execFileAsync('wslview', [url])
     return true
@@ -49,8 +55,7 @@ async function openInWsl(url: string): Promise<boolean> {
     /* fall through */
   }
 
-  // Fallback to powershell.exe -EncodedCommand
-  return openInPowerShell(url)
+  return false
 }
 
 /**
@@ -66,7 +71,7 @@ async function openInWsl(url: string): Promise<boolean> {
 export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Validate URL
-    if (!/^https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!$&'()*+,;=%]+$/i.test(url)) {
+    if (!/^https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!&'*+,;=%]+$/i.test(url)) {
       return false
     }
 
