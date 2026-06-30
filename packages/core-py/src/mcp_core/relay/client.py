@@ -5,6 +5,7 @@ import base64
 import json
 import secrets
 import sys
+import time
 from dataclasses import dataclass
 from urllib.parse import quote, urljoin
 
@@ -166,7 +167,6 @@ async def poll_for_result(
     Raises:
         RuntimeError: On session expiry, unexpected status, or timeout.
     """
-    import time
 
     deadline = time.monotonic() + timeout_s
 
@@ -267,8 +267,6 @@ async def poll_for_responses(
     Raises:
         RuntimeError: On timeout or request failure.
     """
-    import time
-
     deadline = time.monotonic() + timeout_s
 
     async with httpx.AsyncClient() as client:
