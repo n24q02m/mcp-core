@@ -2,6 +2,41 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.22 (2026-06-30)
+
+### Bug Fixes
+
+- Create lockfile dir with mode=0o700 to avoid permission race
+  ([`98e991f`](https://github.com/n24q02m/mcp-core/commit/98e991f778e9f63f255d61564dc1dd71f73e5757))
+
+- Lock file maintenance
+  ([`6f71979`](https://github.com/n24q02m/mcp-core/commit/6f71979d7d622d3daf6c97cff5cdf510ed54bef6))
+
+- Missing tests for error paths in PerPluginStore.load
+  ([`aa7d498`](https://github.com/n24q02m/mcp-core/commit/aa7d498fc89ef714abd5b363f2185c0598c6ffd2))
+
+- Missing tests for extractBearerToken edge cases
+  ([`61f9213`](https://github.com/n24q02m/mcp-core/commit/61f92135047fc0a25944684773da3d4ac92ca014))
+
+- Missing tests for isSchemaComplete
+  ([`f3e9920`](https://github.com/n24q02m/mcp-core/commit/f3e9920996e17a333a70c205143bda940aea9e0f))
+
+- Missing tests for renderFormShell
+  ([`8a2cc01`](https://github.com/n24q02m/mcp-core/commit/8a2cc0190c4e1793758d44853bb9cf77a2a352f7))
+
+- Move inline imports to module level
+  ([`b1b9efc`](https://github.com/n24q02m/mcp-core/commit/b1b9efc427cad3d87741294ee99438f98d2d4e9d))
+
+- Prefer powershell -EncodedCommand over wslview for safer WSL browser-open
+  ([`c6fdc75`](https://github.com/n24q02m/mcp-core/commit/c6fdc759eb4b8d68c04176a57e14b629a5e27a65))
+
+- Repeated Regex Compilation
+  ([`4b79dc4`](https://github.com/n24q02m/mcp-core/commit/4b79dc4889244c63ea12b51133acd5ef3ae480f9))
+
+- Update non-major dependencies
+  ([`45df322`](https://github.com/n24q02m/mcp-core/commit/45df3221d0ba6699c125d1d3d14996d9f29b1ea7))
+
+
 ## v1.18.0-beta.21 (2026-06-29)
 
 ### Bug Fixes
