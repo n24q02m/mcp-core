@@ -17,14 +17,16 @@
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
-      "automergeType": "pr"
+      "automergeType": "pr",
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Auto-merge patch production dependencies",
       "matchDepTypes": ["dependencies"],
       "matchUpdateTypes": ["patch"],
       "automerge": true,
-      "automergeType": "pr"
+      "automergeType": "pr",
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Group all non-major updates",
@@ -41,22 +43,26 @@
       "description": "Pin PSR to v10 \u2014 block Renovate downgrades",
       "matchPackagePatterns": ["^python-semantic-release/"],
       "matchManagers": ["github-actions"],
-      "allowedVersions": ">=10.0.0"
+      "allowedVersions": ">=10.0.0",
+      "minimumReleaseAge": false
     },
     {
       "description": "Pin Python to 3.13.x",
       "matchPackageNames": ["python"],
-      "allowedVersions": ">=3.13.0 <3.14.0"
+      "allowedVersions": ">=3.13.0 <3.14.0",
+      "minimumReleaseAge": false
     },
     {
       "description": "Pin Node.js to 24.x",
       "matchPackageNames": ["node"],
-      "allowedVersions": ">=24.0.0 <25.0.0"
+      "allowedVersions": ">=24.0.0 <25.0.0",
+      "minimumReleaseAge": false
     },
     {
       "description": "Pin Java runtime to 21.x LTS",
       "matchPackageNames": ["java"],
-      "allowedVersions": ">=21.0.0 <22.0.0"
+      "allowedVersions": ">=21.0.0 <22.0.0",
+      "minimumReleaseAge": false
     },
     {
       "description": "Disable runtime updates from mise",
@@ -67,7 +73,8 @@
     {
       "description": "Pin pydantic <2.13 \u2014 cohere>=6.1.0 caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+ which breaks downstream wet/mnemo/crg.",
       "matchPackageNames": ["pydantic"],
-      "allowedVersions": "<2.13"
+      "allowedVersions": "<2.13",
+      "minimumReleaseAge": false
     }
   ],
   "semanticCommits": "enabled",
