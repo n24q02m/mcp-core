@@ -43,7 +43,7 @@ dependencies = [
 [project.optional-dependencies]
 # litellm>=1.83.0: CVE-2026-35030 fixed in 1.83.0; 1.82.7-1.82.8 were removed
 # from PyPI (supply-chain incident). Library mode only — NEVER litellm[proxy].
-llm = ["litellm>=1.90.0"]
+llm = ["litellm>=1.90.1"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
