@@ -79,6 +79,14 @@ _MODEL_CHAIN_SCRIPT = """
 
         var widgets = document.querySelectorAll(".model-chain");
 
+        // The credential env-vars this page actually has input fields for (every
+        // declared [data-provider-key] group, visible or hidden). Used to filter
+        // the dropdown so it only OFFERS models we can authenticate.
+        var availableKeys = {};
+        document.querySelectorAll("[data-provider-key]").forEach(function (g) {
+            availableKeys[g.getAttribute("data-provider-key")] = true;
+        });
+
         function getChips(w) {
             var hidden = document.getElementById("field-" + w.getAttribute("data-key"));
             return hidden.value ? hidden.value.split(",").map(function (s) { return s.trim(); }).filter(Boolean) : [];
@@ -166,6 +174,17 @@ _MODEL_CHAIN_SCRIPT = """
             while (dd.firstChild) dd.removeChild(dd.firstChild);
             var suggested = JSON.parse(w.getAttribute("data-suggested") || "[]");
             var catalog = JSON.parse(w.getAttribute("data-catalog") || "[]");
+            // Only OFFER catalog models this page can authenticate: a credential
+            // field must exist for the model's provider (or the model needs no
+            // key). Without this, picking a model whose <PROVIDER>_API_KEY the
+            // server never declared (vertex_ai/*, bedrock/*, azure/*, ...) reveals
+            // no credential box — the silent-trap bug. Author-curated `suggested`
+            // are exempt (chosen to match declared fields); free-text Enter still
+            // accepts any model (open passthrough for power users).
+            catalog = catalog.filter(function (m) {
+                var k = keyEnvFor(m, w);
+                return !k || availableKeys[k];
+            });
             var seen = {}, options = [];
             suggested.concat(catalog).forEach(function (m) {
                 if (m && !seen[m]) { seen[m] = true; options.push(m); }
@@ -625,9 +644,24 @@ _CATALOG_LIMIT = 5000
 _NORMALIZE_PREFIXES = frozenset({"cohere", "jina_ai", "openai", "gemini", "xai", "anthropic", "vertex_express"})
 
 
-def _normalize_litellm_id(model: str, provider: str) -> str:
+def _normalize_litellm_id(model: str, provider: str, *, chat: bool = False) -> str | None:
     """Prefix a bare curated-provider model id so prefix-inference derives the
-    correct key; leave already-prefixed and non-curated ids untouched."""
+    correct key; leave already-prefixed and non-curated ids untouched.
+
+    Vertex is special: litellm surfaces ``vertex_ai/*`` but this stack can only
+    authenticate Vertex via the ``vertex_express`` httpx adapter (Gemini
+    chat/vision, key ``GOOGLE_VERTEX_EXPRESS_API_KEY``); litellm's ``vertex_ai/``
+    still demands a Service Account / ADC (BerriAI/litellm#21036, open). So a
+    chat-catalog ``vertex_ai/gemini-*`` is remapped to the working
+    ``vertex_express/`` id, and every other ``vertex_ai/*`` is DROPPED
+    (returns ``None``) — offering it would derive a ``VERTEX_AI_API_KEY`` field
+    no server declares, reproducing the silent no-credential-box trap.
+    """
+    if model.startswith("vertex_ai/"):
+        rest = model.split("/", 1)[1]
+        if chat and rest.startswith("gemini"):
+            return f"vertex_express/{rest}"
+        return None
     if "/" in model:
         return model
     if provider in _NORMALIZE_PREFIXES:
@@ -647,6 +681,9 @@ def _catalog_models_for_task(task: str, limit: int = _CATALOG_LIMIT) -> list[str
     modes = _TASK_CATALOG_MODES.get(task)
     if not modes:
         return []
+    # Vertex express is chat/vision only; remap vertex_ai/gemini-* -> vertex_express
+    # for chat-family tasks and drop other vertex_ai/* (see _normalize_litellm_id).
+    is_chat = modes == ("chat",)
     out: list[str] = []
     seen: set[str] = set()
 
@@ -668,7 +705,9 @@ def _catalog_models_for_task(task: str, limit: int = _CATALOG_LIMIT) -> list[str
 
         for m in list_models(modes=modes, configured_only=False, limit=limit):
             if isinstance(m, dict) and m.get("model"):
-                _add(_normalize_litellm_id(str(m["model"]), str(m.get("provider", ""))))
+                norm = _normalize_litellm_id(str(m["model"]), str(m.get("provider", "")), chat=is_chat)
+                if norm is not None:
+                    _add(norm)
     except Exception:
         pass
 
