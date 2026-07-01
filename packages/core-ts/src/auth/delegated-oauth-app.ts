@@ -24,6 +24,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
+import { CfKvBackend } from '../storage/backends.js'
 import { configureRelayLogin, createRelayLoginMiddleware, loginGetHandler, loginPostHandler } from './relay-login.js'
 import {
   createRouter,
@@ -33,6 +34,7 @@ import {
   parseJsonBody,
   type RequestHandler
 } from './router.js'
+import { createSessionStore, type SessionKv, wrapKvBackendAsSessionKv } from './session-store.js'
 import { authorizationServerMetadata, protectedResourceMetadata } from './well-known.js'
 
 export type FlowType = 'device_code' | 'redirect'
@@ -76,6 +78,13 @@ export interface DelegatedOAuthAppOptions {
   upstream: UpstreamOAuthConfig
   onTokenReceived: TokenCallback
   jwtIssuer?: JWTIssuer
+  /**
+   * Optional durable KV for the delegated-flow handshake state (pending
+   * sessions + issued auth codes). Inject in serverless/container deploys so
+   * the state survives a cold-start/restart between /authorize and /callback;
+   * omit for stdio/single-process (falls back to an in-process map).
+   */
+  sessionKv?: SessionKv
 }
 
 export interface DelegatedOAuthAppResult {
@@ -88,6 +97,18 @@ export interface DelegatedOAuthAppResult {
 
 const AUTH_CODE_TTL_S = 600
 const SESSION_TTL_S = 600
+
+/**
+ * Back the delegated-OAuth handshake state with the container's durable CF KV
+ * when configured for it (``MCP_STORAGE_BACKEND=cf-kv``), so the state survives
+ * a cold-start/restart between ``/authorize`` and ``/callback``. Returns
+ * ``undefined`` for stdio/local -> the session store uses an in-process map.
+ */
+function sessionKvFromEnv(): SessionKv | undefined {
+  if ((process.env.MCP_STORAGE_BACKEND ?? '').toLowerCase() !== 'cf-kv') return undefined
+  const baseUrl = process.env.MCP_KV_BASE_URL ?? 'http://kv.internal'
+  return wrapKvBackendAsSessionKv(new CfKvBackend(baseUrl))
+}
 
 interface PendingSession {
   clientId: string
@@ -142,13 +163,6 @@ function buildClientAuth(body: URLSearchParams, upstream: UpstreamOAuthConfig): 
   }
   const encoded = Buffer.from(`${upstream.clientId}:${upstream.clientSecret}`, 'utf8').toString('base64')
   return { Authorization: `Basic ${encoded}` }
-}
-
-function pruneExpired<T extends { createdAt: number }>(store: Map<string, T>, ttlMs: number): void {
-  const now = Date.now()
-  for (const [key, value] of store) {
-    if (now - value.createdAt > ttlMs) store.delete(key)
-  }
 }
 
 /**
@@ -249,8 +263,9 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     options.jwtIssuer ?? new JWTIssuer(options.serverName, undefined, process.env.CREDENTIAL_SECRET ?? null)
   await jwtIssuer.init()
 
-  const pendingSessions = new Map<string, PendingSession>()
-  const authCodes = new Map<string, AuthCodeEntry>()
+  const sessionKv = options.sessionKv ?? sessionKvFromEnv()
+  const pendingSessions = createSessionStore<PendingSession>(sessionKv, SESSION_TTL_S)
+  const authCodes = createSessionStore<AuthCodeEntry>(sessionKv, AUTH_CODE_TTL_S)
   const setupStatus: Record<string, string> = { [options.serverName]: 'idle' }
   // Each entry: AbortController for the background poll loop.
   const pollControllers = new Set<AbortController>()
@@ -305,7 +320,7 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     }
 
     const nonce = randomBytes(32).toString('base64url')
-    pendingSessions.set(nonce, {
+    await pendingSessions.set(nonce, {
       clientId,
       redirectUri,
       state,
@@ -313,7 +328,6 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
       codeChallengeMethod,
       createdAt: Date.now()
     })
-    pruneExpired(pendingSessions, SESSION_TTL_S * 1000)
 
     const base = getBaseUrl(req)
     const qs = new URLSearchParams({
@@ -345,17 +359,12 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
       return
     }
 
-    const session = pendingSessions.get(state)
+    const session = await pendingSessions.get(state)
     if (session === undefined) {
       jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Invalid state' })
       return
     }
-    pendingSessions.delete(state)
-
-    if (Date.now() - session.createdAt > SESSION_TTL_S * 1000) {
-      jsonResponse(res, 400, { error: 'invalid_request', error_description: 'Session expired' })
-      return
-    }
+    await pendingSessions.delete(state)
 
     const base = getBaseUrl(req)
     const form = new URLSearchParams({
@@ -416,13 +425,12 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     }
 
     const authCode = randomBytes(32).toString('base64url')
-    authCodes.set(authCode, {
+    await authCodes.set(authCode, {
       codeChallenge: session.codeChallenge,
       codeChallengeMethod: session.codeChallengeMethod,
       sub,
       createdAt: Date.now()
     })
-    pruneExpired(authCodes, AUTH_CODE_TTL_S * 1000)
 
     const separator = session.redirectUri.includes('?') ? '&' : '?'
     const redirectUrl = `${session.redirectUri}${separator}code=${authCode}&state=${session.state}`
@@ -495,9 +503,10 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
           return
         }
         // Update pre-allocated authCode entry with real subject.
-        const entry = authCodes.get(authCode)
+        const entry = await authCodes.get(authCode)
         if (entry) {
           entry.sub = sub
+          await authCodes.set(authCode, entry)
         }
         markSetupComplete()
         return
@@ -604,13 +613,12 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     // `sub` is a placeholder; pollDeviceToken updates it after
     // invokeTokenCallback returns the real subject id.
     const authCode = randomBytes(32).toString('base64url')
-    authCodes.set(authCode, {
+    await authCodes.set(authCode, {
       codeChallenge,
       codeChallengeMethod,
       sub: 'local-user',
       createdAt: Date.now()
     })
-    pruneExpired(authCodes, AUTH_CODE_TTL_S * 1000)
 
     setupStatus[options.serverName] = 'pending'
     const controller = new AbortController()
@@ -721,17 +729,12 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
       return
     }
 
-    const entry = authCodes.get(code)
+    const entry = await authCodes.get(code)
     if (entry === undefined) {
       jsonResponse(res, 400, { error: 'invalid_grant' })
       return
     }
-    authCodes.delete(code)
-
-    if (Date.now() - entry.createdAt > AUTH_CODE_TTL_S * 1000) {
-      jsonResponse(res, 400, { error: 'invalid_grant' })
-      return
-    }
+    await authCodes.delete(code)
 
     if (entry.codeChallengeMethod !== 'S256') {
       jsonResponse(res, 400, {
