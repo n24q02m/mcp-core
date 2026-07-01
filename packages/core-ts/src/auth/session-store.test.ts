@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createSessionStore, type SessionKv } from './session-store.js'
+import { createSessionStore, type SessionKv, wrapKvBackendAsSessionKv } from './session-store.js'
 
 // In-memory SessionKv double simulating a shared DURABLE store (CF KV). The key
 // property under test: two independent store instances backed by the same KV see
@@ -57,5 +57,51 @@ describe('createSessionStore', () => {
     const store = createSessionStore<{ v: number }>(kv, 0)
     await store.set('k', { v: 9 })
     expect(await store.get('k')).toBeUndefined()
+  })
+})
+
+describe('wrapKvBackendAsSessionKv', () => {
+  // A Buffer-based backend matching the mcp-core CredentialBackend / CfKvBackend shape.
+  function makeBufferBackend() {
+    const store = new Map<string, Buffer>()
+    return {
+      store,
+      backend: {
+        async get(key: string): Promise<Buffer | null> {
+          return store.get(key) ?? null
+        },
+        async put(key: string, blob: Buffer): Promise<void> {
+          store.set(key, blob)
+        },
+        async delete(key: string): Promise<void> {
+          store.delete(key)
+        }
+      }
+    }
+  }
+
+  it('round-trips a string value through a Buffer-based backend', async () => {
+    const { backend } = makeBufferBackend()
+    const kv = wrapKvBackendAsSessionKv(backend)
+    await kv.put('sess-1', '{"nonce":"abc"}')
+    expect(await kv.get('sess-1')).toBe('{"nonce":"abc"}')
+  })
+
+  it('namespaces keys so OAuth state cannot collide with other KV data', async () => {
+    const { store, backend } = makeBufferBackend()
+    const kv = wrapKvBackendAsSessionKv(backend)
+    await kv.put('raw-key', 'v')
+    const storedKey = [...store.keys()][0]
+    expect(storedKey).not.toBe('raw-key')
+    expect(storedKey).toContain('raw-key')
+  })
+
+  it('returns null for a missing key and after delete', async () => {
+    const { backend } = makeBufferBackend()
+    const kv = wrapKvBackendAsSessionKv(backend)
+    expect(await kv.get('nope')).toBeNull()
+    await kv.put('k', 'v')
+    await kv.delete('k')
+    expect(await kv.get('k')).toBeNull()
   })
 })

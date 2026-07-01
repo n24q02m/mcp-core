@@ -21,6 +21,37 @@ export interface SessionKv {
   delete(key: string): Promise<void>
 }
 
+/** A Buffer-based blob backend, matching mcp-core's ``CredentialBackend`` / ``CfKvBackend``. */
+export interface BufferKvBackend {
+  get(key: string): Promise<Buffer | null>
+  put(key: string, blob: Buffer): Promise<void>
+  delete(key: string): Promise<void>
+}
+
+const OAUTH_KEY_PREFIX = 'delegated-oauth:'
+
+/**
+ * Adapt a Buffer-based blob backend (e.g. ``CfKvBackend`` over the container's
+ * ``kv.internal`` handler) to the string ``SessionKv`` interface. Keys are
+ * namespaced so the short-lived OAuth handshake state can share a KV with the
+ * server's other data (credential vaults, etc.) without colliding.
+ */
+export function wrapKvBackendAsSessionKv(backend: BufferKvBackend): SessionKv {
+  const nsKey = (key: string): string => `${OAUTH_KEY_PREFIX}${key}`
+  return {
+    async get(key: string): Promise<string | null> {
+      const blob = await backend.get(nsKey(key))
+      return blob === null ? null : blob.toString('utf8')
+    },
+    async put(key: string, value: string): Promise<void> {
+      await backend.put(nsKey(key), Buffer.from(value, 'utf8'))
+    },
+    async delete(key: string): Promise<void> {
+      await backend.delete(nsKey(key))
+    }
+  }
+}
+
 export interface SessionStore<T> {
   get(key: string): Promise<T | undefined>
   set(key: string, value: T): Promise<void>
