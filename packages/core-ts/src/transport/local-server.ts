@@ -170,7 +170,8 @@ export async function runHttpServer(
       serverName: options.serverName,
       flow: options.delegatedOAuth.flow,
       upstream: options.delegatedOAuth.upstream,
-      onTokenReceived: options.delegatedOAuth.onTokenReceived
+      onTokenReceived: options.delegatedOAuth.onTokenReceived,
+      sessionKv: options.delegatedOAuth.sessionKv
     })
     jwtIssuer = oauthApp.jwtIssuer
   } else if (options.relaySchema) {
