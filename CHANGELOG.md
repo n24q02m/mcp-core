@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.25 (2026-07-01)
+
+### Bug Fixes
+
+- Export session-store from the auth subpath's public API
+  ([#602](https://github.com/n24q02m/mcp-core/pull/602),
+  [`c4ab058`](https://github.com/n24q02m/mcp-core/commit/c4ab0588574caab2de8e5af2cd1d1ae450bbadf2))
+
+
 ## v1.18.0-beta.24 (2026-07-01)
 
 ### Bug Fixes
