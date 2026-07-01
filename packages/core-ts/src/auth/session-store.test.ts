@@ -104,4 +104,12 @@ describe('wrapKvBackendAsSessionKv', () => {
     await kv.delete('k')
     expect(await kv.get('k')).toBeNull()
   })
+
+  it('accepts a caller-supplied key prefix so the store fits an app-scoped KV namespace allowlist', async () => {
+    const { store, backend } = makeBufferBackend()
+    const kv = wrapKvBackendAsSessionKv(backend, 'better-notion/delegated-oauth:')
+    await kv.put('sess-1', 'v')
+    const storedKey = [...store.keys()][0]
+    expect(storedKey).toBe('better-notion/delegated-oauth:sess-1')
+  })
 })

@@ -24,7 +24,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
-import { CfKvBackend } from '../storage/backends.js'
 import { configureRelayLogin, createRelayLoginMiddleware, loginGetHandler, loginPostHandler } from './relay-login.js'
 import {
   createRouter,
@@ -34,7 +33,7 @@ import {
   parseJsonBody,
   type RequestHandler
 } from './router.js'
-import { createSessionStore, type SessionKv, wrapKvBackendAsSessionKv } from './session-store.js'
+import { createSessionStore, type SessionKv } from './session-store.js'
 import { authorizationServerMetadata, protectedResourceMetadata } from './well-known.js'
 
 export type FlowType = 'device_code' | 'redirect'
@@ -83,6 +82,14 @@ export interface DelegatedOAuthAppOptions {
    * sessions + issued auth codes). Inject in serverless/container deploys so
    * the state survives a cold-start/restart between /authorize and /callback;
    * omit for stdio/single-process (falls back to an in-process map).
+   *
+   * The caller (not this module) owns constructing this -- typically
+   * ``wrapKvBackendAsSessionKv(backendFromEnv(), '<app-kv-namespace>:')``. This
+   * module cannot safely guess an app-scoped KV key prefix: a CF Container's
+   * ``kv.internal`` outbound handler commonly allowlists keys by app-specific
+   * prefix, so an auto-detected generic prefix would be silently rejected
+   * (403) by that allowlist. See ``wrapKvBackendAsSessionKv`` in
+   * ``session-store.ts``.
    */
   sessionKv?: SessionKv
 }
@@ -97,18 +104,6 @@ export interface DelegatedOAuthAppResult {
 
 const AUTH_CODE_TTL_S = 600
 const SESSION_TTL_S = 600
-
-/**
- * Back the delegated-OAuth handshake state with the container's durable CF KV
- * when configured for it (``MCP_STORAGE_BACKEND=cf-kv``), so the state survives
- * a cold-start/restart between ``/authorize`` and ``/callback``. Returns
- * ``undefined`` for stdio/local -> the session store uses an in-process map.
- */
-function sessionKvFromEnv(): SessionKv | undefined {
-  if ((process.env.MCP_STORAGE_BACKEND ?? '').toLowerCase() !== 'cf-kv') return undefined
-  const baseUrl = process.env.MCP_KV_BASE_URL ?? 'http://kv.internal'
-  return wrapKvBackendAsSessionKv(new CfKvBackend(baseUrl))
-}
 
 interface PendingSession {
   clientId: string
@@ -263,9 +258,8 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     options.jwtIssuer ?? new JWTIssuer(options.serverName, undefined, process.env.CREDENTIAL_SECRET ?? null)
   await jwtIssuer.init()
 
-  const sessionKv = options.sessionKv ?? sessionKvFromEnv()
-  const pendingSessions = createSessionStore<PendingSession>(sessionKv, SESSION_TTL_S)
-  const authCodes = createSessionStore<AuthCodeEntry>(sessionKv, AUTH_CODE_TTL_S)
+  const pendingSessions = createSessionStore<PendingSession>(options.sessionKv, SESSION_TTL_S)
+  const authCodes = createSessionStore<AuthCodeEntry>(options.sessionKv, AUTH_CODE_TTL_S)
   const setupStatus: Record<string, string> = { [options.serverName]: 'idle' }
   // Each entry: AbortController for the background poll loop.
   const pollControllers = new Set<AbortController>()
