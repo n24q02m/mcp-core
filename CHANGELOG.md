@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.1-beta.1 (2026-07-01)
+
+### Bug Fixes
+
+- Offer working vertex_express models in relay dropdown + gate by credential field
+  ([#603](https://github.com/n24q02m/mcp-core/pull/603),
+  [`9045a95`](https://github.com/n24q02m/mcp-core/commit/9045a95cb66c2a12ae6f0d94dc6cb730abc55447))
+
+
 ## v1.18.0 (2026-07-01)
 
 
