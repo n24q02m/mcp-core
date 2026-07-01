@@ -28,16 +28,24 @@ export interface BufferKvBackend {
   delete(key: string): Promise<void>
 }
 
-const OAUTH_KEY_PREFIX = 'delegated-oauth:'
+const DEFAULT_OAUTH_KEY_PREFIX = 'delegated-oauth:'
 
 /**
  * Adapt a Buffer-based blob backend (e.g. ``CfKvBackend`` over the container's
  * ``kv.internal`` handler) to the string ``SessionKv`` interface. Keys are
- * namespaced so the short-lived OAuth handshake state can share a KV with the
- * server's other data (credential vaults, etc.) without colliding.
+ * namespaced (default prefix, or a caller-supplied one) so the short-lived
+ * OAuth handshake state can share a KV with the server's other data
+ * (credential vaults, etc.) without colliding.
+ *
+ * A CF Container's ``kv.internal`` outbound handler commonly allowlists keys
+ * by app-scoped prefix (e.g. only ``<plugin>/*`` may pass) as a security
+ * boundary against writing outside the app's own KV namespace. Callers
+ * deployed behind such a handler MUST pass a prefix matching that allowlist
+ * (e.g. ``"<plugin>/delegated-oauth:"``) -- the default global prefix will be
+ * rejected (403) by a namespace-restricted handler.
  */
-export function wrapKvBackendAsSessionKv(backend: BufferKvBackend): SessionKv {
-  const nsKey = (key: string): string => `${OAUTH_KEY_PREFIX}${key}`
+export function wrapKvBackendAsSessionKv(backend: BufferKvBackend, keyPrefix = DEFAULT_OAUTH_KEY_PREFIX): SessionKv {
+  const nsKey = (key: string): string => `${keyPrefix}${key}`
   return {
     async get(key: string): Promise<string | null> {
       const blob = await backend.get(nsKey(key))
