@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.23 (2026-07-01)
+
+### Bug Fixes
+
+- Auto-back delegated-OAuth session state with CF KV when MCP_STORAGE_BACKEND=cf-kv
+  ([#599](https://github.com/n24q02m/mcp-core/pull/599),
+  [`6a7d2ab`](https://github.com/n24q02m/mcp-core/commit/6a7d2abe25e2c1dee156598cf9bf4e65bacac922))
+
+- Back delegated-OAuth handshake state with a durable KV so it survives container restart between
+  /authorize and /callback ([#599](https://github.com/n24q02m/mcp-core/pull/599),
+  [`6a7d2ab`](https://github.com/n24q02m/mcp-core/commit/6a7d2abe25e2c1dee156598cf9bf4e65bacac922))
+
+- Durable session state for delegated OAuth (survive container restart)
+  ([#599](https://github.com/n24q02m/mcp-core/pull/599),
+  [`6a7d2ab`](https://github.com/n24q02m/mcp-core/commit/6a7d2abe25e2c1dee156598cf9bf4e65bacac922))
+
+- Gate all update-permitting renovate rules with minimumReleaseAge 7 days
+  ([#598](https://github.com/n24q02m/mcp-core/pull/598),
+  [`4e019a8`](https://github.com/n24q02m/mcp-core/commit/4e019a80aac2bbf9497fc063e82c3d52cb5b9d82))
+
+- **deps**: Lock file maintenance ([#596](https://github.com/n24q02m/mcp-core/pull/596),
+  [`8e1d9c7`](https://github.com/n24q02m/mcp-core/commit/8e1d9c781f377d815d70297271390dc311b57eed))
+
+- **deps**: Update non-major dependencies ([#595](https://github.com/n24q02m/mcp-core/pull/595),
+  [`6e5390c`](https://github.com/n24q02m/mcp-core/commit/6e5390c4354b8ca98660395fca3626de4f9c6743))
+
+
 ## v1.18.0-beta.22 (2026-06-30)
 
 ### Bug Fixes
