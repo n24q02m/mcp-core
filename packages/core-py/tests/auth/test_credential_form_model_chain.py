@@ -283,3 +283,81 @@ def test_enter_keeps_search_keyword():
     assert 'buildDropdown(w, "");' not in _MODEL_CHAIN_SCRIPT  # no filter reset
     # the dropdown is rebuilt with the SAME live keyword after a selection
     assert "buildDropdown(w, input.value.trim());" in _MODEL_CHAIN_SCRIPT
+
+
+# --- vertex: remap vertex_ai/gemini -> vertex_express + drop the rest ---------
+#
+# litellm surfaces vertex_ai/* (Service-Account/ADC only, BerriAI/litellm#21036
+# open). This stack authenticates Vertex ONLY via the vertex_express httpx
+# adapter (Gemini chat/vision, GOOGLE_VERTEX_EXPRESS_API_KEY). Offering
+# vertex_ai/* in the dropdown was a silent no-credential-box trap: it derives an
+# unbacked VERTEX_AI_API_KEY. So a chat-catalog vertex_ai/gemini-* is remapped to
+# the working vertex_express id, and every other vertex_ai/* is dropped.
+
+
+def test_normalize_vertex_ai_gemini_remapped_to_express_for_chat():
+    from mcp_core.auth.credential_form import _normalize_litellm_id
+
+    assert (
+        _normalize_litellm_id("vertex_ai/gemini-3.1-flash-lite", "vertex_ai", chat=True)
+        == "vertex_express/gemini-3.1-flash-lite"
+    )
+
+
+def test_normalize_vertex_ai_nongemini_dropped():
+    from mcp_core.auth.credential_form import _normalize_litellm_id
+
+    # non-Gemini Vertex (claude/mistral on Vertex, embeddings) is SA-only here.
+    assert _normalize_litellm_id("vertex_ai/claude-sonnet-4", "vertex_ai", chat=True) is None
+    assert _normalize_litellm_id("vertex_ai/text-embedding-005", "vertex_ai", chat=False) is None
+
+
+def test_normalize_vertex_ai_gemini_dropped_when_not_chat():
+    from mcp_core.auth.credential_form import _normalize_litellm_id
+
+    # express is chat/vision only; a Gemini id surfacing in an embedding catalog
+    # is not a chat model -> drop, never remap to a non-existent express embedder.
+    assert _normalize_litellm_id("vertex_ai/gemini-embedding-001", "vertex_ai", chat=False) is None
+
+
+def test_normalize_non_vertex_ids_unchanged():
+    from mcp_core.auth.credential_form import _normalize_litellm_id
+
+    assert _normalize_litellm_id("azure_ai/deepseek-v3.2", "azure_ai", chat=True) == "azure_ai/deepseek-v3.2"
+    assert _normalize_litellm_id("gpt-4o-mini", "openai", chat=True) == "openai/gpt-4o-mini"
+
+
+def test_catalog_remaps_vertex_ai_gemini_and_drops_rest(monkeypatch):
+    import mcp_core.llm.catalog as catalog_mod
+    import mcp_core.llm.provider_catalog as pc
+    from mcp_core.auth.credential_form import _catalog_models_for_task
+
+    monkeypatch.setattr(pc, "provider_catalog_models", lambda task: [])
+    monkeypatch.setattr(
+        catalog_mod,
+        "list_models",
+        lambda **kw: [
+            {"model": "vertex_ai/gemini-3.1-flash-lite", "provider": "vertex_ai", "mode": "chat"},
+            {"model": "vertex_ai/claude-sonnet-4", "provider": "vertex_ai", "mode": "chat"},
+            {"model": "gemini/gemini-2.5-flash", "provider": "gemini", "mode": "chat"},
+        ],
+    )
+    out = _catalog_models_for_task("chat")
+    assert "vertex_express/gemini-3.1-flash-lite" in out  # remapped to the working id
+    assert "vertex_ai/gemini-3.1-flash-lite" not in out  # the SA-only id is gone
+    assert not any(m.startswith("vertex_ai/") for m in out)  # nothing SA-only survives
+    assert "gemini/gemini-2.5-flash" in out  # unrelated providers untouched
+
+
+def test_model_chain_script_filters_dropdown_to_backed_providers():
+    """The dropdown must only OFFER catalog models the page has a credential field
+    for (availableKeys gate), so a model whose <PROVIDER>_API_KEY the server never
+    declared (vertex_ai/bedrock/azure/...) is not offered and cannot reproduce the
+    silent no-credential-box trap. Free-text Enter still accepts any model."""
+    from mcp_core.auth.credential_form import _MODEL_CHAIN_SCRIPT
+
+    assert "availableKeys" in _MODEL_CHAIN_SCRIPT
+    # the gate reads the declared credential fields present on the page
+    assert "[data-provider-key]" in _MODEL_CHAIN_SCRIPT
+    # and applies to the catalog list before it is offered
+    assert "catalog = catalog.filter" in _MODEL_CHAIN_SCRIPT
