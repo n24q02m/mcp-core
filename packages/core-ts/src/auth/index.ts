@@ -29,4 +29,11 @@ export {
   type StepCallback,
   type SubjectContext
 } from './local-oauth-app.js'
+export {
+  type BufferKvBackend,
+  createSessionStore,
+  type SessionKv,
+  type SessionStore,
+  wrapKvBackendAsSessionKv
+} from './session-store.js'
 export { authorizationServerMetadata, protectedResourceMetadata } from './well-known.js'
