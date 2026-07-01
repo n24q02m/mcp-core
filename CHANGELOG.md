@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.0-beta.24 (2026-07-01)
+
+### Bug Fixes
+
+- Delegated OAuth session KV must use caller-scoped key prefix
+  ([#601](https://github.com/n24q02m/mcp-core/pull/601),
+  [`aa0a2cc`](https://github.com/n24q02m/mcp-core/commit/aa0a2cc4b2b1d9125d4e53acb722aa022021eb05))
+
+
 ## v1.18.0-beta.23 (2026-07-01)
 
 ### Bug Fixes
