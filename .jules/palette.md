@@ -9,3 +9,6 @@
 ## 2026-06-25 - Dynamically Created Alerts
 **Learning:** When dynamically creating and appending status messages (like success or error toasts) via JavaScript, they must be given `role="alert"` to be immediately announced by screen readers.
 **Action:** Always set `setAttribute("role", "alert")` on dynamically created status/notification DOM elements.
+## 2026-06-25 - Dynamically Created Alerts
+**Learning:** When dynamically creating and appending status messages (like success or error toasts) via JavaScript, they must be given `role="alert"` to be immediately announced by screen readers.
+**Action:** Always set `setAttribute("role", "alert")` or `role="alert"` in the HTML template for dynamically updated status/notification DOM elements.
