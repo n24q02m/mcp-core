@@ -16,3 +16,8 @@
 **Vulnerability:** Too permissive URL validation regex allowed shell metacharacters (`$`, `(`, `)`) which could be interpreted by `wslview` in WSL environments.
 **Learning:** Even when using `execFile` (which avoids shell invocation), downstream utilities like `wslview` might pass arguments to a shell. Base64 encoding parameters (e.g., via PowerShell's `-EncodedCommand`) provides a much safer way to pass complex strings across the Linux/Windows boundary in WSL.
 **Prevention:** Tighten input validation regexes to exclude shell metacharacters. Prioritize safer execution methods that use encoding (like Base64) over direct parameter passing to utilities that might invoke a shell.
+
+## 2026-07-02 - [Clickjacking via HTML responses without X-Frame-Options in router.ts]
+**Vulnerability:** Missing X-Frame-Options header in the `htmlResponse` helper of the router allows clickjacking attacks by enabling the page to be embedded in an iframe.
+**Learning:** When serving custom HTML responses (e.g., error pages, setup forms) directly from server endpoints, they must explicitly include the `X-Frame-Options: DENY` HTTP header to prevent clickjacking.
+**Prevention:** Ensure all utility functions that generate HTML responses (like `htmlResponse`) automatically inject the `X-Frame-Options: DENY` header.

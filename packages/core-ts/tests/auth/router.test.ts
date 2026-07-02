@@ -263,6 +263,7 @@ describe('htmlResponse', () => {
       expect(resp.status).toBe(200)
       expect(resp.headers.get('content-type')).toContain('text/html')
       expect(resp.headers.get('content-type')).toContain('utf-8')
+      expect(resp.headers.get('x-frame-options')).toBe('DENY')
       expect(await resp.text()).toBe('<html></html>')
     } finally {
       close()

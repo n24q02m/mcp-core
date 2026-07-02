@@ -74,6 +74,6 @@ export function jsonResponse(res: ServerResponse, status: number, body: unknown)
 }
 
 export function htmlResponse(res: ServerResponse, status: number, html: string): void {
-  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' })
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'X-Frame-Options': 'DENY' })
   res.end(html)
 }
