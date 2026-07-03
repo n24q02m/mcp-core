@@ -14,3 +14,6 @@
 ## 2024-05-24 - Cookie Parsing Hot Path Avoids Array Allocations
 **Learning:** In hot paths like HTTP cookie parsing (`parseCookies` in `local-oauth-app.ts` and `delegated-oauth-app.ts`), splitting strings via `split(';')` generates unnecessary array allocations and intermediate strings. A single-pass `while` loop using `indexOf` and `substring()` is demonstrably faster (~10% improvement in basic tests) and reduces GC pressure while avoiding additional dependencies.
 **Action:** Always prefer index-based scanning and substring extraction for parsing small text structures (like headers or cookies) in high-frequency functions. Ensure functional parity with extensive edge case tests for trailing symbols and missing separators.
+## $(date +%Y-%m-%d) - [Optimize Dictionary Pruning]
+**Learning:** In Python, resetting a dictionary by creating a new one (e.g., using dict comprehension) and then using `clear` and `update` is O(N). For pruning scenarios where only a small number of items are deleted (e.g., expired sessions), it's faster to find the expired keys and delete them using `del dict[key]`, making it O(K).
+**Action:** Use targeted deletion (`del dict[key]`) over full dictionary rebuilds for pruning operations to achieve O(K) complexity instead of O(N-K).
