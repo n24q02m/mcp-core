@@ -9,3 +9,7 @@
 ## 2026-06-25 - Dynamically Created Alerts
 **Learning:** When dynamically creating and appending status messages (like success or error toasts) via JavaScript, they must be given `role="alert"` to be immediately announced by screen readers.
 **Action:** Always set `setAttribute("role", "alert")` on dynamically created status/notification DOM elements.
+
+## 2026-07-03 - Dynamically Created Alerts in OAuth Forms
+**Learning:** When dynamically creating status messages or waiting indicators (like Google Drive authorization status) via JavaScript, they must be given `role="alert"` to be immediately announced by screen readers. This ensures visually impaired users are kept informed of background state changes without needing to manually poll the interface.
+**Action:** Always set `setAttribute("role", "alert")` on dynamically created status/notification DOM elements in HTML forms and OAuth pages.

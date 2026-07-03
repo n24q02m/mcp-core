@@ -875,6 +875,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                     var waiting = document.createElement("span");
                                     waiting.id = "gdrive-waiting";
                                     waiting.style.color = "#9ca3af";
+                                    waiting.setAttribute("role", "alert");
                                     waiting.textContent = "Waiting for authorization...";
                                     statusBox.appendChild(waiting);
                                     statusBox.className = "status-box info";
