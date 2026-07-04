@@ -176,7 +176,10 @@ function getBaseUrl(req: IncomingMessage): string {
   const forwardedProto = req.headers['x-forwarded-proto']
   const protocol =
     typeof forwardedProto === 'string' && forwardedProto.length > 0
-      ? forwardedProto.split(',')[0].trim()
+      ? (forwardedProto.indexOf(',') !== -1
+          ? forwardedProto.substring(0, forwardedProto.indexOf(','))
+          : forwardedProto
+        ).trim()
       : encrypted
         ? 'https'
         : 'http'
@@ -885,7 +888,7 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
   function clientIp(req: IncomingMessage): string {
     const fwd = req.headers['x-forwarded-for']
     if (typeof fwd === 'string' && fwd.length > 0) {
-      return fwd.split(',')[0].trim()
+      return (fwd.indexOf(',') !== -1 ? fwd.substring(0, fwd.indexOf(',')) : fwd).trim()
     }
     return req.socket.remoteAddress ?? 'unknown'
   }
