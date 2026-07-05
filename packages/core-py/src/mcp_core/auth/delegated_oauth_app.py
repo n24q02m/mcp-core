@@ -254,11 +254,10 @@ def create_delegated_oauth_app(
 
     def _prune_expired(store: dict[str, dict[str, Any]], ttl: float) -> None:
         now = time.monotonic()
-        # ⚡ Bolt: Prune in-place using dict comprehension to avoid intermediate list
-        remaining = {k: v for k, v in store.items() if now - v["created_at"] <= ttl}
-        if len(remaining) < len(store):
-            store.clear()
-            store.update(remaining)
+        # ⚡ Bolt: Avoid O(N) dict rebuild by iterating and deleting only expired items O(K).
+        expired_keys = [k for k, v in store.items() if now - v["created_at"] > ttl]
+        for k in expired_keys:
+            del store[k]
 
     def mark_setup_complete(key: str | None = None) -> None:
         k = key or server_name
