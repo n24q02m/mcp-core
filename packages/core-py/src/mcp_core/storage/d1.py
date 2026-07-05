@@ -74,7 +74,8 @@ class D1Backend:
             batch = rows[i : i + self.max_rows_per_insert]
             if match and len(batch) > 1:
                 tuple_sql = match.group(1)
-                values = ", ".join(tuple_sql for _ in batch)
+                # ⚡ Bolt: Use list multiplication instead of generator expression for faster string joining in hot path
+                values = ", ".join([tuple_sql] * len(batch))
                 batched_sql = sql[: match.start(1)] + values
                 flat = [v for row in batch for v in row]
                 # batched_sql only expands the ?-placeholder VALUES tuple; row
