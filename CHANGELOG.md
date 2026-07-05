@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.18.2 (2026-07-05)
+
+### Bug Fixes
+
+- Add MCP_NO_BROWSER env-guard to try_open_browser to prevent browser tab hijack in headless/test
+  contexts
+  ([`524ca2e`](https://github.com/n24q02m/mcp-core/commit/524ca2e1b531be6aa5b72b50ae3746de9ac8816e))
+
+
 ## v1.18.2-beta.1 (2026-07-05)
 
 ### Bug Fixes
