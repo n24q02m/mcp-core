@@ -2,6 +2,7 @@
 
 import base64
 import logging
+import os
 import re
 import subprocess
 import time
@@ -80,6 +81,13 @@ def try_open_browser(url: str) -> bool:
     Returns:
         True if the browser was likely opened, False otherwise.
     """
+    # Env-guard: suppress auto-open in headless / CI / autonomous-test contexts so a
+    # relay/clean-state server never hijacks the user's real browser with /authorize?nonce
+    # or 127.0.0.1 tabs. Set MCP_NO_BROWSER=1 (or NO_BROWSER / CI) to disable.
+    if os.environ.get("MCP_NO_BROWSER") or os.environ.get("NO_BROWSER"):
+        logger.debug("Browser open suppressed by env guard (MCP_NO_BROWSER/NO_BROWSER): %s", url)
+        return False
+
     # Validate URL
     if not re.match(r"^https?://[a-zA-Z0-9-._~:/?#\[\]@!&'*+,;=%]+$", url, re.IGNORECASE):
         logger.debug("Invalid URL for browser open: %s", url)

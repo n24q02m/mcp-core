@@ -126,6 +126,17 @@ describe('tryOpenBrowser', () => {
 
       expect(execFile).not.toHaveBeenCalled()
     })
+
+    it('does not open when MCP_NO_BROWSER / NO_BROWSER is set', async () => {
+      vi.mocked(execFile).mockClear()
+      for (const envVar of ['MCP_NO_BROWSER', 'NO_BROWSER']) {
+        process.env[envVar] = '1'
+        const result = await tryOpenBrowser('https://example.com/authorize?nonce=abc')
+        expect(result).toBe(false)
+        delete process.env[envVar]
+      }
+      expect(execFile).not.toHaveBeenCalled()
+    })
   })
 
   describe('WSL detection', () => {

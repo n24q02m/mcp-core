@@ -130,6 +130,16 @@ class TestTryOpenBrowser:
                     assert try_open_browser(url) is True
                     assert mock_wb.open.call_count == 2
 
+    @pytest.mark.parametrize("env_var", ["MCP_NO_BROWSER", "NO_BROWSER"])
+    def test_env_guard_suppresses_open(self, monkeypatch, env_var):
+        """MCP_NO_BROWSER / NO_BROWSER suppress auto-open so a relay/clean-state server
+        never hijacks the user's real browser in headless / autonomous-test contexts."""
+        monkeypatch.setenv(env_var, "1")
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                assert try_open_browser("https://example.com/authorize?nonce=abc") is False
+                mock_wb.open.assert_not_called()
+
 
 class TestOpenInWsl:
     def test_tries_powershell_first(self):

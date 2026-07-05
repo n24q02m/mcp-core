@@ -70,6 +70,13 @@ async function openInWsl(url: string): Promise<boolean> {
  */
 export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
+    // Env-guard: suppress auto-open in headless / CI / autonomous-test contexts so a
+    // relay/clean-state server never hijacks the user's real browser with /authorize?nonce
+    // or 127.0.0.1 tabs. Set MCP_NO_BROWSER=1 (or NO_BROWSER / CI) to disable.
+    if (process.env.MCP_NO_BROWSER || process.env.NO_BROWSER) {
+      return false
+    }
+
     // Validate URL
     if (!/^https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!&'*+,;=%]+$/i.test(url)) {
       return false
