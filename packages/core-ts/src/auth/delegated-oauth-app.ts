@@ -224,7 +224,7 @@ a { color: #4ea1ff; }
   <p>Visit the URL below and enter this code:</p>
   <div class="code">${safeCode}</div>
   <p><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a></p>
-  <p class="status" id="status">Waiting for you to approve...</p>
+  <p class="status" id="status" role="alert">Waiting for you to approve...</p>
 </div>
 <script>
 async function poll() {
