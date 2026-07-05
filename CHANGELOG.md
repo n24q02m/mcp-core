@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v1.18.2-beta.1 (2026-07-05)
+
+### Bug Fixes
+
+- Add role=alert to dynamic oauth status messages
+  ([`7594565`](https://github.com/n24q02m/mcp-core/commit/759456542244a24580e499e2ca7ffc7a3cbb4d25))
+
+- Add X-Frame-Options DENY to htmlResponse helper
+  ([`d233054`](https://github.com/n24q02m/mcp-core/commit/d2330549f06b130c2dfa41c5e40b60b7b718a01d))
+
+- Avoid array allocation parsing forwarded headers
+  ([`8731099`](https://github.com/n24q02m/mcp-core/commit/8731099313eceef58717fcf31aeb138aebe7e9e5))
+
+- Prune expired oauth entries in-place (O(K) not O(N))
+  ([`dad3318`](https://github.com/n24q02m/mcp-core/commit/dad331894d900ab485197c6da1237b28daf99230))
+
+- **deps**: Update non-major dependencies ([#604](https://github.com/n24q02m/mcp-core/pull/604),
+  [`a0982f9`](https://github.com/n24q02m/mcp-core/commit/a0982f9276f30214646adc59c4c4cc47f4358110))
+
+- **deps**: Update python-semantic-release/publish-action digest to 4f3c5d7
+  ([`ae4f8fd`](https://github.com/n24q02m/mcp-core/commit/ae4f8fd003609165196e000e27a8d28929f8e231))
+
+- **deps**: Update python-semantic-release/python-semantic-release digest to 37a30a7
+  ([`463f9fc`](https://github.com/n24q02m/mcp-core/commit/463f9fcd35b7ea37a93914004d235f93ac093042))
+
+
 ## v1.18.1 (2026-07-02)
 
 
