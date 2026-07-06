@@ -17,3 +17,6 @@
 ## $(date +%Y-%m-%d) - [Optimize Dictionary Pruning]
 **Learning:** In Python, resetting a dictionary by creating a new one (e.g., using dict comprehension) and then using `clear` and `update` is O(N). For pruning scenarios where only a small number of items are deleted (e.g., expired sessions), it's faster to find the expired keys and delete them using `del dict[key]`, making it O(K).
 **Action:** Use targeted deletion (`del dict[key]`) over full dictionary rebuilds for pruning operations to achieve O(K) complexity instead of O(N-K).
+## 2024-06-25 - [Optimize SQL VALUES Generation]
+**Learning:** In Python, when generating repetitive strings like SQL `VALUES` clauses for batched queries, using a generator expression inside `", ".join(...)` (e.g., `", ".join(tuple_sql for _ in batch)`) incurs measurable overhead due to generator iteration. Using list multiplication (`", ".join([tuple_sql] * len(batch))`) is significantly faster because the multiplication executes in optimized C code, avoiding the byte-code loop entirely.
+**Action:** Always prefer list multiplication (`[string] * N`) over generator expressions when creating repeated patterns of a static string, particularly on hot paths like database batch inserts.
