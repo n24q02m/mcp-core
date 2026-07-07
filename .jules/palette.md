@@ -13,3 +13,6 @@
 ## 2026-07-03 - Dynamically Created Alerts in OAuth Forms
 **Learning:** When dynamically creating status messages or waiting indicators (like Google Drive authorization status) via JavaScript, they must be given `role="alert"` to be immediately announced by screen readers. This ensures visually impaired users are kept informed of background state changes without needing to manually poll the interface.
 **Action:** Always set `setAttribute("role", "alert")` on dynamically created status/notification DOM elements in HTML forms and OAuth pages.
+## 2026-07-07 - Added accessible focus states to model chain widget
+**Learning:** Parity between core-py and core-ts for frontend UI involves shared HTML/CSS templates inside strings. Interactive elements rendered inside these components must have focus states applied via CSS (like `:focus-within` and `:focus-visible`) for accessibility since the baseline templates may lack them.
+**Action:** Always maintain UI parity between the Python and TS frontend string templates when introducing a11y improvements to credential forms or login pages.
