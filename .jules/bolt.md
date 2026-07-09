@@ -17,3 +17,7 @@
 ## $(date +%Y-%m-%d) - [Optimize Dictionary Pruning]
 **Learning:** In Python, resetting a dictionary by creating a new one (e.g., using dict comprehension) and then using `clear` and `update` is O(N). For pruning scenarios where only a small number of items are deleted (e.g., expired sessions), it's faster to find the expired keys and delete them using `del dict[key]`, making it O(K).
 **Action:** Use targeted deletion (`del dict[key]`) over full dictionary rebuilds for pruning operations to achieve O(K) complexity instead of O(N-K).
+
+## 2026-07-09 - [Optimize String Concatenation in Python]
+**Learning:** In Python, when repeating strings like SQL placeholders in a loop, list multiplication (e.g. `[val] * count`) is executed entirely in C and is significantly faster than using a generator expression inside `.join()`.
+**Action:** Use list multiplication for repeating static strings or tuples instead of generator loops when performance is critical.
