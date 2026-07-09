@@ -74,6 +74,8 @@ class D1Backend:
             batch = rows[i : i + self.max_rows_per_insert]
             if match and len(batch) > 1:
                 tuple_sql = match.group(1)
+                # ⚡ Bolt: Use list multiplication instead of a generator expression for string joins.
+                # List multiplication runs in optimized C and allows `join()` to pre-calculate memory.
                 values = ", ".join([tuple_sql] * len(batch))
                 batched_sql = sql[: match.start(1)] + values
                 flat = [v for row in batch for v in row]
