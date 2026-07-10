@@ -234,6 +234,20 @@ const FORM_SHELL_CSS = `        *, *::before, *::after {
             background-color: #0f0f0f;
         }
 
+        .model-chain { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; position: relative; padding: 8px; border: 1px solid #2a2a3a; border-radius: 8px; background: #14141f; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+        .model-chain:focus-within { border-color: #4a6fa5; box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2); }
+        .mc-chips { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+        .mc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: #23233a; border: 1px solid #34344a; border-radius: 6px; font-size: 13px; cursor: grab; }
+        .mc-chip.dragging { opacity: 0.4; }
+        .mc-chip .mc-order { color: #8a8aa5; font-variant-numeric: tabular-nums; }
+        .mc-chip button { background: none; border: none; color: #b56; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+        .mc-chip button:hover, .mc-chip button:focus-visible { color: #ff6b6b; outline: 2px solid #ff6b6b; outline-offset: 2px; border-radius: 2px; }
+        .mc-typeahead { flex: 1; min-width: 140px; background: transparent; border: none; color: inherit; outline: none; font-size: 14px; padding: 4px; }
+        .mc-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; background: #1b1b2a; border: 1px solid #2a2a3a; border-radius: 8px; margin-top: 4px; max-height: 220px; overflow-y: auto; }
+        .mc-dropdown label { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+        .mc-dropdown label:hover, .mc-dropdown label:focus-within { background: #23233a; }
+        .mc-badge { font-size: 12px; color: #8a8aa5; width: 100%; }
+
         .help-text {
             font-size: 0.8125rem;
             color: #9ca3af;
