@@ -2,6 +2,37 @@
 
 <!-- version list -->
 
+## v1.19.0-beta.1 (2026-07-10)
+
+### Bug Fixes
+
+- Fail the release when the computed version already exists on the registry
+  ([#625](https://github.com/n24q02m/mcp-core/pull/625),
+  [`ac484a0`](https://github.com/n24q02m/mcp-core/commit/ac484a0e949bc434443903ffc72b3ac5bfe1b800))
+
+- Mcp-clean-state also wipes PerPluginStore config.json and .secret
+  ([#627](https://github.com/n24q02m/mcp-core/pull/627),
+  [`d0c61db`](https://github.com/n24q02m/mcp-core/commit/d0c61db471dfa423e9ed4a40ee041b8019e13ea8))
+
+- Pin the opencode workflow's actions to commit SHAs
+  ([#626](https://github.com/n24q02m/mcp-core/pull/626),
+  [`d00e12e`](https://github.com/n24q02m/mcp-core/commit/d00e12ece396d35e6fe23f3d38aa56207886a3ec))
+
+### Features
+
+- Add opencode github agent (responds to /oc)
+  ([`36354e9`](https://github.com/n24q02m/mcp-core/commit/36354e966c4b7ce412b22275eeff867f0d492f2f))
+
+- Add review-learnings store the automated reviewer must obey
+  ([`0c7e9ef`](https://github.com/n24q02m/mcp-core/commit/0c7e9ef5e71608c88d2abe9e9222871c5188268a))
+
+- Auto-respond only to issues and PRs opened by outside people
+  ([`69f17b7`](https://github.com/n24q02m/mcp-core/commit/69f17b74d3453821ad69aa06328a8407ed8b02c5))
+
+- Reviewer must obey .github/review-learnings.md
+  ([`91d8ef9`](https://github.com/n24q02m/mcp-core/commit/91d8ef93e1b430ec9ecbf20aba50db95146ac91f))
+
+
 ## v1.18.2 (2026-07-05)
 
 ### Bug Fixes
