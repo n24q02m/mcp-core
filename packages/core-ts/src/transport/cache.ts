@@ -33,7 +33,7 @@ export function cacheFilename(serverName: string, port: number, srvVersion: stri
 
 export function atomicWrite(path: string, content: string): void {
   const dir = dirname(path)
-  if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true })
+  if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
   const tmp = `${path}.tmp`
   writeFileSync(tmp, content, { encoding: 'utf-8' })
   if (process.platform !== 'win32') {
