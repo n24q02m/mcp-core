@@ -22,8 +22,8 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: anomalyco/opencode/github@latest
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: anomalyco/opencode/github@2c14fc5586fe0b88e5c04732d2e846769cc35671 # latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -39,8 +39,8 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: anomalyco/opencode/github@latest
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: anomalyco/opencode/github@2c14fc5586fe0b88e5c04732d2e846769cc35671 # latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -57,8 +57,8 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: anomalyco/opencode/github@latest
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: anomalyco/opencode/github@2c14fc5586fe0b88e5c04732d2e846769cc35671 # latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
