@@ -1,7 +1,8 @@
 """mcp-clean-state CLI — D14.
 
-Removes MCP server credentials, locks, tools cache, and per-server token caches.
-By default preserves app data (SQLite, diskcache, SearXNG state).
+Removes MCP server credentials (legacy config.enc + PerPluginStore config.json /
+.secret / subs tree), locks, tools cache, and per-server token caches. By
+default preserves app data (SQLite, diskcache, SearXNG state).
 
 The ``--kill-daemons`` flag terminates any alive legacy bridge daemons before
 removing their lock files. Required after upgrading from mcp-core <=1.11.x to
@@ -106,6 +107,37 @@ def _config_paths() -> list[Path]:
     return paths
 
 
+def _per_plugin_store_paths(server: str) -> list[Path]:
+    """Credential paths written by ``mcp_core.storage.per_plugin_store.PerPluginStore``
+    via its ``LocalFsBackend`` (see ``storage/backends.py::_key_to_path`` for the
+    authoritative on-disk layout), under ``~/.<server>/``:
+
+    - ``config.json`` — single-user (stdio / HTTP single-user) credential blob.
+    - ``.secret`` — machine-bound AES-GCM key for the single-user mode above.
+    - ``subs/<sub>/config.json`` and ``subs/<sub>/tokens/<provider>.json`` —
+      HTTP multi-user mode, one directory per OAuth ``sub``. The whole ``subs``
+      tree is enumerated so nested per-sub token files are covered too.
+
+    None of these were covered by the legacy ``config.enc`` wipe, so every
+    "clean state" E2E run since the PerPluginStore migration reused whatever
+    credentials were already on disk.
+    """
+    base = _home() / f".{server}"
+    if not base.exists():
+        return []
+    out: list[Path] = []
+    cfg = base / "config.json"
+    if cfg.exists():
+        out.append(cfg)
+    secret = base / ".secret"
+    if secret.exists():
+        out.append(secret)
+    subs = base / "subs"
+    if subs.exists():
+        out.append(subs)
+    return out
+
+
 def _per_server_token_paths(server: str) -> list[Path]:
     base = _home() / f".{server}"
     if not base.exists():
@@ -141,6 +173,7 @@ def _per_server_data_paths(server: str) -> list[Path]:
 def _enumerate(servers: list[str], keep_data: bool) -> list[Path]:
     paths = list(_config_paths())
     for srv in servers:
+        paths.extend(_per_plugin_store_paths(srv))
         paths.extend(_per_server_token_paths(srv))
         if not keep_data:
             paths.extend(_per_server_data_paths(srv))

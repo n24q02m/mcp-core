@@ -116,6 +116,130 @@ def test_enumerate_with_data(mock_fs):
     assert "data" in path_names
 
 
+def test_enumerate_wipes_per_plugin_store_config_and_secret(mock_fs):
+    """PerPluginStore (mcp_core.storage.per_plugin_store) writes config.json +
+    a machine-bound .secret key at ~/.<server>/ for single-user mode. Clean
+    state must wipe both, else E2E runs against credentials that survived
+    the "clean" reset (regression since the config.enc -> PerPluginStore
+    migration)."""
+    server_dir = mock_fs["home"] / ".wet-mcp"
+    server_dir.mkdir()
+    (server_dir / "config.json").write_text("{}")
+    (server_dir / ".secret").write_bytes(b"machine-key-bytes")
+
+    paths = _enumerate(["wet-mcp"], keep_data=True)
+    path_names = [p.name for p in paths]
+    assert "config.json" in path_names
+    assert ".secret" in path_names
+
+
+def test_enumerate_wipes_per_plugin_store_subs_tree(mock_fs):
+    """Multi-user mode writes ~/.<server>/subs/<sub>/config.json and
+    subs/<sub>/tokens/<provider>.json (per storage/backends.py _key_to_path).
+    The whole subs/ tree must be enumerated for wiping."""
+    server_dir = mock_fs["home"] / ".wet-mcp"
+    sub_dir = server_dir / "subs" / "user-a"
+    sub_dir.mkdir(parents=True)
+    (sub_dir / "config.json").write_text("{}")
+    tokens_dir = sub_dir / "tokens"
+    tokens_dir.mkdir()
+    (tokens_dir / "google_drive.json").write_text("{}")
+
+    paths = _enumerate(["wet-mcp"], keep_data=True)
+    path_names = [p.name for p in paths]
+    assert "subs" in path_names
+
+
+def test_enumerate_per_plugin_store_missing_files_no_error(mock_fs):
+    """Server dir exists but has none of config.json/.secret/subs -- must not
+    error, and must not enumerate anything for it."""
+    server_dir = mock_fs["home"] / ".wet-mcp"
+    server_dir.mkdir()
+
+    paths = _enumerate(["wet-mcp"], keep_data=True)
+    assert paths == []
+
+
+def test_enumerate_per_plugin_store_other_plugin_untouched(mock_fs):
+    """Cleaning one server must not enumerate another server's PerPluginStore
+    files, even if both live directly under home."""
+    server_dir = mock_fs["home"] / ".wet-mcp"
+    server_dir.mkdir()
+    (server_dir / "config.json").write_text("{}")
+
+    other_dir = mock_fs["home"] / ".mnemo-mcp"
+    other_dir.mkdir()
+    (other_dir / "config.json").write_text("{}")
+
+    paths = _enumerate(["wet-mcp"], keep_data=True)
+    assert all("mnemo-mcp" not in str(p) for p in paths)
+    assert any(p == server_dir / "config.json" for p in paths)
+
+
+def test_main_wipes_per_plugin_store_files_e2e(mock_fs, monkeypatch):
+    """End-to-end regression check: running mcp-clean-state must actually
+    delete config.json and .secret from disk -- the exact bug this fixes."""
+    server_dir = mock_fs["home"] / ".wet-mcp"
+    server_dir.mkdir()
+    cfg = server_dir / "config.json"
+    cfg.write_text("{}")
+    secret = server_dir / ".secret"
+    secret.write_bytes(b"key")
+
+    monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    exit_code = main(["--server", "wet-mcp"])
+
+    assert exit_code == 0
+    assert not cfg.exists()
+    assert not secret.exists()
+
+
+def test_main_per_plugin_store_other_server_survives(mock_fs, monkeypatch):
+    """Cleaning wet-mcp must not remove mnemo-mcp's PerPluginStore files."""
+    wet_dir = mock_fs["home"] / ".wet-mcp"
+    wet_dir.mkdir()
+    (wet_dir / "config.json").write_text("{}")
+
+    mnemo_dir = mock_fs["home"] / ".mnemo-mcp"
+    mnemo_dir.mkdir()
+    mnemo_cfg = mnemo_dir / "config.json"
+    mnemo_cfg.write_text("{}")
+
+    monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp", "mnemo-mcp"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    exit_code = main(["--server", "wet-mcp"])
+
+    assert exit_code == 0
+    assert not (wet_dir / "config.json").exists()
+    assert mnemo_cfg.exists()
+
+
+def test_main_dry_run_per_plugin_store_not_deleted(mock_fs, monkeypatch, capsys):
+    """--dry-run must list PerPluginStore config.json/.secret without deleting
+    them (mirrors test_main_dry_run for the legacy config.enc path)."""
+    server_dir = mock_fs["home"] / ".wet-mcp"
+    server_dir.mkdir()
+    cfg = server_dir / "config.json"
+    cfg.write_text("{}")
+    secret = server_dir / ".secret"
+    secret.write_bytes(b"key")
+
+    monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
+
+    exit_code = main(["--dry-run", "--server", "wet-mcp"])
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "[dry-run] Would remove" in captured.out
+    assert str(cfg) in captured.out
+    assert str(secret) in captured.out
+    assert cfg.exists()
+    assert secret.exists()
+
+
 def test_enumerate_imagine_mcp(mock_fs):
     server_dir = mock_fs["home"] / ".imagine-mcp"
     server_dir.mkdir()
