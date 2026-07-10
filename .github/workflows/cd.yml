@@ -50,6 +50,92 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
+      # Dry-run PSR (no_operation_mode => --noop: no commit/tag/push/release) purely to
+      # learn the version it WOULD publish, so the collision guard below can fire BEFORE
+      # the real run creates a git tag or GitHub Release. Same action + SHA and same
+      # config_file/prerelease inputs as the real step, run against the same untouched
+      # checkout, so the computed version is identical.
+      - uses: python-semantic-release/python-semantic-release@37a30a7987cfebb6d49240bf1c4e9cd9817d0673 # v10
+        id: dryrun
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          config_file: semantic-release.toml
+          prerelease: ${{ inputs.release_type == 'beta' }}
+          prerelease_token: beta
+          no_operation_mode: true
+
+      # All 3 published coordinates (npm core-ts, PyPI core-py, PyPI embedding-daemon)
+      # share the SAME PSR-computed version, but a version can be free on one registry
+      # and already taken on another -- so all 3 are checked, and this fails if ANY of
+      # them reports a collision or an unknown/unreachable result. Neither registry ever
+      # allows reusing a version number, so a hit here means git history has diverged
+      # from what was actually published; this fires before any tag or Release is
+      # created, converting a silent release freeze (PSR sees a matching tag, sets
+      # released=false, every publish job is skipped) or an opaque upload failure deep
+      # in `npm publish`/`uv publish` into one explicit, actionable error.
+      - name: Guard against re-publishing an already-published version
+        if: steps.dryrun.outputs.released == 'true'
+        env:
+          COMPUTED_VERSION: ${{ steps.dryrun.outputs.version }}
+        run: |
+          set -uo pipefail
+          FAILED=0
+
+          # PyPI probe: normalizes the version in the URL path (e.g. 1.2.3-beta.1 and
+          # 1.2.3b1 both resolve to the same release), so PSR's raw version output can
+          # be used directly.
+          #   200            -> exists         -> COLLISION
+          #   404             -> not found      -> FREE
+          #   anything else  -> network/registry error -> UNKNOWN, never treated as free
+          check_pypi() {
+            local pkg="$1"
+            local url="https://pypi.org/pypi/${pkg}/${COMPUTED_VERSION}/json"
+            echo "Checking PyPI for ${pkg} ${COMPUTED_VERSION}..."
+            local http_code
+            http_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$url")
+            if [ "$http_code" = "200" ]; then
+              echo "::error::Computed release version ${COMPUTED_VERSION} already exists on PyPI as ${pkg}==${COMPUTED_VERSION}. PyPI NEVER allows re-publishing a version number, even one later yanked. This almost always means the git history diverged from what was actually published to PyPI. Do NOT retry the same version: bump PAST the already-published range (higher than any version ever published) and dispatch the release again."
+              return 1
+            fi
+            if [ "$http_code" = "404" ]; then
+              echo "OK: ${pkg}==${COMPUTED_VERSION} is not on PyPI (404) -- safe to publish."
+              return 0
+            fi
+            echo "::error::Could not verify whether ${pkg}==${COMPUTED_VERSION} exists on PyPI: unexpected HTTP status ${http_code} from ${url} (likely a transient network/registry error, rate limit, or outage). Refusing to proceed so a genuine collision cannot slip through as a false 'free'."
+            return 1
+          }
+
+          # npm probe (unauthenticated `npm view` against the live registry):
+          #   version exists        -> exit 0, prints the version on stdout  => COLLISION
+          #   version/package 404   -> exit non-zero, output contains 'E404' => FREE
+          #   network/registry error-> exit non-zero, output has NO 'E404'   => UNKNOWN
+          check_npm() {
+            local pkg="$1"
+            echo "Checking npm for ${pkg}@${COMPUTED_VERSION}..."
+            local output status
+            if output="$(npm view "${pkg}@${COMPUTED_VERSION}" version 2>&1)"; then
+              status=0
+            else
+              status=$?
+            fi
+            if [ "${status}" -eq 0 ] && [ -n "${output}" ]; then
+              echo "::error::Computed release version ${COMPUTED_VERSION} already exists on npm as ${pkg}@${COMPUTED_VERSION}. npm NEVER allows re-publishing a version number, even one later unpublished or deprecated. This almost always means the git history diverged from what was actually published to npm. Do NOT retry the same version: bump PAST the already-published range (higher than any version ever published) and dispatch the release again."
+              return 1
+            fi
+            if printf '%s\n' "${output}" | grep -q 'E404'; then
+              echo "OK: ${pkg}@${COMPUTED_VERSION} is not on npm (E404) -- safe to publish."
+              return 0
+            fi
+            echo "::error::Could not verify whether ${pkg}@${COMPUTED_VERSION} exists on npm: 'npm view' failed without an E404 (likely a transient registry/network error, rate limit, or outage). Refusing to proceed so a genuine collision cannot slip through as a false 'free'. npm output: ${output}"
+            return 1
+          }
+
+          check_npm '@n24q02m/mcp-core' || FAILED=1
+          check_pypi 'n24q02m-mcp-core' || FAILED=1
+          check_pypi 'mcp-embedding-daemon' || FAILED=1
+
+          exit "$FAILED"
+
       - uses: python-semantic-release/python-semantic-release@37a30a7987cfebb6d49240bf1c4e9cd9817d0673 # v10
         id: release
         with:
