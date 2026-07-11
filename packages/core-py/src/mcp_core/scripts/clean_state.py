@@ -385,6 +385,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.kill_daemons:
+        if not _confirm(args.yes):
+            return 1
         kill_daemons(verbose=args.verbose)
         return 0
 

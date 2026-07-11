@@ -187,7 +187,6 @@ def test_main_wipes_per_plugin_store_files_e2e(mock_fs, monkeypatch):
     secret.write_bytes(b"key")
 
     monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
-    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
     exit_code = main(["--server", "wet-mcp", "--yes"])
 
@@ -208,7 +207,6 @@ def test_main_per_plugin_store_other_server_survives(mock_fs, monkeypatch):
     mnemo_cfg.write_text("{}")
 
     monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp", "mnemo-mcp"])
-    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
     exit_code = main(["--server", "wet-mcp", "--yes"])
 
@@ -341,9 +339,6 @@ def test_main_success_verbose(mock_fs, monkeypatch, capsys):
     cfg_file.write_text("dummy")
     monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
 
-    # Mock non-interactive
-    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
-
     exit_code = main(["--server", "wet-mcp", "--verbose", "--yes"])
 
     assert exit_code == 0
@@ -359,7 +354,6 @@ def test_main_rmtree_error(mock_fs, monkeypatch, capsys):
     data_dir.mkdir()
 
     monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
-    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
     def mock_rmtree(p):
         raise OSError("rmtree error")
@@ -487,6 +481,31 @@ def test_main_tty_input_y_proceeds(mock_fs, monkeypatch):
 def test_main_kill_daemons_flag(monkeypatch):
     mock_kill = MagicMock(return_value=(1, 2))
     monkeypatch.setattr("mcp_core.scripts.clean_state.kill_daemons", mock_kill)
+
+    exit_code = main(["--kill-daemons", "--yes"])
+
+    assert exit_code == 0
+    mock_kill.assert_called_once()
+
+
+def test_main_kill_daemons_non_tty_without_yes_refuses(monkeypatch):
+    """--kill-daemons SIGKILLs live processes -- same footgun class as
+    credential deletion, so it must be gated behind the same confirmation."""
+    mock_kill = MagicMock(return_value=(1, 2))
+    monkeypatch.setattr("mcp_core.scripts.clean_state.kill_daemons", mock_kill)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    exit_code = main(["--kill-daemons"])
+
+    assert exit_code == 1
+    mock_kill.assert_not_called()
+
+
+def test_main_kill_daemons_tty_input_y_proceeds(monkeypatch):
+    mock_kill = MagicMock(return_value=(1, 2))
+    monkeypatch.setattr("mcp_core.scripts.clean_state.kill_daemons", mock_kill)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("sys.stdin.readline", lambda: "y\n")
 
     exit_code = main(["--kill-daemons"])
 
