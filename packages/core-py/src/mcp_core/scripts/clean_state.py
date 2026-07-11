@@ -9,6 +9,10 @@ removing their lock files. Required after upgrading from mcp-core <=1.11.x to
 2.0.0+ where the stdio bridge / smart-stdio layer was removed in favor of
 direct FastMCP stdio mode and pure HTTP servers. See
 ``docs/migration-2026-04-30.md``.
+
+BREAKING: non-interactive callers (no tty) must now pass ``--yes`` explicitly
+to confirm deletion. Previously a missing tty auto-confirmed, so any
+non-interactive wrapper silently deleted credentials.
 """
 
 from __future__ import annotations
@@ -180,10 +184,12 @@ def _enumerate(servers: list[str], keep_data: bool) -> list[Path]:
     return paths
 
 
-def _confirm() -> bool:
-    if not sys.stdin.isatty():
-        # Non-interactive — auto-yes
+def _confirm(assume_yes: bool) -> bool:
+    if assume_yes:
         return True
+    if not sys.stdin.isatty():
+        print("refusing: pass --yes for non-interactive", file=sys.stderr)
+        return False
     print("Proceed? [y/N] ", end="", flush=True)
     line = sys.stdin.readline().strip().lower()
     return line in ("y", "yes")
@@ -363,6 +369,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="List paths that would be removed.")
     parser.add_argument("--verbose", action="store_true", help="Print each removed path.")
     parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt (required for non-interactive use).",
+    )
+    parser.add_argument(
         "--kill-daemons",
         action="store_true",
         help=(
@@ -374,6 +385,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.kill_daemons:
+        if not _confirm(args.yes):
+            return 1
         kill_daemons(verbose=args.verbose)
         return 0
 
@@ -395,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         return 0
 
-    if not _confirm():
+    if not _confirm(args.yes):
         print("Aborted.")
         return 1
 

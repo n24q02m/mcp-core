@@ -77,6 +77,9 @@ from mcp_core.transport.local_server import (
     start_http_server_background,
 )
 
+# Console-script CLI builder (bare=serve dispatch + built-in subcommands).
+from mcp_core.cli import build_cli, ensure_stderr_logging
+
 __all__ = [
     "decrypt",
     "derive_aes_key",
@@ -126,4 +129,6 @@ __all__ = [
     "HttpServerHandle",
     "run_http_server",
     "start_http_server_background",
+    "build_cli",
+    "ensure_stderr_logging",
 ]
