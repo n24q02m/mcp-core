@@ -1,3 +1,4 @@
+export { atomicWriteFile } from './atomic-write.js'
 export {
   backendFromEnv,
   CfKvBackend,
