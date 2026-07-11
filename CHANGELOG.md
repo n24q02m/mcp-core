@@ -2,6 +2,76 @@
 
 <!-- version list -->
 
+## v1.19.0-beta.2 (2026-07-11)
+
+### Bug Fixes
+
+- Add accessible focus states to credential form widgets
+  ([`5bc050b`](https://github.com/n24q02m/mcp-core/commit/5bc050b502791e68452da39229cf3ebb0860d6d9))
+
+- Atomic machine key write and loud corrupt-blob log in core-ts store
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- Enforce restrictive mode on sensitive directory creation
+  ([`a6e4cde`](https://github.com/n24q02m/mcp-core/commit/a6e4cde0bd8f74ae721f3d4638e868a00d428548))
+
+- Log loudly when credential blob is corrupt instead of silent None
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- Make core-ts LocalFsBackend.put atomic (parity with core-py)
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- Make LocalFsBackend.put atomic via tmp file + os.replace
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- Make renovate automerge effective (isolated groups, digest+lockfile automerge, 7-day cooldown)
+  ([`0652f13`](https://github.com/n24q02m/mcp-core/commit/0652f1362c193fd47be20ed9c46d8cf2a183f13a))
+
+- Optimize SQL VALUES expansion in D1 batch insert
+  ([`c3a3279`](https://github.com/n24q02m/mcp-core/commit/c3a327906def6ea8b9dd5e50f79d9e98f19443cd))
+
+- Pin cli half-pair precedence over valid env pair in resolver test
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- Suppress semgrep false positive on corrupt-blob log lines
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- Write per-plugin machine key atomically ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- **deps**: Lock file maintenance ([#615](https://github.com/n24q02m/mcp-core/pull/615),
+  [`33c61d5`](https://github.com/n24q02m/mcp-core/commit/33c61d5ea88c911fbd175f4ca79e095b14045b11))
+
+- **deps**: Update @biomejs/biome to ^2.5.2 ([#630](https://github.com/n24q02m/mcp-core/pull/630),
+  [`0a4463a`](https://github.com/n24q02m/mcp-core/commit/0a4463af8b700165ea4c49afb2a6b886d6b70bfc))
+
+- **deps**: Update @types/node to ^26.1.0 ([#631](https://github.com/n24q02m/mcp-core/pull/631),
+  [`a733b90`](https://github.com/n24q02m/mcp-core/commit/a733b901484af8226efecea2ef27e50f87da9cc1))
+
+- **deps**: Update github-actions digests ([#629](https://github.com/n24q02m/mcp-core/pull/629),
+  [`b48a176`](https://github.com/n24q02m/mcp-core/commit/b48a176369de97afd206da75fec651229b90a7be))
+
+### Features
+
+- Add bundled client BYO resolution chain (resolve_bundled_client)
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- Bundled client BYO resolver + atomic credential writes
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+- Export bundled client resolver from mcp_core.auth
+  ([#633](https://github.com/n24q02m/mcp-core/pull/633),
+  [`f48f4b0`](https://github.com/n24q02m/mcp-core/commit/f48f4b07edf7ed5a216f59616ee513f7dde8955b))
+
+
 ## v1.19.0-beta.1 (2026-07-10)
 
 ### Bug Fixes
