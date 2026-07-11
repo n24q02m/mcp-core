@@ -75,6 +75,33 @@ def test_localfs_allows_dot_in_sub(tmp_path, monkeypatch):
     assert backend.get("wet/subs/u.1/config") == b"blob"
 
 
+def test_put_leaves_no_tmp_debris(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    backend = LocalFsBackend()
+    backend.put("demo/config", b"payload-1")
+    cfg_dir = tmp_path / ".demo-mcp"
+    assert (cfg_dir / "config.json").read_bytes() == b"payload-1"
+    assert list(cfg_dir.glob("*.tmp")) == []
+
+
+def test_put_failure_keeps_old_blob(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    backend = LocalFsBackend()
+    backend.put("demo/config", b"old-blob")
+
+    def boom(self, target):
+        raise OSError("simulated crash at rename")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("pathlib.Path.replace", boom)
+        with pytest.raises(OSError):
+            backend.put("demo/config", b"new-blob")
+
+    cfg = tmp_path / ".demo-mcp" / "config.json"
+    assert cfg.read_bytes() == b"old-blob"  # blob cũ nguyên vẹn
+    assert list(cfg.parent.glob("*.tmp")) == []  # không rác tmp
+
+
 class _FakeHttp:
     """In-memory HTTP stub keyed by the URL's last path segment."""
 

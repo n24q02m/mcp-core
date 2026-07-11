@@ -1,7 +1,10 @@
 """Per-plugin encrypted credential store tests."""
 
 import json
+import logging
 import os
+from pathlib import Path
+
 import pytest
 
 from mcp_core.storage.backends import InMemoryBackend
@@ -126,3 +129,51 @@ def test_load_returns_none_on_tampered_ciphertext(store_factory):
     tampered = blob[:-1] + bytes([blob[-1] ^ 0xFF])
     store.cred_path.write_bytes(tampered)
     assert store.load() is None
+
+
+def test_load_corrupt_blob_logs_loudly(store_factory, caplog):
+    """Decrypt failure (tampered/corrupt ciphertext) must log loudly, not silently."""
+    store = store_factory("demo")
+    store.save({"k": "v"})
+    # Corrupt the ciphertext on disk
+    cfg = Path.home() / ".demo-mcp" / "config.json"
+    cfg.write_bytes(b"\x00" * 40)
+    with caplog.at_level(logging.ERROR):
+        assert store.load() is None  # API giữ nguyên
+    assert any("corrupt" in r.message.lower() for r in caplog.records)
+    assert "demo/config" in caplog.text  # nói rõ KEY nào, không lộ nội dung
+
+
+def test_load_truncated_blob_logs_loudly(store_factory, caplog):
+    """Blob shorter than the nonce (13 bytes) is a torn write, not silent absence."""
+    store = store_factory("demo")
+    store._backend.put(store.cred_key, b"\x00" * 5)
+    with caplog.at_level(logging.ERROR):
+        assert store.load() is None  # API giữ nguyên
+    assert any("corrupt" in r.message.lower() for r in caplog.records)
+    assert "demo/config" in caplog.text  # nói rõ KEY nào, không lộ nội dung
+
+
+def test_machine_key_write_is_atomic(monkeypatch, tmp_path):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    store = PerPluginStore("demo")
+
+    # Only crash the .secret rename, not config.json's -- otherwise the
+    # config write's own (already-atomic) replace() would raise first and
+    # mask whether the machine-key write is atomic.
+    real_replace = Path.replace
+
+    def boom(self, target):
+        if target.name == ".secret":
+            raise OSError("simulated crash at rename")
+        return real_replace(self, target)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("pathlib.Path.replace", boom)
+        with pytest.raises(OSError):
+            store.save({"k": "v"})  # first save generates the machine key
+
+    secret = Path.home() / ".demo-mcp" / ".secret"
+    assert not secret.exists() or len(secret.read_bytes()) == 32  # không bao giờ torn
+    store.save({"k": "v"})  # recover sạch sau crash
+    assert store.load() == {"k": "v"}

@@ -1,10 +1,28 @@
 import { createCipheriv, randomBytes, scryptSync } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { InMemoryBackend } from '../../src/storage/backends.js'
 import { credPath, PerPluginStore, setHomeDirForTesting } from '../../src/storage/per-plugin-store.js'
+
+// Mocking node:fs/promises for the atomic-write rename-failure case (Task 5,
+// mirrors the mock in backends.test.ts from Task 4). Only `rename` is
+// intercepted, gated on the destination path so unrelated writes in this
+// file keep using the real filesystem. The gate substring is unique to this
+// file's plugin name to avoid colliding with backends.test.ts's own trigger.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    rename: vi.fn((oldPath, newPath) => {
+      if (typeof newPath === 'string' && newPath.includes('atomic-key-fail-trigger')) {
+        return Promise.reject(new Error('simulated rename failure'))
+      }
+      return actual.rename(oldPath, newPath)
+    })
+  }
+})
 
 describe('PerPluginStore', () => {
   let testHome: string
@@ -135,5 +153,53 @@ describe('PerPluginStore', () => {
     await backend.put(`${pluginName}/subs/${sub}/config`, Buffer.concat([iv, ciphertext, tag]))
 
     expect(await store.load()).toBeNull()
+  })
+
+  it('machine key write is atomic (no torn .secret on rename failure)', async () => {
+    // Mirrors Task 4's LocalFsBackend rename-failure test, but for the
+    // machine-key path: a crash mid-write must not leave a half-written
+    // .secret on disk (that would silently decrypt to garbage on next read).
+    const pluginName = 'atomic-key-fail-trigger'
+    const store = new PerPluginStore(pluginName)
+
+    await expect(store.save({ k: 'v' })).rejects.toThrow('simulated rename failure')
+
+    const secretDir = join(testHome, `.${pluginName}-mcp`)
+    expect(existsSync(join(secretDir, '.secret'))).toBe(false)
+    expect(readdirSync(secretDir).some((entry) => entry.endsWith('.tmp'))).toBe(false)
+  })
+
+  it('load stays silent when no blob exists', async () => {
+    const store = new PerPluginStore('test-plugin')
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await store.load()).toBeNull()
+    expect(errorSpy).not.toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
+
+  it('load logs the cred key on a truncated blob', async () => {
+    const backend = new InMemoryBackend()
+    const store = new PerPluginStore('test-plugin', null, backend)
+    await backend.put('test-plugin/config', Buffer.allocUnsafe(28))
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await store.load()).toBeNull()
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('test-plugin/config'))
+    errorSpy.mockRestore()
+  })
+
+  it('load logs the cred key on a corrupt/tampered blob', async () => {
+    const store = new PerPluginStore('test-plugin')
+    await store.save({ key: 'value' })
+    const { readFileSync, writeFileSync } = await import('node:fs')
+    const blob = readFileSync(store.credPath)
+    const tampered = Buffer.from(blob)
+    tampered[tampered.length - 1] ^= 0xff // flip last byte
+    writeFileSync(store.credPath, tampered)
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(await store.load()).toBeNull()
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('test-plugin/config'))
+    errorSpy.mockRestore()
   })
 })

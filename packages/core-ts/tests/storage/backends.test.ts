@@ -1,10 +1,26 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { backendFromEnv, CfKvBackend, type Http, InMemoryBackend, LocalFsBackend } from '../../src/storage/backends.js'
 import { setHomeDirForTesting } from '../../src/storage/home-dir.js'
 import { PerPluginStore } from '../../src/storage/per-plugin-store.js'
+
+// Mocking node:fs/promises for the atomic-write rename-failure case (Task 4).
+// Only `rename` is intercepted, gated on the destination path so unrelated
+// gets/puts in this file keep using the real filesystem.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    rename: vi.fn((oldPath, newPath) => {
+      if (typeof newPath === 'string' && newPath.includes('rename-error-trigger')) {
+        return Promise.reject(new Error('simulated rename failure'))
+      }
+      return actual.rename(oldPath, newPath)
+    })
+  }
+})
 
 describe('InMemoryBackend', () => {
   it('put/get/delete roundtrip (absent get returns null)', async () => {
@@ -76,6 +92,28 @@ describe('LocalFsBackend', () => {
     const backend = new LocalFsBackend()
     await backend.put('wet/subs/u.1/config', Buffer.from('blob'))
     expect(await backend.get('wet/subs/u.1/config')).toEqual(Buffer.from('blob'))
+  })
+
+  it('put leaves no tmp debris and keeps old blob on rename failure', async () => {
+    const backend = new LocalFsBackend()
+    // Seed the "old" blob directly (bypassing put/rename) so the mocked
+    // rename failure below is the only thing exercising the atomic-write path.
+    const configDir = join(testHome, '.rename-error-trigger-mcp')
+    mkdirSync(configDir, { recursive: true })
+    writeFileSync(join(configDir, 'config.json'), 'old-blob')
+
+    await expect(backend.put('rename-error-trigger/config', Buffer.from('new-blob'))).rejects.toThrow(
+      'simulated rename failure'
+    )
+
+    // Old content survives the failed rename.
+    expect(readFileSync(join(configDir, 'config.json'), 'utf-8')).toBe('old-blob')
+    // No leftover .tmp file in the directory.
+    expect(readdirSync(configDir).some((entry) => entry.endsWith('.tmp'))).toBe(false)
+
+    // A successful put still writes the new content.
+    await backend.put('demo/config', Buffer.from('new-content'))
+    expect(readFileSync(join(testHome, '.demo-mcp', 'config.json'), 'utf-8')).toBe('new-content')
   })
 })
 

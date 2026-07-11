@@ -18,6 +18,7 @@ caused multi-daemon path-drift contention with platformdirs version skew.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -28,7 +29,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from mcp_core.storage.backends import CredentialBackend, backend_from_env
+from mcp_core.storage.backends import CredentialBackend, _atomic_write_bytes, backend_from_env
+
+logger = logging.getLogger(__name__)
 
 _UNSAFE_RE = re.compile(r"[^a-zA-Z0-9._-]")
 
@@ -56,13 +59,10 @@ def _machine_key_path(plugin_name: str) -> Path:
 
 def _load_or_generate_machine_key(plugin_name: str) -> bytes:
     secret_path = _machine_key_path(plugin_name)
-    secret_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if secret_path.exists():
         return secret_path.read_bytes()
     key = secrets.token_bytes(32)
-    secret_path.write_bytes(key)
-    if os.name != "nt":
-        os.chmod(secret_path, 0o600)
+    _atomic_write_bytes(secret_path, key)
     return key
 
 
@@ -110,12 +110,24 @@ class PerPluginStore:
         if blob is None:
             return None
         if len(blob) < 13:
+            # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+            logger.error(
+                "Credential blob for %s is corrupt or the encryption key changed; "
+                "treating as not configured (re-run setup to restore)",
+                self.cred_key,
+            )
             return None
         nonce, ciphertext = blob[:12], blob[12:]
         aesgcm = AESGCM(self._key())
         try:
             plaintext = aesgcm.decrypt(nonce, ciphertext, None)
         except Exception:
+            # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+            logger.error(
+                "Credential blob for %s is corrupt or the encryption key changed; "
+                "treating as not configured (re-run setup to restore)",
+                self.cred_key,
+            )
             return None
         return json.loads(plaintext)
 

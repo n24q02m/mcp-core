@@ -16,8 +16,9 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { atomicWriteFile } from './atomic-write.js'
 import { backendFromEnv, type CredentialBackend } from './backends.js'
 import { getHomeDir } from './home-dir.js'
 
@@ -48,7 +49,7 @@ async function loadOrGenMachineKey(pluginName: string): Promise<Buffer> {
   } catch {
     const key = randomBytes(32)
     await mkdir(join(getHomeDir(), `.${pluginName}-mcp`), { recursive: true, mode: 0o700 })
-    await writeFile(secretPath, key, { mode: 0o600 })
+    await atomicWriteFile(secretPath, key)
     return key
   }
 }
@@ -88,7 +89,12 @@ export class PerPluginStore {
     const blob = await this.backend.get(this.credKey)
     if (blob === null) return null
     // Format: [12-byte IV][ciphertext][16-byte GCM tag]
-    if (blob.length < 29) return null
+    if (blob.length < 29) {
+      console.error(
+        `[mcp-core PerPluginStore] Credential blob for ${this.credKey} is corrupt or the encryption key changed; treating as not configured (re-run setup to restore)`
+      )
+      return null
+    }
     const iv = blob.subarray(0, 12)
     const tag = blob.subarray(blob.length - 16)
     const data = blob.subarray(12, blob.length - 16)
@@ -98,6 +104,9 @@ export class PerPluginStore {
       const plaintext = Buffer.concat([decipher.update(data), decipher.final()])
       return JSON.parse(plaintext.toString('utf-8')) as Record<string, unknown>
     } catch {
+      console.error(
+        `[mcp-core PerPluginStore] Credential blob for ${this.credKey} is corrupt or the encryption key changed; treating as not configured (re-run setup to restore)`
+      )
       return null
     }
   }
