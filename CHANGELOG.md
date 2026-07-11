@@ -2,6 +2,40 @@
 
 <!-- version list -->
 
+## v1.19.0-beta.3 (2026-07-11)
+
+### Bug Fixes
+
+- Gate --kill-daemons behind the same confirmation as deletion
+  ([#634](https://github.com/n24q02m/mcp-core/pull/634),
+  [`f84a23c`](https://github.com/n24q02m/mcp-core/commit/f84a23ceee358d73ff26f0192cfb780a2c2607c2))
+
+- Require explicit --yes for non-interactive mcp-clean-state
+  ([#634](https://github.com/n24q02m/mcp-core/pull/634),
+  [`f84a23c`](https://github.com/n24q02m/mcp-core/commit/f84a23ceee358d73ff26f0192cfb780a2c2607c2))
+
+- Tighten builtin-recognition test assertion to rc 0
+  ([#634](https://github.com/n24q02m/mcp-core/pull/634),
+  [`f84a23c`](https://github.com/n24q02m/mcp-core/commit/f84a23ceee358d73ff26f0192cfb780a2c2607c2))
+
+### Features
+
+- Add config/relay/doctor built-in subcommands to mcp_core.cli
+  ([#634](https://github.com/n24q02m/mcp-core/pull/634),
+  [`f84a23c`](https://github.com/n24q02m/mcp-core/commit/f84a23ceee358d73ff26f0192cfb780a2c2607c2))
+
+- Add mcp_core.cli builder with stderr logging guard
+  ([#634](https://github.com/n24q02m/mcp-core/pull/634),
+  [`f84a23c`](https://github.com/n24q02m/mcp-core/commit/f84a23ceee358d73ff26f0192cfb780a2c2607c2))
+
+- Export build_cli from mcp_core top level ([#634](https://github.com/n24q02m/mcp-core/pull/634),
+  [`f84a23c`](https://github.com/n24q02m/mcp-core/commit/f84a23ceee358d73ff26f0192cfb780a2c2607c2))
+
+- Mcp_core.cli builder + stderr guard + clean-state --yes
+  ([#634](https://github.com/n24q02m/mcp-core/pull/634),
+  [`f84a23c`](https://github.com/n24q02m/mcp-core/commit/f84a23ceee358d73ff26f0192cfb780a2c2607c2))
+
+
 ## v1.19.0-beta.2 (2026-07-11)
 
 ### Bug Fixes
