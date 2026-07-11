@@ -211,6 +211,9 @@ def build_cli(
     handler instead. ``version`` is accepted here (the built-in handlers below
     do not consume it) so it is already threaded through for a future task
     that wants it.
+
+    ``extra`` handlers are registered as argument-less subcommands;
+    per-subcommand argument specs land with the per-server CLI work (WS-B2).
     """
     handlers: dict[str, Callable[[argparse.Namespace], int]] = {
         "config": _build_config_handler(server_name),
