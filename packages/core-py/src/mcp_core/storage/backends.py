@@ -92,6 +92,29 @@ def _key_to_path(key: str) -> Path:
     return path
 
 
+def _atomic_write_bytes(path: Path, blob: bytes) -> None:
+    """Write blob atomically: tmp file + fsync + os.replace.
+
+    A torn credential write decrypts to garbage, which load() reports as
+    "not configured" -- the stored credentials silently vanish. Writing to
+    a temp file in the same directory keeps the old blob intact until the
+    new one is fully on disk.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "wb") as f:
+            f.write(blob)
+            f.flush()
+            os.fsync(f.fileno())
+        if os.name != "nt":
+            os.chmod(tmp, 0o600)
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 class LocalFsBackend:
     """Stores blobs on local disk, preserving the per-plugin layout."""
 
@@ -103,10 +126,7 @@ class LocalFsBackend:
 
     def put(self, key: str, blob: bytes) -> None:
         path = _key_to_path(key)
-        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        path.write_bytes(blob)
-        if os.name != "nt":
-            os.chmod(path, 0o600)
+        _atomic_write_bytes(path, blob)
 
     def delete(self, key: str) -> None:
         path = _key_to_path(key)
