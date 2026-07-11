@@ -18,6 +18,7 @@ caused multi-daemon path-drift contention with platformdirs version skew.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -29,6 +30,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from mcp_core.storage.backends import CredentialBackend, _atomic_write_bytes, backend_from_env
+
+logger = logging.getLogger(__name__)
 
 _UNSAFE_RE = re.compile(r"[^a-zA-Z0-9._-]")
 
@@ -107,12 +110,22 @@ class PerPluginStore:
         if blob is None:
             return None
         if len(blob) < 13:
+            logger.error(
+                "Credential blob for %s is corrupt or the encryption key changed; "
+                "treating as not configured (re-run setup to restore)",
+                self.cred_key,
+            )
             return None
         nonce, ciphertext = blob[:12], blob[12:]
         aesgcm = AESGCM(self._key())
         try:
             plaintext = aesgcm.decrypt(nonce, ciphertext, None)
         except Exception:
+            logger.error(
+                "Credential blob for %s is corrupt or the encryption key changed; "
+                "treating as not configured (re-run setup to restore)",
+                self.cred_key,
+            )
             return None
         return json.loads(plaintext)
 
