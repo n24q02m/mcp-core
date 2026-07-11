@@ -150,9 +150,12 @@ def test_builtin_name_recognized_dispatches_to_real_handler(cli_storage):
     # A bare (unregistered) built-in name must be *recognized* — dispatched
     # through to its real handler, not rejected with rc 2 like an unknown
     # subcommand. config/relay/doctor are wired up (no NotImplementedError).
+    # rc == 0 both proves the real handler ran (cli_storage's tmp_path is a
+    # healthy, unconfigured state -- see test_doctor_healthy_rc_0_no_fail_lines)
+    # and rules out the unknown-subcommand path, which returns 2.
     rc = run(["doctor"])
 
-    assert isinstance(rc, int)
+    assert rc == 0
 
 
 def test_serve_not_called_for_subcommand_dispatch():
