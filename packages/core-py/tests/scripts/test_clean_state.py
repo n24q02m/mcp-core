@@ -189,7 +189,7 @@ def test_main_wipes_per_plugin_store_files_e2e(mock_fs, monkeypatch):
     monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
-    exit_code = main(["--server", "wet-mcp"])
+    exit_code = main(["--server", "wet-mcp", "--yes"])
 
     assert exit_code == 0
     assert not cfg.exists()
@@ -210,7 +210,7 @@ def test_main_per_plugin_store_other_server_survives(mock_fs, monkeypatch):
     monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp", "mnemo-mcp"])
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
-    exit_code = main(["--server", "wet-mcp"])
+    exit_code = main(["--server", "wet-mcp", "--yes"])
 
     assert exit_code == 0
     assert not (wet_dir / "config.json").exists()
@@ -274,9 +274,25 @@ def test_enumerate_duplicate_and_error(mock_fs, monkeypatch):
     assert any(p.name == "config.enc" for p in paths)
 
 
-def test_confirm_auto_yes(monkeypatch):
+def test_confirm_assume_yes_bypasses_tty_check(monkeypatch):
+    """--yes short-circuits the prompt regardless of tty state."""
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
-    assert _confirm() is True
+    assert _confirm(True) is True
+
+
+def test_confirm_non_tty_without_assume_yes_refuses(monkeypatch, capsys):
+    """Non-interactive callers must pass --yes explicitly -- the old
+    sys.stdin.isatty() auto-yes fallback let any non-interactive wrapper
+    silently confirm destructive credential deletion."""
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    assert _confirm(False) is False
+    assert "--yes" in capsys.readouterr().err
+
+
+def test_confirm_tty_prompt_unchanged(monkeypatch):
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("sys.stdin.readline", lambda: "y\n")
+    assert _confirm(False) is True
 
 
 def test_kill_daemons_missing_dir(mock_fs, capsys):
@@ -328,7 +344,7 @@ def test_main_success_verbose(mock_fs, monkeypatch, capsys):
     # Mock non-interactive
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
 
-    exit_code = main(["--server", "wet-mcp", "--verbose"])
+    exit_code = main(["--server", "wet-mcp", "--verbose", "--yes"])
 
     assert exit_code == 0
     assert not cfg_file.exists()
@@ -350,7 +366,7 @@ def test_main_rmtree_error(mock_fs, monkeypatch, capsys):
 
     monkeypatch.setattr(shutil, "rmtree", mock_rmtree)
 
-    exit_code = main(["--no-keep-data", "--server", "wet-mcp"])
+    exit_code = main(["--no-keep-data", "--server", "wet-mcp", "--yes"])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "failed:" in captured.err
@@ -398,6 +414,19 @@ def test_main_dry_run(mock_fs, monkeypatch, capsys):
     assert (mock_fs["config"] / "config.enc").exists()
 
 
+def test_main_dry_run_skips_confirm_even_non_tty_without_yes(mock_fs, monkeypatch, capsys):
+    """--dry-run never mutates the filesystem, so it must succeed even when
+    non-interactive and --yes was not passed (confirmation is never reached)."""
+    (mock_fs["config"] / "config.enc").write_text("dummy")
+    monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    exit_code = main(["--dry-run", "--server", "wet-mcp"])
+
+    assert exit_code == 0
+    assert (mock_fs["config"] / "config.enc").exists()
+
+
 def test_main_abort(mock_fs, monkeypatch, capsys):
     (mock_fs["config"] / "config.enc").write_text("dummy")
     monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
@@ -409,6 +438,50 @@ def test_main_abort(mock_fs, monkeypatch, capsys):
 
     assert exit_code == 1
     assert (mock_fs["config"] / "config.enc").exists()
+
+
+def test_main_non_tty_without_yes_refuses(mock_fs, monkeypatch, capsys):
+    """Regression pin for the auto-yes footgun: a non-interactive caller that
+    forgets --yes must abort with exit code 1 and delete nothing."""
+    cfg_file = mock_fs["config"] / "config.enc"
+    cfg_file.write_text("dummy")
+    monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    exit_code = main(["--server", "wet-mcp"])
+
+    assert exit_code == 1
+    assert cfg_file.exists()
+    captured = capsys.readouterr()
+    assert "--yes" in captured.err
+    assert "Aborted." in captured.out
+
+
+def test_main_non_tty_with_yes_proceeds(mock_fs, monkeypatch):
+    cfg_file = mock_fs["config"] / "config.enc"
+    cfg_file.write_text("dummy")
+    monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+
+    exit_code = main(["--server", "wet-mcp", "--yes"])
+
+    assert exit_code == 0
+    assert not cfg_file.exists()
+
+
+def test_main_tty_input_y_proceeds(mock_fs, monkeypatch):
+    """tty prompt path is unchanged: interactive 'y' still proceeds without
+    --yes."""
+    cfg_file = mock_fs["config"] / "config.enc"
+    cfg_file.write_text("dummy")
+    monkeypatch.setattr("mcp_core.scripts.clean_state.ALL_SERVERS", ["wet-mcp"])
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("sys.stdin.readline", lambda: "y\n")
+
+    exit_code = main(["--server", "wet-mcp"])
+
+    assert exit_code == 0
+    assert not cfg_file.exists()
 
 
 def test_main_kill_daemons_flag(monkeypatch):
