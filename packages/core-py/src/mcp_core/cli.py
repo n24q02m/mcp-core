@@ -197,11 +197,15 @@ def _build_doctor_handler(server_name: str) -> Callable[[argparse.Namespace], in
     return _handler
 
 
+ExtraHandler = Callable[[argparse.Namespace], int]
+ExtraSpec = ExtraHandler | tuple[Callable[[argparse.ArgumentParser], None], ExtraHandler]
+
+
 def build_cli(
     server_name: str,
     *,
     serve: Callable[[list[str]], int | None],
-    extra: dict[str, Callable[[argparse.Namespace], int]] | None = None,
+    extra: dict[str, ExtraSpec] | None = None,
     version: str | None = None,
 ) -> Callable[[list[str] | None], int]:
     """Build the console-script entry point for one MCP server.
@@ -212,15 +216,24 @@ def build_cli(
     do not consume it) so it is already threaded through for a future task
     that wants it.
 
-    ``extra`` handlers are registered as argument-less subcommands;
-    per-subcommand argument specs land with the per-server CLI work (WS-B2).
+    Each ``extra`` value is either a bare handler -- registered as an
+    argument-less subcommand, as before -- or a ``(configure, handler)``
+    tuple, where ``configure`` receives that subcommand's
+    ``argparse.ArgumentParser`` (to add positionals/flags) before argv is
+    parsed. Overriding a built-in name (``config``/``relay``/``doctor``) with
+    a tuple replaces that built-in's own argument wiring entirely.
     """
-    handlers: dict[str, Callable[[argparse.Namespace], int]] = {
+    handlers: dict[str, ExtraHandler] = {
         "config": _build_config_handler(server_name),
         "relay": _build_relay_handler(server_name),
         "doctor": _build_doctor_handler(server_name),
     }
-    handlers.update(extra or {})
+    configurers: dict[str, Callable[[argparse.ArgumentParser], None]] = {}
+    for name, spec in (extra or {}).items():
+        configure, handler = spec if isinstance(spec, tuple) else (None, spec)
+        handlers[name] = handler
+        if configure is not None:
+            configurers[name] = configure
 
     def run(argv: list[str] | None = None) -> int:
         if argv is None:
@@ -256,7 +269,9 @@ def build_cli(
             # fall through to argparse's own parser.error() -> SystemExit(2),
             # which is acceptable here -- distinct from the unknown-subcommand
             # case above, which already returns a clean rc 2 without raising.
-            if name == "config":
+            if name in configurers:
+                configurers[name](sub)
+            elif name == "config":
                 sub.add_argument("config_action", choices=["status", "delete"])
                 sub.add_argument("--yes", action="store_true", default=False)
             elif name == "relay":

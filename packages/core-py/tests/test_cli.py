@@ -158,6 +158,93 @@ def test_builtin_name_recognized_dispatches_to_real_handler(cli_storage):
     assert rc == 0
 
 
+def test_extra_subcommand_tuple_configures_positional_and_flag():
+    calls: list[argparse.Namespace] = []
+
+    def configure(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument("action", choices=["build", "embed"])
+        sub.add_argument("--full-rebuild", action="store_true", default=False)
+
+    def handler(ns: argparse.Namespace) -> int:
+        calls.append(ns)
+        return 0
+
+    run = build_cli("test-server", serve=lambda argv: None, extra={"graph": (configure, handler)})
+    rc = run(["graph", "build", "--full-rebuild"])
+
+    assert rc == 0
+    assert len(calls) == 1
+    assert calls[0].action == "build"
+    assert calls[0].full_rebuild is True
+
+
+def test_extra_subcommand_bare_callable_still_arg_less():
+    # Backward compat: a bare handler in `extra` (no tuple) keeps working
+    # exactly like before -- registered as an argument-less subcommand --
+    # even when another `extra` entry in the same dict uses the tuple form.
+    calls: list[argparse.Namespace] = []
+
+    def bare_handler(ns: argparse.Namespace) -> int:
+        calls.append(ns)
+        return 0
+
+    def configure(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument("--flag", action="store_true", default=False)
+
+    run = build_cli(
+        "test-server",
+        serve=lambda argv: None,
+        extra={"sync": bare_handler, "graph": (configure, lambda ns: 0)},
+    )
+    rc = run(["sync"])
+
+    assert rc == 0
+    assert len(calls) == 1
+    assert isinstance(calls[0], argparse.Namespace)
+
+
+def test_extra_subcommand_tuple_overrides_builtin_config_args():
+    calls: list[argparse.Namespace] = []
+
+    def configure(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument("--force", action="store_true", default=False)
+
+    def handler(ns: argparse.Namespace) -> int:
+        calls.append(ns)
+        return 0
+
+    run = build_cli("test-server", serve=lambda argv: None, extra={"config": (configure, handler)})
+    rc = run(["config", "--force"])
+
+    assert rc == 0
+    assert len(calls) == 1
+    assert calls[0].force is True
+    # The built-in config's own args (config_action/--yes) must not leak in --
+    # proof the custom `configure` fully replaced the built-in wiring rather
+    # than being layered on top of it.
+    assert not hasattr(calls[0], "config_action")
+    assert not hasattr(calls[0], "yes")
+
+
+def test_extra_subcommand_tuple_bad_args_exits_2():
+    def configure(sub: argparse.ArgumentParser) -> None:
+        sub.add_argument("action", choices=["build", "embed"])
+
+    run = build_cli("test-server", serve=lambda argv: None, extra={"graph": (configure, lambda ns: 0)})
+
+    with pytest.raises(SystemExit) as exc_info:
+        run(["graph", "bogus-action"])
+
+    assert exc_info.value.code == 2
+
+
+def test_build_cli_docstring_documents_tuple_extra_not_ws_b2_stub():
+    doc = build_cli.__doc__
+    assert doc is not None
+    assert "WS-B2" not in doc
+    assert "configure" in doc
+
+
 def test_serve_not_called_for_subcommand_dispatch():
     serve_calls: list[list[str]] = []
 
