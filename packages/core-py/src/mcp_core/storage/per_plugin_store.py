@@ -110,6 +110,7 @@ class PerPluginStore:
         if blob is None:
             return None
         if len(blob) < 13:
+            # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
             logger.error(
                 "Credential blob for %s is corrupt or the encryption key changed; "
                 "treating as not configured (re-run setup to restore)",
@@ -121,6 +122,7 @@ class PerPluginStore:
         try:
             plaintext = aesgcm.decrypt(nonce, ciphertext, None)
         except Exception:
+            # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
             logger.error(
                 "Credential blob for %s is corrupt or the encryption key changed; "
                 "treating as not configured (re-run setup to restore)",
