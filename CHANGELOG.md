@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.19.0-beta.4 (2026-07-11)
+
+### Bug Fixes
+
+- Use explicit narrowing in extra spec normalization for type checker
+  ([#635](https://github.com/n24q02m/mcp-core/pull/635),
+  [`927767e`](https://github.com/n24q02m/mcp-core/commit/927767e6354205cd31e7cedcb451dbafd6e45648))
+
+### Features
+
+- Argument specs for mcp_core.cli extra subcommands
+  ([#635](https://github.com/n24q02m/mcp-core/pull/635),
+  [`927767e`](https://github.com/n24q02m/mcp-core/commit/927767e6354205cd31e7cedcb451dbafd6e45648))
+
+- Support argument specs for extra cli subcommands
+  ([#635](https://github.com/n24q02m/mcp-core/pull/635),
+  [`927767e`](https://github.com/n24q02m/mcp-core/commit/927767e6354205cd31e7cedcb451dbafd6e45648))
+
+
 ## v1.19.0-beta.3 (2026-07-11)
 
 ### Bug Fixes
