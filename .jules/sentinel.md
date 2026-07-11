@@ -21,3 +21,7 @@
 **Vulnerability:** Missing X-Frame-Options header in the `htmlResponse` helper of the router allows clickjacking attacks by enabling the page to be embedded in an iframe.
 **Learning:** When serving custom HTML responses (e.g., error pages, setup forms) directly from server endpoints, they must explicitly include the `X-Frame-Options: DENY` HTTP header to prevent clickjacking.
 **Prevention:** Ensure all utility functions that generate HTML responses (like `htmlResponse`) automatically inject the `X-Frame-Options: DENY` header.
+## 2026-07-10 - [Insecure Directory Permissions Fix]
+**Vulnerability:** Directories for sensitive components (caches, configs, session locks, SQLite user stores) in both `core-py` and `core-ts` were created without explicit restrictive permissions in the initial `mkdir`/`mkdirSync` call, creating a Time-Of-Check to Time-Of-Use (TOCTOU) race condition window where the directories could be created with the system's default, more permissive umask.
+**Learning:** Depending on a subsequent `chmod` call to tighten directory permissions leaves a brief window where an attacker could access or modify the directory.
+**Prevention:** Always explicitly set the mode during directory creation (e.g., `mode=0o700` in Python's `mkdir`, `mode: 0o700` in Node.js's `mkdirSync`) when handling sensitive configuration or cache data.

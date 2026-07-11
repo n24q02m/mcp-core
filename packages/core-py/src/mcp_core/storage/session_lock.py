@@ -116,7 +116,7 @@ async def write_session_lock(server_name: str, info: SessionInfo) -> None:
         info: Session information to persist.
     """
     path = _lock_path(server_name)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     if path.parent.exists() and os.name != "nt":
         path.parent.chmod(0o700)
 
