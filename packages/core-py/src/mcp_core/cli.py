@@ -33,6 +33,7 @@ import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 from loguru import logger
 
@@ -230,10 +231,17 @@ def build_cli(
     }
     configurers: dict[str, Callable[[argparse.ArgumentParser], None]] = {}
     for name, spec in (extra or {}).items():
-        configure, handler = spec if isinstance(spec, tuple) else (None, spec)
-        handlers[name] = handler
-        if configure is not None:
-            configurers[name] = configure
+        # isinstance(spec, tuple) alone leaves ty unable to fully exclude the
+        # bare-ExtraHandler arm of the union (a Callable could in principle
+        # also subclass tuple), so the cast asserts what this API's contract
+        # already guarantees: a tuple spec here is always (configure, handler).
+        if isinstance(spec, tuple):
+            configure_fn, handler_fn = cast("tuple[Callable[[argparse.ArgumentParser], None], ExtraHandler]", spec)
+        else:
+            configure_fn, handler_fn = None, cast("ExtraHandler", spec)
+        handlers[name] = handler_fn
+        if configure_fn is not None:
+            configurers[name] = configure_fn
 
     def run(argv: list[str] | None = None) -> int:
         if argv is None:
