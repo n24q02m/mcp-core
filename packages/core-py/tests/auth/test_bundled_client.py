@@ -51,6 +51,13 @@ def test_cli_half_pair_raises(kwargs):
         resolve_bundled_client(SPEC, **kwargs)
 
 
+def test_cli_half_pair_raises_even_with_valid_env(monkeypatch):
+    monkeypatch.setenv(SPEC.env_id, "env-id")
+    monkeypatch.setenv(SPEC.env_secret, "env-secret")
+    with pytest.raises(ValueError, match="together"):
+        resolve_bundled_client(SPEC, cli_id="only-id")
+
+
 def test_env_half_pair_raises(monkeypatch):
     monkeypatch.setenv(SPEC.env_id, "only-id")
     with pytest.raises(ValueError, match="together"):
