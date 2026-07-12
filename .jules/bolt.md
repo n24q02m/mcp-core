@@ -17,3 +17,6 @@
 ## $(date +%Y-%m-%d) - [Optimize Dictionary Pruning]
 **Learning:** In Python, resetting a dictionary by creating a new one (e.g., using dict comprehension) and then using `clear` and `update` is O(N). For pruning scenarios where only a small number of items are deleted (e.g., expired sessions), it's faster to find the expired keys and delete them using `del dict[key]`, making it O(K).
 **Action:** Use targeted deletion (`del dict[key]`) over full dictionary rebuilds for pruning operations to achieve O(K) complexity instead of O(N-K).
+## $(date +%Y-%m-%d) - Optimize D1Backend executemany for non-INSERT statements
+**Learning:** D1Backend `executemany` was falling back to individual `execute` HTTP requests for non-INSERT batched statements, creating an N+1 query problem. Cloudflare D1 provides a `/batch` endpoint that accepts an array of JSON statements and executes them in a single request.
+**Action:** When working with batched database statements over HTTP, always check if the API supports a batch endpoint to avoid N+1 queries. We implemented this in `D1Backend` to use `/batch` for non-INSERTs while keeping the efficient `VALUES` string expansion for standard INSERTs.
