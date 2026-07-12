@@ -189,6 +189,14 @@ jobs:
       - name: Build and publish core-ts
         run: |
           cd packages/core-ts && bun run build
+          # package.json lists README.md in `files`, but core-ts has none of its
+          # own -- without this the tarball ships without one and npmjs.com shows
+          # "This package does not have a README" (the PyPI job already does this).
+          cp ../../README.md .
+          # Fail loudly rather than publish a package page that reads
+          # "This package does not have a README" to its ~2.5k weekly installs.
+          npm pack --dry-run --json | grep -q '"path": *"README.md"' \
+            || { echo "::error::README.md missing from the npm tarball -- refusing to publish"; exit 1; }
           VERSION=$(node -p "require('./package.json').version")
           if npm view @n24q02m/mcp-core@"$VERSION" version 2>/dev/null; then
             echo "core-ts@$VERSION already published, skipping"
