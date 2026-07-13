@@ -2,6 +2,40 @@
 
 <!-- version list -->
 
+## v1.19.0-beta.5 (2026-07-13)
+
+### Bug Fixes
+
+- Correct mention gate expression (balanced parens + precedence)
+  ([#645](https://github.com/n24q02m/mcp-core/pull/645),
+  [`b71f1fb`](https://github.com/n24q02m/mcp-core/commit/b71f1fb43994332e674a34c3d78afec0f9b7cbd9))
+
+- Gate oc mention job on comment author write access
+  ([#645](https://github.com/n24q02m/mcp-core/pull/645),
+  [`b71f1fb`](https://github.com/n24q02m/mcp-core/commit/b71f1fb43994332e674a34c3d78afec0f9b7cbd9))
+
+- Run opencode bot on hosted runners ([#643](https://github.com/n24q02m/mcp-core/pull/643),
+  [`2a7dd65`](https://github.com/n24q02m/mcp-core/commit/2a7dd65956e49de9993cb41127e3e5ef55cb7f85))
+
+- Ship the README in the core-ts npm tarball ([#639](https://github.com/n24q02m/mcp-core/pull/639),
+  [`e31b4bc`](https://github.com/n24q02m/mcp-core/commit/e31b4bce9b195027b5fa19a5b79982b2ed83084d))
+
+- **deps**: Lock file maintenance ([#641](https://github.com/n24q02m/mcp-core/pull/641),
+  [`1fd4a7c`](https://github.com/n24q02m/mcp-core/commit/1fd4a7cfd76972048c0b5be93822471437cbb4ee))
+
+- **deps**: Lock file maintenance ([#638](https://github.com/n24q02m/mcp-core/pull/638),
+  [`36b7d59`](https://github.com/n24q02m/mcp-core/commit/36b7d59c5c9b266f8b48be902a6d3dd6b1aa5543))
+
+- **deps**: Lock file maintenance ([#637](https://github.com/n24q02m/mcp-core/pull/637),
+  [`a9ec704`](https://github.com/n24q02m/mcp-core/commit/a9ec7046b373bf9125fff88f7177da032bdd059d))
+
+### Features
+
+- Elicit credential setup via url-mode elicitation with capability fallback
+  ([#646](https://github.com/n24q02m/mcp-core/pull/646),
+  [`00235ae`](https://github.com/n24q02m/mcp-core/commit/00235ae310489ffeef258a0dbc4a0b75b2cf8eac))
+
+
 ## v1.19.0-beta.4 (2026-07-11)
 
 ### Bug Fixes
