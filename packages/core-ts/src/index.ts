@@ -47,6 +47,7 @@ export {
 } from './relay/client.js'
 export {
   buildOpenRelayHandler,
+  type ElicitationServer,
   type OpenRelayHandlerOptions,
   type OpenRelayResult,
   registerOpenRelayTool,
