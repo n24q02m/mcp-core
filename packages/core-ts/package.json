@@ -7,7 +7,12 @@
     "model-context-protocol",
     "streamable-http",
     "oauth21",
-    "transport"
+    "transport",
+    "claude",
+    "cursor",
+    "copilot",
+    "codex",
+    "opencode"
   ],
   "author": {
     "name": "n24q02m",
