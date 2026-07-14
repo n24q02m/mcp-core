@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.19.0 (2026-07-14)
+
+### Bug Fixes
+
+- **core-py**: Stop CLI --help/--version from starting the server
+  ([#650](https://github.com/n24q02m/mcp-core/pull/650),
+  [`5585f99`](https://github.com/n24q02m/mcp-core/commit/5585f9916afa0d50f7960e7fb4348126d4d89e2e))
+
+- **deps**: Lock file maintenance ([#648](https://github.com/n24q02m/mcp-core/pull/648),
+  [`a479e23`](https://github.com/n24q02m/mcp-core/commit/a479e2333c10b411822ce1e0fbec6236f33159d0))
+
+### Features
+
+- Add AI client keywords to mcp-core for discoverability
+  ([#649](https://github.com/n24q02m/mcp-core/pull/649),
+  [`99ad744`](https://github.com/n24q02m/mcp-core/commit/99ad744127efd9c14885b094b430db29b40d9922))
+
+
 ## v1.19.0-beta.5 (2026-07-13)
 
 ### Bug Fixes
