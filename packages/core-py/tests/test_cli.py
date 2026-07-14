@@ -279,6 +279,117 @@ def test_serve_path_does_not_call_ensure_stderr_logging(monkeypatch):
     assert called == []
 
 
+# --- -h / --help -------------------------------------------------------------
+
+
+def test_help_flag_does_not_start_server_prints_usage_and_subcommands(capsys):
+    serve_calls: list[list[str]] = []
+
+    def fake_serve(argv: list[str]) -> None:
+        serve_calls.append(list(argv))
+        return None
+
+    run = build_cli("test-server", serve=fake_serve, extra={"sync": lambda ns: 0})
+    rc = run(["--help"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert serve_calls == []
+    assert "usage: test-server" in captured.out
+    for name in ("config", "relay", "doctor", "sync"):
+        assert name in captured.out
+
+
+def test_help_short_flag_behaves_identically_to_long_flag(capsys):
+    serve_calls: list[list[str]] = []
+
+    def fake_serve(argv: list[str]) -> None:
+        serve_calls.append(list(argv))
+        return None
+
+    run = build_cli("test-server", serve=fake_serve)
+    rc = run(["-h"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert serve_calls == []
+    assert "usage: test-server" in captured.out
+
+
+# --- --version ----------------------------------------------------------------
+
+
+def test_version_flag_with_version_set_prints_and_skips_serve(capsys):
+    serve_calls: list[list[str]] = []
+
+    def fake_serve(argv: list[str]) -> None:
+        serve_calls.append(list(argv))
+        return None
+
+    run = build_cli("test-server", serve=fake_serve, version="1.2.3")
+    rc = run(["--version"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert serve_calls == []
+    assert captured.out.strip() == "test-server 1.2.3"
+
+
+def test_version_flag_without_version_set_falls_through_to_serve():
+    serve_calls: list[list[str]] = []
+
+    def fake_serve(argv: list[str]) -> None:
+        serve_calls.append(list(argv))
+        return None
+
+    run = build_cli("test-server", serve=fake_serve)
+    rc = run(["--version"])
+
+    assert rc == 0
+    assert serve_calls == [["--version"]]
+
+
+# --- regression guard: pass-through / bare / subcommand paths unaffected -----
+
+
+def test_regression_http_flag_still_passes_through_to_serve():
+    serve_calls: list[list[str]] = []
+
+    def fake_serve(argv: list[str]) -> None:
+        serve_calls.append(list(argv))
+        return None
+
+    run = build_cli("test-server", serve=fake_serve)
+    rc = run(["--http"])
+
+    assert rc == 0
+    assert serve_calls == [["--http"]]
+
+
+def test_regression_bare_invocation_still_serves():
+    serve_calls: list[list[str]] = []
+
+    def fake_serve(argv: list[str]) -> None:
+        serve_calls.append(list(argv))
+        return None
+
+    run = build_cli("test-server", serve=fake_serve)
+    rc = run([])
+
+    assert rc == 0
+    assert serve_calls == [[]]
+
+
+def test_regression_config_subcommand_still_dispatches(cli_storage, capsys):
+    run = build_cli("test-server", serve=lambda argv: None)
+
+    rc = run(["config", "status"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "not configured" in captured.out
+
+
 # --- config status ----------------------------------------------------------
 
 

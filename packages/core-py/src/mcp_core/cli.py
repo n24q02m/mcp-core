@@ -6,7 +6,11 @@ behaviour for the two invocation shapes it already handles:
 
 - Bare invocation (``argv`` empty) still means "start the server".
 - Any flag-prefixed argv (``--http`` etc.) is passed through to ``serve``
-  byte-for-byte, so existing ``--http`` semantics are untouched.
+  byte-for-byte, so existing ``--http`` semantics are untouched -- except
+  ``-h``/``--help`` (always) and ``--version``/``-V`` (only when ``version``
+  is set), which are intercepted here and never reach ``serve``. Starting
+  the server on those would hang in stdio mode instead of printing the
+  requested output.
 
 A leading *positional* argv[0] is treated as a subcommand name — either one
 of the reserved built-ins (``config``/``relay``/``doctor``) or a
@@ -202,6 +206,14 @@ ExtraHandler = Callable[[argparse.Namespace], int]
 ExtraSpec = ExtraHandler | tuple[Callable[[argparse.ArgumentParser], None], ExtraHandler]
 
 
+def _print_cli_help(server_name: str, handlers: dict[str, ExtraHandler]) -> None:
+    """Print ``-h``/``--help`` output to stdout (never touches ``serve``)."""
+    names = ", ".join(sorted(handlers))
+    print(f"usage: {server_name} [-h] [--version] [<subcommand> ...]")
+    print("Any other flags/args are passed through to the MCP server (e.g. --http).")
+    print(f"subcommands: {names}")
+
+
 def build_cli(
     server_name: str,
     *,
@@ -213,9 +225,10 @@ def build_cli(
 
     ``extra`` subcommand names take precedence over the reserved built-ins,
     so a server (or a test) can supply its own ``doctor``/``config``/``relay``
-    handler instead. ``version`` is accepted here (the built-in handlers below
-    do not consume it) so it is already threaded through for a future task
-    that wants it.
+    handler instead. ``version``, when set, powers ``--version``/``-V``
+    (handled by ``run`` itself, before ``serve`` or any subcommand runs); when
+    ``version`` is ``None``, ``--version``/``-V`` falls through to ``serve``
+    like any other flag, unchanged from before.
 
     Each ``extra`` value is either a bare handler -- registered as an
     argument-less subcommand, as before -- or a ``(configure, handler)``
@@ -253,7 +266,19 @@ def build_cli(
 
         # Peek argv[0] before touching argparse at all: bare/flag argv must
         # never reach the subparsers below, or `--http` would be misread as
-        # an unrecognized option instead of passed through to `serve`.
+        # an unrecognized option instead of passed through to `serve`. Two
+        # standard flags are intercepted here rather than falling into the
+        # catch-all below: starting the server on `-h`/`--help`/`--version`
+        # would hang (stdio mode blocks on stdin) instead of printing the
+        # requested output.
+        if argv[0] in ("-h", "--help"):
+            _print_cli_help(server_name, handlers)
+            return 0
+
+        if version is not None and argv[0] in ("--version", "-V"):
+            print(f"{server_name} {version}")
+            return 0
+
         if argv[0].startswith("-"):
             rc = serve(argv)
             return 0 if rc is None else rc
