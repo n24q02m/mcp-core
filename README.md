@@ -33,6 +33,7 @@
 - [What you get](#what-you-get)
 - [Quick start (Python)](#quick-start-python)
 - [Quick start (TypeScript)](#quick-start-typescript)
+- [CLI](#cli)
 - [Documentation](#documentation)
 - [Development](#development)
 - [License](#license)
@@ -190,6 +191,95 @@ const middleware = new OAuthMiddleware({
 const http = new StreamableHTTPServer({ server, port: 9876, oauthMiddleware: middleware })
 await http.connect()
 // Then mount http.handleRequest(req, res) on your http.Server / Express / Hono.
+```
+
+## CLI
+
+`mcp_core.cli.build_cli` (re-exported as `from mcp_core import build_cli`) is the
+console-script builder every Python MCP server mounts as its entry point. It wraps
+a server's existing `serve(argv) -> int | None` function with subcommand dispatch,
+so every server exposes the **same** operator subcommands for free while `serve`'s
+own behaviour stays byte-for-byte unchanged. It has no TypeScript counterpart.
+
+A downstream server mounts it as its console script:
+
+```python
+# wet_mcp/cli.py
+from mcp_core import build_cli
+
+def main() -> int:
+    return build_cli("wet-mcp", serve=_serve, extra=_extras(), version=_version())(None)
+```
+
+```toml
+# pyproject.toml
+[project.scripts]
+wet-mcp = "wet_mcp.cli:main"
+```
+
+### Dispatch rules
+
+`build_cli(...)` returns `run(argv=None) -> int`, which inspects `argv[0]`:
+
+- **No args** — start the server (`serve([])`), the normal stdio launch.
+- **A flag** (`--http`, ...) — passed byte-for-byte to `serve`; existing flag
+  semantics are untouched.
+- **`-h` / `--help`** — print the subcommand list and exit without starting the
+  server (which would otherwise hang waiting on stdin in stdio mode).
+- **`--version` / `-V`** — print `<server> <version>`, but only when `version=` is
+  passed; otherwise it falls through to `serve` like any other flag.
+- **A positional name** — routed as a subcommand through argparse; an unknown name
+  exits `2`.
+
+STDOUT is the MCP protocol channel in stdio mode, so only the subcommand path prints
+to stdout: informational results (status, session details, `doctor`'s
+`[ok]`/`[warn]`/`[fail]` lines) go to stdout, while failures and prompts go to stderr
+with a non-zero exit code. Credential **values** are never printed — only names, keys,
+and status.
+
+### Built-in subcommands
+
+Every server gets three reserved subcommands without writing any code:
+
+| Subcommand | Purpose |
+|---|---|
+| `config status` | Report whether a config is stored: `configured`, `not configured`, or `corrupt` (undecryptable). |
+| `config delete [--yes]` | Delete the stored config. Prompts to confirm; `--yes` skips the prompt and is required in non-interactive mode. |
+| `relay status` | Show the active relay session (id prefix, relay URL, age) or report that none is active. |
+| `relay open` | Open the active relay URL in a browser. |
+| `relay reset` | Clear the relay session lock and the stored transport mode. |
+| `doctor` | Environment diagnostics — Python 3.13, credential-backend init, store-dir writability, config state, relay session, transport mode. Exits non-zero on any `[fail]`. |
+
+```bash
+wet-mcp doctor
+wet-mcp config status
+wet-mcp relay status
+```
+
+### Server-specific subcommands (`extra`)
+
+`build_cli(..., extra=...)` adds server-specific subcommands. Names in `extra` take
+precedence over the built-ins, so a server can replace `config` / `relay` / `doctor`
+with its own wiring. Each `extra` value is one of two shapes:
+
+```python
+ExtraHandler = Callable[[argparse.Namespace], int]
+ExtraSpec = ExtraHandler | tuple[Callable[[argparse.ArgumentParser], None], ExtraHandler]
+```
+
+- A **bare handler** — registered as an argument-less subcommand.
+- A **`(configure, handler)` tuple** — `configure` receives that subcommand's own
+  `argparse.ArgumentParser` to add positionals/flags before argv is parsed, then
+  `handler` receives the parsed `Namespace` and returns the exit code.
+
+wet-mcp, for example, registers one bare handler and two configured ones:
+
+```python
+extra = {
+    "warmup": _handle_warmup,                 # wet-mcp warmup
+    "auth": (_configure_auth, _handle_auth),  # wet-mcp auth google [--client-id ...]
+    "docs": (_configure_docs, _handle_docs),  # wet-mcp docs reindex <library>
+}
 ```
 
 ## Documentation
