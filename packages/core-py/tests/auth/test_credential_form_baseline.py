@@ -85,3 +85,29 @@ def test_card_form_declares_light_mode():
     html = render_credential_form(_CARD_SCHEMA, submit_url="/a")
     assert "@media (prefers-color-scheme: light)" in html
     assert html.count("@media (prefers-color-scheme: light)") >= 2
+
+
+# ---------------------------------------------------------------------------
+# WS3-7c: the shared form shell declares a Content-Security-Policy meta so the
+# self-contained page runs its own inline script/style but loads nothing
+# external. Applies to every form the shell renders (flat + tabs + cards).
+# ---------------------------------------------------------------------------
+
+_CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'"
+
+
+def test_flat_form_has_csp_meta():
+    html = render_credential_form(_BASELINE_SCHEMA, submit_url="/a")
+    assert f'<meta http-equiv="Content-Security-Policy" content="{_CSP}" />' in html
+
+
+def test_tab_form_has_csp_meta():
+    html = render_credential_form(_TABS_SCHEMA, submit_url="/a")
+    assert 'http-equiv="Content-Security-Policy"' in html
+    assert _CSP in html
+
+
+def test_card_form_has_csp_meta():
+    html = render_credential_form(_CARD_SCHEMA, submit_url="/a")
+    assert 'http-equiv="Content-Security-Policy"' in html
+    assert _CSP in html

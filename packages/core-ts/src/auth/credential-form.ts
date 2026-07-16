@@ -547,10 +547,15 @@ const FORM_SHELL_CSS = `        *, *::before, *::after {
 /**
  * Wrap `bodyHtml` in the shared dark-theme HTML shell.
  *
- * The shell provides `<!DOCTYPE html>`, `<head>` (charset, viewport, escaped
- * `<title>`, embedded `FORM_SHELL_CSS`) and a `<body>` whose only child is
- * `bodyHtml`. `bodyHtml` is inserted verbatim, so callers MUST pre-escape any
- * untrusted values they interpolate.
+ * The shell provides `<!DOCTYPE html>`, `<head>` (charset, viewport, a
+ * Content-Security-Policy meta, escaped `<title>`, embedded `FORM_SHELL_CSS`)
+ * and a `<body>` whose only child is `bodyHtml`. `bodyHtml` is inserted
+ * verbatim, so callers MUST pre-escape any untrusted values they interpolate.
+ *
+ * The CSP (`default-src 'none'; style-src 'unsafe-inline'; script-src
+ * 'unsafe-inline'; connect-src 'self'`) permits the page's own inline
+ * `<style>`/`<script>` and same-origin `fetch` submits while blocking any
+ * external resource load.
  *
  * `title` is HTML-escaped before being placed in `<title>`.
  *
@@ -567,6 +572,7 @@ export function renderFormShell(title: string, bodyHtml: string): string {
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'" />
     <title>${safeTitle}</title>
     <style>
 ${FORM_SHELL_CSS}    </style>

@@ -74,3 +74,37 @@ describe('light-mode support', () => {
     expect((html.match(/@media \(prefers-color-scheme: light\)/g) ?? []).length).toBeGreaterThanOrEqual(2)
   })
 })
+
+// WS3-7c: the shared form shell declares a Content-Security-Policy meta so the
+// self-contained page runs its own inline script/style but loads nothing
+// external. Applies to every form the shell renders (flat + tabs + cards).
+const CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'"
+
+describe('CSP meta', () => {
+  it('the flat form embeds the CSP meta', () => {
+    const html = renderCredentialForm(BASELINE_SCHEMA, { submitUrl: '/a' })
+    expect(html).toContain(`<meta http-equiv="Content-Security-Policy" content="${CSP}" />`)
+  })
+
+  it('the tab form embeds the CSP meta', () => {
+    const html = renderCredentialForm(
+      {
+        server: 's',
+        displayName: 'S',
+        tabs: [{ id: 'a', label: 'A', fields: [{ key: 'K', label: 'K', type: 'text' }] }]
+      },
+      { submitUrl: '/a' }
+    )
+    expect(html).toContain('http-equiv="Content-Security-Policy"')
+    expect(html).toContain(CSP)
+  })
+
+  it('the card form embeds the CSP meta', () => {
+    const html = renderCredentialForm(
+      { server: 's', displayName: 'S', cardGroup: { key: 'items', fields: [{ key: 'K', label: 'K', type: 'text' }] } },
+      { submitUrl: '/a' }
+    )
+    expect(html).toContain('http-equiv="Content-Security-Policy"')
+    expect(html).toContain(CSP)
+  })
+})
