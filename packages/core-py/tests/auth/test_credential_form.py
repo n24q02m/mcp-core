@@ -287,3 +287,44 @@ def test_prefill_empty_string_renders_no_value_attr():
     html = render_credential_form(schema, submit_url="/auth", prefill={"X": ""})
     block = html.split('name="X"')[1].split("/>")[0]
     assert "value=" not in block
+
+
+# ---------------------------------------------------------------------------
+# ``pattern`` attribute from a field's ``validation`` regex — parity with the
+# core-ts renderer (#656). Without it the declared regex is silently dropped
+# and never reaches the browser's native input validation.
+# ---------------------------------------------------------------------------
+
+
+def test_render_emits_pattern_when_validation_set():
+    """A field ``validation`` regex renders as the input's ``pattern`` attr."""
+    schema = {
+        "server": "test",
+        "displayName": "Test",
+        "fields": [{"key": "NOTION_TOKEN", "label": "Integration Token", "type": "password", "validation": "^(secret_|ntn_).+"}],
+    }
+    html = render_credential_form(schema, submit_url="/submit")
+    assert 'pattern="^(secret_|ntn_).+"' in html
+
+
+def test_render_escapes_validation_in_pattern_attr():
+    """The ``validation`` value is HTML-escaped so it cannot break out of the attr."""
+    schema = {
+        "server": "test",
+        "displayName": "Test",
+        "fields": [{"key": "X", "label": "X", "type": "text", "validation": '^"><script>.+'}],
+    }
+    html = render_credential_form(schema, submit_url="/submit")
+    assert 'pattern="^"><script>' not in html
+    assert 'pattern="^&quot;&gt;&lt;script&gt;.+"' in html
+
+
+def test_render_omits_pattern_without_validation():
+    """No ``validation`` -> no ``pattern`` attribute is emitted."""
+    schema = {
+        "server": "test",
+        "displayName": "Test",
+        "fields": [{"key": "PLAIN", "label": "Plain", "type": "text"}],
+    }
+    html = render_credential_form(schema, submit_url="/submit")
+    assert "pattern=" not in html
