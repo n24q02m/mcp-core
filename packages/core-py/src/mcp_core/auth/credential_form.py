@@ -813,6 +813,10 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
     )
 
     value_attr = f' value="{_escape(value)}"' if value else ""
+    # ``validation`` (a regex string) renders as the input's ``pattern`` attr so
+    # the browser applies it natively. Escaped so it cannot break out of the
+    # attribute. Parity with core-ts ``renderField`` (#656).
+    pattern_attr = f' pattern="{_escape(field["validation"])}"' if field.get("validation") else ""
 
     help_html = ""
     aria_describedby = ""
@@ -909,7 +913,7 @@ def _render_field(field: dict[str, Any], value: str = "") -> str:
                 autocomplete="off"
                 autocorrect="off"
                 autocapitalize="off"
-                spellcheck="false"{value_attr}{required_attr}{aria_describedby}
+                spellcheck="false"{value_attr}{pattern_attr}{required_attr}{aria_describedby}
             />
             {help_html}
         </div>"""
