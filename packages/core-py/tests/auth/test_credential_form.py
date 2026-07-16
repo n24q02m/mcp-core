@@ -301,7 +301,9 @@ def test_render_emits_pattern_when_validation_set():
     schema = {
         "server": "test",
         "displayName": "Test",
-        "fields": [{"key": "NOTION_TOKEN", "label": "Integration Token", "type": "password", "validation": "^(secret_|ntn_).+"}],
+        "fields": [
+            {"key": "NOTION_TOKEN", "label": "Integration Token", "type": "password", "validation": "^(secret_|ntn_).+"}
+        ],
     }
     html = render_credential_form(schema, submit_url="/submit")
     assert 'pattern="^(secret_|ntn_).+"' in html
