@@ -24,6 +24,14 @@ def test_username_field_present_when_enabled():
     assert "required" not in attrs  # optional field
 
 
+def test_username_field_help_text_uses_styled_class():
+    """The username help text must use the same styled class (.help-text) as
+    every other field's help text, not the undefined .field-help typo."""
+    html = render_credential_form(_USERNAME_SCHEMA, submit_url="/authorize?nonce=x", include_username_field=True)
+    assert '<p class="help-text">Leave blank for a one-off session.' in html
+    assert "field-help" not in html
+
+
 def test_render_form_posts_step_to_otp_url():
     """Step submit JS must fetch() with POST method targeting /otp URL."""
     schema = {"server": "test", "displayName": "Test", "fields": []}
