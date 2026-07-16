@@ -23,6 +23,32 @@ from mcp_core.relay.client import (
 from mcp_core.relay.wordlist import WORDLIST
 
 
+def _split_passphrase_words(passphrase: str) -> list[str]:
+    """Reconstruct the WORDLIST words composing a hyphen-joined Diceware passphrase.
+
+    A few WORDLIST entries contain an internal hyphen (e.g. "drop-down", "t-shirt"),
+    so a plain ``passphrase.split("-")`` cannot reliably recover word boundaries.
+    This performs a greedy longest-match tokenization against WORDLIST instead,
+    which also correctly counts repeated words (Diceware sampling is with
+    replacement, so a word may legitimately appear more than once).
+    """
+    segments = passphrase.split("-")
+    max_span = max(word.count("-") for word in WORDLIST) + 1
+    words: list[str] = []
+    i = 0
+    while i < len(segments):
+        for span in range(min(max_span, len(segments) - i), 0, -1):
+            candidate = "-".join(segments[i : i + span])
+            if candidate in WORDLIST:
+                words.append(candidate)
+                i += span
+                break
+        else:
+            msg = f"Could not tokenize passphrase segment at index {i}: {segments[i]!r}"
+            raise AssertionError(msg)
+    return words
+
+
 class TestWordlist:
     def test_contains_exactly_7776_words(self):
         assert len(WORDLIST) == 7776
@@ -47,22 +73,16 @@ class TestGeneratePassphrase:
 
     def test_respects_custom_word_count(self):
         passphrase = generate_passphrase(6)
-        # Verify by matching against wordlist — account for hyphenated words
-        found = [w for w in WORDLIST if w in passphrase]
-        assert len(found) >= 6
+        words = _split_passphrase_words(passphrase)
+        assert len(words) == 6
+        assert all(w in WORDLIST for w in words)
 
     def test_only_uses_words_from_wordlist(self):
-        word_set = set(WORDLIST)
         for _ in range(20):
             passphrase = generate_passphrase()
-            # Reconstruct words by checking which wordlist entries appear
-            remaining = passphrase
-            matched = 0
-            for word in sorted(word_set, key=len, reverse=True):
-                while str(word) in remaining:
-                    remaining = remaining.replace(str(word), "", 1)
-                    matched += 1
-            assert matched >= 4
+            words = _split_passphrase_words(passphrase)
+            assert len(words) == 4
+            assert all(w in WORDLIST for w in words)
 
     def test_produces_different_passphrases(self):
         results = {generate_passphrase() for _ in range(10)}
