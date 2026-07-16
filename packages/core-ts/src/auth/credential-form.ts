@@ -17,6 +17,8 @@ export interface ConfigField {
   helpText?: string
   helpUrl?: string
   required?: boolean
+  /** Regex string for client-side validation; rendered as the input's `pattern` attribute. */
+  validation?: string
 }
 
 /**
@@ -484,6 +486,7 @@ function renderField(field: ConfigField, value = ''): string {
     : '<span class="optional-badge" aria-hidden="true">Optional</span>'
 
   const valueAttr = value ? ` value="${escapeHtml(value)}"` : ''
+  const patternAttr = field.validation ? ` pattern="${escapeHtml(field.validation)}"` : ''
 
   let helpHtml = ''
   let ariaDescribedby = ''
@@ -511,7 +514,7 @@ function renderField(field: ConfigField, value = ''): string {
                 autocomplete="off"
                 autocorrect="off"
                 autocapitalize="off"
-                spellcheck="false"${valueAttr}${requiredAttr}${ariaDescribedby}
+                spellcheck="false"${valueAttr}${patternAttr}${requiredAttr}${ariaDescribedby}
             />
             ${helpHtml}
         </div>`
