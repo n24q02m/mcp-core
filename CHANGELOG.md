@@ -2,6 +2,46 @@
 
 <!-- version list -->
 
+## v1.20.0-beta.1 (2026-07-16)
+
+### Bug Fixes
+
+- Add CSP meta to credential form shell ([#657](https://github.com/n24q02m/mcp-core/pull/657),
+  [`f8f16bb`](https://github.com/n24q02m/mcp-core/commit/f8f16bb4dc55ad87ca5c91860e954e534aaa2f56))
+
+- Apply ruff format to pattern-attr parity test
+  ([#658](https://github.com/n24q02m/mcp-core/pull/658),
+  [`cdd5a75`](https://github.com/n24q02m/mcp-core/commit/cdd5a75e021db4cf2d8128afb623f8bdcbd26782))
+
+- Assert passphrase word count via separator so Diceware repeats do not flake
+  ([#655](https://github.com/n24q02m/mcp-core/pull/655),
+  [`f9db405`](https://github.com/n24q02m/mcp-core/commit/f9db405e0d86bad15c8bb56a37a2918efd94a321))
+
+- Emit pattern attribute from validation in core-py field renderer
+  ([#658](https://github.com/n24q02m/mcp-core/pull/658),
+  [`cdd5a75`](https://github.com/n24q02m/mcp-core/commit/cdd5a75e021db4cf2d8128afb623f8bdcbd26782))
+
+- Emit pattern attribute in renderField so field validation regex applies
+  ([#656](https://github.com/n24q02m/mcp-core/pull/656),
+  [`e1497a8`](https://github.com/n24q02m/mcp-core/commit/e1497a8480b4ba853ada205bdf4cc1650bdf163b))
+
+- Use styled help-text class for username field help
+  ([#654](https://github.com/n24q02m/mcp-core/pull/654),
+  [`ac2197f`](https://github.com/n24q02m/mcp-core/commit/ac2197f14d908f1392c7c0d57ac879a1c4fe028c))
+
+### Features
+
+- Document mcp_core CLI in README ([#653](https://github.com/n24q02m/mcp-core/pull/653),
+  [`042b038`](https://github.com/n24q02m/mcp-core/commit/042b038c55757294b0b35a5bd26d20ecce75f7a5))
+
+- Light mode support via prefers-color-scheme ([#657](https://github.com/n24q02m/mcp-core/pull/657),
+  [`f8f16bb`](https://github.com/n24q02m/mcp-core/commit/f8f16bb4dc55ad87ca5c91860e954e534aaa2f56))
+
+- Schema-level tabs and dynamic card groups in credential form renderer
+  ([#657](https://github.com/n24q02m/mcp-core/pull/657),
+  [`f8f16bb`](https://github.com/n24q02m/mcp-core/commit/f8f16bb4dc55ad87ca5c91860e954e534aaa2f56))
+
+
 ## v1.19.0 (2026-07-14)
 
 ### Bug Fixes
