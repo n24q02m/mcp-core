@@ -27,6 +27,60 @@ describe('renderCredentialForm', () => {
     expect(html).toContain('/authorize?nonce=abc')
   })
 
+  it('emits a pattern attribute when the field declares validation', () => {
+    // relay-schema fields can set `validation` (a regex string) for
+    // client-side input validation. Without this, the declared regex is
+    // silently dropped and never reaches the browser.
+    const html = renderCredentialForm(
+      {
+        server: 'test',
+        displayName: 'Test',
+        fields: [
+          {
+            key: 'NOTION_TOKEN',
+            label: 'Integration Token',
+            type: 'password',
+            validation: '^(secret_|ntn_).+'
+          }
+        ]
+      },
+      { submitUrl: '/submit' }
+    )
+    expect(html).toContain('pattern="^(secret_|ntn_).+"')
+  })
+
+  it('HTML-escapes the validation value in the pattern attribute', () => {
+    const html = renderCredentialForm(
+      {
+        server: 'test',
+        displayName: 'Test',
+        fields: [
+          {
+            key: 'X',
+            label: 'X',
+            type: 'text',
+            validation: '^"><script>.+'
+          }
+        ]
+      },
+      { submitUrl: '/submit' }
+    )
+    expect(html).not.toContain('pattern="^"><script>')
+    expect(html).toContain('pattern="^&quot;&gt;&lt;script&gt;.+"')
+  })
+
+  it('omits the pattern attribute when the field has no validation', () => {
+    const html = renderCredentialForm(
+      {
+        server: 'test',
+        displayName: 'Test',
+        fields: [{ key: 'PLAIN', label: 'Plain', type: 'text' }]
+      },
+      { submitUrl: '/submit' }
+    )
+    expect(html).not.toContain('pattern=')
+  })
+
   it('escapes XSS in displayName', () => {
     const html = renderCredentialForm(
       { server: 'test', displayName: '<script>alert("xss")</script>', fields: [] },
