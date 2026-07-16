@@ -43,3 +43,34 @@ describe('flat credential form backward-compat', () => {
     expect(html).not.toContain('card-group-container')
   })
 })
+
+// W4.4 light-mode: the shell + feature CSS declare a `prefers-color-scheme:
+// light` override and `color-scheme: light dark` so the form is legible in a
+// light OS theme instead of the previous dark-only hardcode.
+describe('light-mode support', () => {
+  it('the flat form declares light-mode CSS', () => {
+    const html = renderCredentialForm(BASELINE_SCHEMA, { submitUrl: '/a' })
+    expect(html).toContain('color-scheme: light dark')
+    expect(html).toContain('@media (prefers-color-scheme: light)')
+  })
+
+  it('the tab form declares shell + tab light overrides', () => {
+    const html = renderCredentialForm(
+      {
+        server: 's',
+        displayName: 'S',
+        tabs: [{ id: 'a', label: 'A', fields: [{ key: 'K', label: 'K', type: 'text' }] }]
+      },
+      { submitUrl: '/a' }
+    )
+    expect((html.match(/@media \(prefers-color-scheme: light\)/g) ?? []).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('the card form declares shell + card light overrides', () => {
+    const html = renderCredentialForm(
+      { server: 's', displayName: 'S', cardGroup: { key: 'items', fields: [{ key: 'K', label: 'K', type: 'text' }] } },
+      { submitUrl: '/a' }
+    )
+    expect((html.match(/@media \(prefers-color-scheme: light\)/g) ?? []).length).toBeGreaterThanOrEqual(2)
+  })
+})

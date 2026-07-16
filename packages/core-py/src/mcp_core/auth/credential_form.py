@@ -584,6 +584,73 @@ _FORM_SHELL_CSS = """        *, *::before, *::after {
             font-size: 0.8125rem;
             color: #9ca3af;
         }
+
+        :root {
+            color-scheme: light dark;
+        }
+
+        @media (prefers-color-scheme: light) {
+            body {
+                background-color: #f4f5f7;
+                color: #1f2937;
+            }
+            .card {
+                background-color: #ffffff;
+                border-color: #e5e7eb;
+            }
+            .server-name {
+                color: #111827;
+            }
+            .server-id,
+            .server-description,
+            .help-text,
+            .mc-badge,
+            .form-title,
+            .capabilities-title,
+            .capability-desc {
+                color: #6b7280;
+            }
+            .field-label,
+            .capability-label {
+                color: #374151;
+            }
+            .field-input {
+                background-color: #ffffff;
+                border-color: #d1d5db;
+                color: #1f2937;
+            }
+            .field-input::placeholder {
+                color: #9ca3af;
+            }
+            .field-input:disabled {
+                background-color: #f3f4f6;
+            }
+            .optional-badge {
+                color: #6b7280;
+                background-color: #f3f4f6;
+                border-color: #d1d5db;
+            }
+            .capability-item {
+                background-color: #f9fafb;
+                border-color: #e5e7eb;
+            }
+            .model-chain {
+                background: #f9fafb;
+                border-color: #d1d5db;
+            }
+            .mc-chip {
+                background: #eef1f6;
+                border-color: #d1d5db;
+            }
+            .mc-dropdown {
+                background: #ffffff;
+                border-color: #d1d5db;
+            }
+            .mc-dropdown label:hover,
+            .mc-dropdown label:focus-within {
+                background: #eef1f6;
+            }
+        }
 """
 
 
@@ -920,6 +987,20 @@ _TABS_CSS = """    <style>
         .tab-panel.active {
             display: block;
         }
+        @media (prefers-color-scheme: light) {
+            .tabs {
+                border-bottom-color: #e5e7eb;
+            }
+            .tab {
+                color: #6b7280;
+            }
+            .tab:not(:disabled):hover {
+                color: #374151;
+            }
+            .tab.active {
+                color: #111827;
+            }
+        }
     </style>
 """
 
@@ -990,6 +1071,15 @@ _CARD_GROUP_CSS = """    <style>
             opacity: 0.5;
             cursor: not-allowed;
             border-color: #2a3a4a;
+        }
+        @media (prefers-color-scheme: light) {
+            .card-group-item {
+                background-color: #f9fafb;
+                border-color: #e5e7eb;
+            }
+            .card-group-title {
+                color: #374151;
+            }
         }
     </style>
 """

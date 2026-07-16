@@ -48,3 +48,40 @@ def test_flat_form_has_no_feature_markup():
     assert 'role="tablist"' not in html
     assert "card-group-container" not in html
     assert "<style>" not in html.split("</head>")[1]  # no in-body feature <style>
+
+
+# ---------------------------------------------------------------------------
+# W4.4 light-mode: the shell + feature CSS declare a ``prefers-color-scheme:
+# light`` override and ``color-scheme: light dark`` so the form is legible in a
+# light OS theme instead of the previous dark-only hardcode.
+# ---------------------------------------------------------------------------
+
+_TABS_SCHEMA = {
+    "server": "s",
+    "displayName": "S",
+    "tabs": [{"id": "a", "label": "A", "fields": [{"key": "K", "label": "K", "type": "text"}]}],
+}
+_CARD_SCHEMA = {
+    "server": "s",
+    "displayName": "S",
+    "cardGroup": {"key": "items", "fields": [{"key": "K", "label": "K", "type": "text"}]},
+}
+
+
+def test_flat_form_declares_light_mode():
+    html = render_credential_form(_BASELINE_SCHEMA, submit_url="/a")
+    assert "color-scheme: light dark" in html
+    assert "@media (prefers-color-scheme: light)" in html
+
+
+def test_tab_form_declares_light_mode():
+    html = render_credential_form(_TABS_SCHEMA, submit_url="/a")
+    # Shell light block + tab-specific light overrides.
+    assert "@media (prefers-color-scheme: light)" in html
+    assert html.count("@media (prefers-color-scheme: light)") >= 2
+
+
+def test_card_form_declares_light_mode():
+    html = render_credential_form(_CARD_SCHEMA, submit_url="/a")
+    assert "@media (prefers-color-scheme: light)" in html
+    assert html.count("@media (prefers-color-scheme: light)") >= 2
