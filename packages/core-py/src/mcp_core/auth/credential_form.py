@@ -584,16 +584,89 @@ _FORM_SHELL_CSS = """        *, *::before, *::after {
             font-size: 0.8125rem;
             color: #9ca3af;
         }
+
+        :root {
+            color-scheme: light dark;
+        }
+
+        @media (prefers-color-scheme: light) {
+            body {
+                background-color: #f4f5f7;
+                color: #1f2937;
+            }
+            .card {
+                background-color: #ffffff;
+                border-color: #e5e7eb;
+            }
+            .server-name {
+                color: #111827;
+            }
+            .server-id,
+            .server-description,
+            .help-text,
+            .mc-badge,
+            .form-title,
+            .capabilities-title,
+            .capability-desc {
+                color: #6b7280;
+            }
+            .field-label,
+            .capability-label {
+                color: #374151;
+            }
+            .field-input {
+                background-color: #ffffff;
+                border-color: #d1d5db;
+                color: #1f2937;
+            }
+            .field-input::placeholder {
+                color: #9ca3af;
+            }
+            .field-input:disabled {
+                background-color: #f3f4f6;
+            }
+            .optional-badge {
+                color: #6b7280;
+                background-color: #f3f4f6;
+                border-color: #d1d5db;
+            }
+            .capability-item {
+                background-color: #f9fafb;
+                border-color: #e5e7eb;
+            }
+            .model-chain {
+                background: #f9fafb;
+                border-color: #d1d5db;
+            }
+            .mc-chip {
+                background: #eef1f6;
+                border-color: #d1d5db;
+            }
+            .mc-dropdown {
+                background: #ffffff;
+                border-color: #d1d5db;
+            }
+            .mc-dropdown label:hover,
+            .mc-dropdown label:focus-within {
+                background: #eef1f6;
+            }
+        }
 """
 
 
 def render_form_shell(title: str, body_html: str) -> str:
     """Wrap ``body_html`` in the shared dark-theme HTML shell.
 
-    The shell provides ``<!DOCTYPE html>``, ``<head>`` (charset, viewport,
-    escaped ``<title>``, embedded ``_FORM_SHELL_CSS``) and a ``<body>`` whose
-    only child is ``body_html``. ``body_html`` is inserted verbatim, so
-    callers MUST pre-escape any untrusted values they interpolate.
+    The shell provides ``<!DOCTYPE html>``, ``<head>`` (charset, viewport, a
+    Content-Security-Policy meta, escaped ``<title>``, embedded
+    ``_FORM_SHELL_CSS``) and a ``<body>`` whose only child is ``body_html``.
+    ``body_html`` is inserted verbatim, so callers MUST pre-escape any untrusted
+    values they interpolate.
+
+    The CSP (``default-src 'none'; style-src 'unsafe-inline'; script-src
+    'unsafe-inline'; connect-src 'self'``) permits the page's own inline
+    ``<style>``/``<script>`` (the form is self-contained by design) and its
+    same-origin ``fetch`` submits, while blocking any external resource load.
 
     ``title`` is HTML-escaped before being placed in ``<title>``.
 
@@ -609,6 +682,7 @@ def render_form_shell(title: str, body_html: str) -> str:
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'" />
     <title>{safe_title}</title>
     <style>
 {_FORM_SHELL_CSS}    </style>
@@ -859,6 +933,935 @@ def _render_capability(cap: dict[str, Any]) -> str:
             </li>"""
 
 
+# ===========================================================================
+# Schema-level tabs + dynamic card group (W4.1)
+# ---------------------------------------------------------------------------
+# Two OPT-IN capabilities that let servers declare richer credential UIs
+# through the schema alone (no forked renderer):
+#   * ``tabs``      -> mutually-exclusive credential modes (e.g. telegram
+#                      bot-token vs phone/OTP), only the active tab submits.
+#   * ``cardGroup`` -> a repeatable field group with Add/Remove (e.g. email
+#                      multi-account), submitted as a JSON array.
+# A schema that declares NEITHER key renders through the unchanged flat-field
+# path in ``render_credential_form`` below, byte-for-byte identical to before,
+# so every existing server (wet, mnemo, crg, notion, ...) is unaffected. The
+# feature CSS ships as a ``<style>`` block inside the body — only when the
+# feature is used — so the shared ``_FORM_SHELL_CSS`` (and the flat form) stay
+# untouched. Kept in parity with core-ts ``credential-form.ts``.
+# ===========================================================================
+
+# Tab CSS (scoped ``.tabs``/``.tab``/``.tab-panel``); emitted in-body only for
+# tabbed forms. Palette mirrors the shared shell so tabs blend into the card.
+_TABS_CSS = """    <style>
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .tab {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s ease, border-color 0.15s ease;
+            font-family: inherit;
+        }
+        .tab:not(:disabled):hover {
+            color: #ccc;
+        }
+        .tab:focus-visible {
+            outline: 2px solid #4a6fa5;
+            outline-offset: -2px;
+            border-radius: 4px;
+        }
+        .tab.active {
+            color: #fff;
+            border-bottom-color: #4a6fa5;
+        }
+        .tab:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .tab-panel {
+            display: none;
+        }
+        .tab-panel.active {
+            display: block;
+        }
+        @media (prefers-color-scheme: light) {
+            .tabs {
+                border-bottom-color: #e5e7eb;
+            }
+            .tab {
+                color: #6b7280;
+            }
+            .tab:not(:disabled):hover {
+                color: #374151;
+            }
+            .tab.active {
+                color: #111827;
+            }
+        }
+    </style>
+"""
+
+# Card-group CSS (scoped ``.card-group-*``); emitted in-body only for card
+# forms. ``.card-group-item`` avoids the shell's ``.card`` name deliberately.
+_CARD_GROUP_CSS = """    <style>
+        .card-group-item {
+            border: 1px solid #2a2a2a;
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 0.875rem;
+            background-color: #121212;
+        }
+        .card-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .card-group-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #ddd;
+            max-width: 300px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .card-group-remove {
+            background: transparent;
+            color: #f87171;
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            border-radius: 6px;
+            padding: 0.25rem 0.6rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-family: inherit;
+        }
+        .card-group-remove:hover:not(:disabled) {
+            background-color: rgba(248, 113, 113, 0.08);
+        }
+        .card-group-remove:focus-visible {
+            outline: 2px solid #f87171;
+            outline-offset: 2px;
+        }
+        .card-group-add {
+            width: 100%;
+            background-color: transparent;
+            color: #6c9bd2;
+            border: 1px dashed #3a5a8a;
+            border-radius: 8px;
+            padding: 0.625rem 1rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+            font-family: inherit;
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .card-group-add:hover:not(:disabled) {
+            background-color: rgba(108, 155, 210, 0.08);
+            border-color: #4a6fa5;
+        }
+        .card-group-add:focus-visible {
+            outline: 2px solid #6c9bd2;
+            outline-offset: 2px;
+        }
+        .card-group-add:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #2a3a4a;
+        }
+        @media (prefers-color-scheme: light) {
+            .card-group-item {
+                background-color: #f9fafb;
+                border-color: #e5e7eb;
+            }
+            .card-group-title {
+                color: #374151;
+            }
+        }
+    </style>
+"""
+
+# Multi-step (OTP / 2FA) step-input UI, shared by tab forms. Written as a plain
+# (non-f) string so JS braces need no escaping. Mirrors the flat form's
+# ``showStepInput``/``submitStep`` semantics (same ``/otp`` POST, same
+# redirect-follow on completion) so a tabbed server's phone->OTP->2FA chain
+# behaves identically to the default form.
+_STEP_UI_JS = """
+            function showStepInput(ns) {
+                if (form && form.style.display !== "none") { form.style.display = "none"; }
+                var tabsEl = document.querySelector(".tabs");
+                if (tabsEl) { tabsEl.style.display = "none"; }
+                var container = document.getElementById("step-container");
+                var promptEl, inputEl, buttonEl, errorEl;
+                if (container) {
+                    promptEl = document.getElementById("step-prompt");
+                    inputEl = document.getElementById("step-input");
+                    buttonEl = document.getElementById("step-submit");
+                    errorEl = document.getElementById("step-error");
+                    errorEl.style.display = "none"; errorEl.textContent = "";
+                    inputEl.value = ""; inputEl.disabled = false;
+                    buttonEl.disabled = false; buttonEl.removeAttribute("aria-busy"); buttonEl.textContent = "Verify";
+                } else {
+                    var card = form.parentNode;
+                    container = document.createElement("div"); container.id = "step-container";
+                    promptEl = document.createElement("label"); promptEl.id = "step-prompt";
+                    promptEl.setAttribute("for", "step-input"); promptEl.className = "form-title";
+                    container.appendChild(promptEl);
+                    var fieldGroup = document.createElement("div"); fieldGroup.className = "field-group";
+                    inputEl = document.createElement("input"); inputEl.id = "step-input"; inputEl.className = "field-input";
+                    inputEl.setAttribute("autocomplete", "off"); inputEl.setAttribute("autocorrect", "off");
+                    inputEl.setAttribute("autocapitalize", "off"); inputEl.setAttribute("spellcheck", "false");
+                    fieldGroup.appendChild(inputEl); container.appendChild(fieldGroup);
+                    buttonEl = document.createElement("button"); buttonEl.type = "button"; buttonEl.id = "step-submit";
+                    buttonEl.className = "submit-btn"; buttonEl.textContent = "Verify"; container.appendChild(buttonEl);
+                    errorEl = document.createElement("div"); errorEl.id = "step-error"; errorEl.className = "status-box error";
+                    errorEl.setAttribute("role", "alert"); errorEl.style.display = "none"; container.appendChild(errorEl);
+                    card.appendChild(container);
+                    buttonEl.addEventListener("click", function () { submitStep(); });
+                    inputEl.addEventListener("keydown", function (evt) { if (evt.key === "Enter") { evt.preventDefault(); submitStep(); } });
+                    inputEl.addEventListener("input", function () { inputEl.removeAttribute("aria-invalid"); inputEl.removeAttribute("aria-errormessage"); errorEl.style.display = "none"; });
+                }
+                promptEl.textContent = ns.text || "";
+                inputEl.setAttribute("type", ns.input_type || "text");
+                inputEl.setAttribute("placeholder", ns.placeholder || "");
+                inputEl.dataset.field = ns.field || "value";
+                inputEl.focus();
+            }
+            function submitStep() {
+                var inputEl = document.getElementById("step-input");
+                var buttonEl = document.getElementById("step-submit");
+                var errorEl = document.getElementById("step-error");
+                var fieldName = inputEl.dataset.field || "value";
+                var value = inputEl.value;
+                inputEl.removeAttribute("aria-invalid");
+                if (value.trim() === "") {
+                    errorEl.textContent = "Please enter a value."; errorEl.style.display = "block";
+                    inputEl.setAttribute("aria-invalid", "true"); inputEl.setAttribute("aria-errormessage", "step-error");
+                    inputEl.focus(); return;
+                }
+                errorEl.style.display = "none"; errorEl.textContent = "";
+                buttonEl.disabled = true; buttonEl.textContent = "Verifying..."; buttonEl.setAttribute("aria-busy", "true");
+                inputEl.disabled = true;
+                var body = {}; body[fieldName] = value;
+                fetch(otpUrl(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+                    .then(function (response) { return response.json().then(function (data) {
+                        if (data.ok) {
+                            if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {
+                                showStepInput(data.next_step);
+                            } else if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) {
+                                var c = document.getElementById("step-container"); while (c.firstChild) { c.removeChild(c.firstChild); }
+                                var done = document.createElement("div"); done.className = "status-box success"; done.style.display = "block";
+                                done.setAttribute("role", "alert"); done.textContent = "Setup complete! Redirecting..."; c.appendChild(done);
+                                window.location.replace(data.redirect_url);
+                            } else {
+                                var c2 = document.getElementById("step-container"); while (c2.firstChild) { c2.removeChild(c2.firstChild); }
+                                var done2 = document.createElement("div"); done2.className = "status-box success"; done2.style.display = "block";
+                                done2.setAttribute("role", "alert"); done2.textContent = "Setup complete! You can close this tab."; c2.appendChild(done2);
+                            }
+                        } else {
+                            errorEl.textContent = data.error || data.error_description || "Verification failed."; errorEl.style.display = "block";
+                            inputEl.disabled = false; inputEl.setAttribute("aria-invalid", "true"); inputEl.setAttribute("aria-errormessage", "step-error");
+                            buttonEl.disabled = false; buttonEl.textContent = "Verify"; buttonEl.removeAttribute("aria-busy"); inputEl.focus();
+                        }
+                    }); })
+                    .catch(function (err) {
+                        errorEl.textContent = "Network error: " + err.message; errorEl.style.display = "block";
+                        inputEl.disabled = false; inputEl.setAttribute("aria-invalid", "true"); inputEl.setAttribute("aria-errormessage", "step-error");
+                        buttonEl.disabled = false; buttonEl.textContent = "Verify"; buttonEl.removeAttribute("aria-busy"); inputEl.focus();
+                    });
+            }
+"""
+
+
+def _resolve_active_tab(tabs: list[dict[str, Any]], initial_tab: str | None) -> str:
+    """Return the id of the tab that should render active on load.
+
+    Defaults to the first tab. ``initial_tab`` (a server-computed hint, e.g.
+    telegram opening the phone tab when only a phone was prefilled) wins when
+    it names a real tab; an unknown hint falls back to the first tab.
+    """
+    ids = [str(t.get("id", "")) for t in tabs]
+    if initial_tab is not None and initial_tab in ids:
+        return initial_tab
+    return ids[0] if ids else ""
+
+
+def _render_tabbed_credential_form(
+    schema: dict[str, Any],
+    *,
+    submit_url: str,
+    page_title: str | None,
+    prefill: dict[str, str] | None,
+    include_username_field: bool,
+    initial_tab: str | None,
+) -> str:
+    """Render a credential form whose fields are split across mutually-exclusive tabs.
+
+    Only the active tab's fields are collected on submit, so a schema can offer
+    several credential modes (each a tab) without the inactive mode's fields
+    leaking into the POST. Multi-step (OTP / 2FA) chaining works exactly as the
+    flat form. See ``_TABS_CSS`` / ``_STEP_UI_JS``.
+    """
+    display_name = _escape(schema.get("displayName", schema.get("server", "Configuration")))
+    server = _escape(schema.get("server", ""))
+    description = _escape(schema.get("description", ""))
+    title = page_title if page_title is not None else schema.get("displayName", schema.get("server", "Configuration"))
+    submit_url_escaped = _escape(submit_url)
+    prefill = prefill or {}
+
+    tabs: list[dict[str, Any]] = schema.get("tabs", [])
+    active_id = _resolve_active_tab(tabs, initial_tab)
+
+    tab_buttons = []
+    tab_panels = []
+    for tab in tabs:
+        tid = _escape(tab.get("id", ""))
+        label = _escape(tab.get("label", ""))
+        is_active = tab.get("id", "") == active_id
+        active_cls = " active" if is_active else ""
+        aria_selected = "true" if is_active else "false"
+        tabindex = "0" if is_active else "-1"
+        tab_buttons.append(
+            f'<button type="button" id="tab-{tid}" class="tab{active_cls}" data-tab="{tid}"'
+            f' role="tab" aria-selected="{aria_selected}" tabindex="{tabindex}"'
+            f' aria-controls="panel-{tid}">{label}</button>'
+        )
+        panel_fields = "".join(_render_field(f, prefill.get(f.get("key", ""), "")) for f in tab.get("fields", []))
+        tab_panels.append(
+            f'<div id="panel-{tid}" class="tab-panel{active_cls}" data-panel="{tid}"'
+            f' role="tabpanel" aria-labelledby="tab-{tid}">{panel_fields}\n                </div>'
+        )
+
+    tabs_html = "\n                ".join(tab_buttons)
+    panels_html = "\n                ".join(tab_panels)
+
+    username_html = _username_field_html() if include_username_field else ""
+
+    capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
+    capabilities_html = ""
+    if capability_info:
+        items_html = "".join(_render_capability(c) for c in capability_info)
+        capabilities_html = f"""
+        <section class="capabilities-section" aria-labelledby="capabilities-title">
+            <h2 class="capabilities-title" id="capabilities-title">Capabilities Requested</h2>
+            <ul class="capabilities-list">{items_html}
+            </ul>
+        </section>"""
+
+    description_html = f'<p class="server-description" id="server-desc">{description}</p>' if description else ""
+
+    script = _TABS_SCRIPT.replace("__SUBMIT_URL__", submit_url_escaped).replace("__INITIAL_TAB__", active_id)
+
+    body_html = f"""{_TABS_CSS}    <div class="container">
+        <div class="card">
+            <div class="server-header">
+                <h1 class="server-name">{display_name}</h1>
+                <div class="server-id">{server}</div>
+                {description_html}
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Credential mode">
+                {tabs_html}
+            </div>
+
+            <form id="credential-form" novalidate>
+                {username_html}{panels_html}
+
+                <button type="submit" class="submit-btn" id="submit-btn">Connect</button>
+
+                <div class="status-box" id="status-box" role="alert"></div>
+            </form>
+        </div>
+        {capabilities_html}
+    </div>
+{script}"""
+
+    return render_form_shell(title, body_html)
+
+
+# Tab form behaviour: tab switching (click + ARIA-tablist arrow keys), then a
+# submit that collects ONLY the active panel's fields. ``__SUBMIT_URL__`` and
+# ``__INITIAL_TAB__`` are substituted at render time; ``_STEP_UI_JS`` is spliced
+# in for OTP/2FA support.
+_TABS_SCRIPT = (
+    """    <script>
+        (function () {
+            var form = document.getElementById("credential-form");
+            var submitBtn = document.getElementById("submit-btn");
+            var statusBox = document.getElementById("status-box");
+            var submitUrl = "__SUBMIT_URL__";
+            var activeTab = "__INITIAL_TAB__";
+            var tabs = document.querySelectorAll(".tab");
+            var tabsArray = Array.prototype.slice.call(tabs);
+            var pendingRedirectUrl = null;
+
+            function showStatus(type, message) {
+                statusBox.className = "status-box " + type;
+                statusBox.textContent = message;
+                statusBox.style.display = "block";
+            }
+            function otpUrl() {
+                return submitUrl.replace(/\\/authorize.*/, "/otp");
+            }
+"""
+    + _STEP_UI_JS
+    + """
+            tabs.forEach(function (tab, index) {
+                tab.addEventListener("click", function () {
+                    if (tab.disabled) { return; }
+                    activeTab = tab.dataset.tab;
+                    tabs.forEach(function (t) {
+                        t.classList.remove("active");
+                        t.setAttribute("aria-selected", "false");
+                        t.setAttribute("tabindex", "-1");
+                    });
+                    tab.classList.add("active");
+                    tab.setAttribute("aria-selected", "true");
+                    tab.setAttribute("tabindex", "0");
+                    document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.remove("active"); });
+                    var panel = document.querySelector('.tab-panel[data-panel="' + activeTab + '"]');
+                    if (panel) { panel.classList.add("active"); }
+                    statusBox.style.display = "none";
+                    statusBox.textContent = "";
+                    form.querySelectorAll(".field-input").forEach(function (i) { i.removeAttribute("aria-invalid"); });
+                });
+                tab.addEventListener("keydown", function (e) {
+                    var targetIndex = -1;
+                    if (e.key === "ArrowRight") { targetIndex = index + 1; if (targetIndex >= tabsArray.length) { targetIndex = 0; } }
+                    else if (e.key === "ArrowLeft") { targetIndex = index - 1; if (targetIndex < 0) { targetIndex = tabsArray.length - 1; } }
+                    if (targetIndex !== -1) { e.preventDefault(); tabsArray[targetIndex].focus(); tabsArray[targetIndex].click(); }
+                });
+            });
+
+            form.addEventListener("input", function (event) {
+                if (event.target.classList.contains("field-input")) {
+                    event.target.removeAttribute("aria-invalid");
+                    event.target.removeAttribute("aria-errormessage");
+                    statusBox.style.display = "none";
+                }
+            });
+
+            form.addEventListener("submit", function (event) {
+                event.preventDefault();
+                var activePanel = document.querySelector(".tab-panel.active");
+                var inputs = activePanel ? activePanel.querySelectorAll(".field-input") : [];
+                var payload = {};
+                var valid = true;
+                var firstInvalid = null;
+                inputs.forEach(function (input) {
+                    if (input.hasAttribute("required") && input.value.trim() === "") {
+                        valid = false;
+                        input.setAttribute("aria-invalid", "true");
+                        input.setAttribute("aria-errormessage", "status-box");
+                        if (!firstInvalid) { firstInvalid = input; }
+                    } else {
+                        input.removeAttribute("aria-invalid");
+                        input.removeAttribute("aria-errormessage");
+                        payload[input.name] = input.value;
+                    }
+                });
+                if (!valid) {
+                    showStatus("error", "Please fill in all required fields.");
+                    if (firstInvalid) { firstInvalid.focus(); }
+                    return;
+                }
+                submitBtn.disabled = true;
+                submitBtn.textContent = "Connecting...";
+                submitBtn.setAttribute("aria-busy", "true");
+                statusBox.style.display = "none";
+                tabs.forEach(function (t) { t.disabled = true; });
+                function reenable() {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = "Connect";
+                    submitBtn.removeAttribute("aria-busy");
+                    form.querySelectorAll(".field-input").forEach(function (i) { i.disabled = false; });
+                    tabs.forEach(function (t) { t.disabled = false; });
+                }
+                function lockConnected() {
+                    form.querySelectorAll(".field-input").forEach(function (i) { i.disabled = true; });
+                    submitBtn.disabled = true;
+                    submitBtn.removeAttribute("aria-busy");
+                    submitBtn.textContent = "Connected";
+                }
+                fetch(submitUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+                    .then(function (response) { return response.json().then(function (data) {
+                        if (data.ok) {
+                            if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) { pendingRedirectUrl = data.redirect_url; }
+                            if (data.next_step && (data.next_step.type === "otp_required" || data.next_step.type === "password_required")) {
+                                statusBox.style.display = "none";
+                                showStepInput(data.next_step);
+                            } else if (data.next_step && data.next_step.type === "info") {
+                                lockConnected();
+                                showStatus("success", data.next_step.message || "Setup saved. Additional steps may be required.");
+                            } else if (pendingRedirectUrl) {
+                                lockConnected();
+                                showStatus("success", "Credentials saved. Redirecting...");
+                                window.location.replace(pendingRedirectUrl);
+                            } else {
+                                lockConnected();
+                                showStatus("success", data.message || "Connected successfully. You can close this window.");
+                            }
+                        } else {
+                            showStatus("error", data.error || data.error_description || "Request failed.");
+                            reenable();
+                        }
+                    }); })
+                    .catch(function (err) {
+                        showStatus("error", "Network error: " + err.message);
+                        reenable();
+                    });
+            });
+        })();
+    </script>"""
+)
+
+
+def _username_field_html() -> str:
+    """Optional workspace-username field shared by the flat + feature forms.
+
+    Carries the ``.field-input`` class so the form's collector picks it up into
+    the POST as ``__sub_username`` (the local OAuth AS pops it to derive a
+    STABLE sub). Optional, so it never blocks submit.
+    """
+    return (
+        '<div class="field-group">'
+        '<label for="field-__sub_username" class="field-label">Workspace / username'
+        ' <span class="optional-badge" aria-hidden="true">Optional</span></label>'
+        '<input id="field-__sub_username" type="text" name="__sub_username"'
+        ' class="field-input" placeholder="e.g. alice"'
+        ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />'
+        '<p class="help-text">Leave blank for a one-off session. Set the same value on'
+        " every device to keep your saved data (one shared bucket per username).</p>"
+        "</div>"
+    )
+
+
+def _render_card_group_credential_form(
+    schema: dict[str, Any],
+    *,
+    submit_url: str,
+    page_title: str | None,
+    prefill: dict[str, str] | None,
+    include_username_field: bool,
+) -> str:
+    """Render a credential form built around one repeatable card group.
+
+    The group's fields are cloned per card (Add/Remove) and submitted as a JSON
+    array under the group ``key`` (e.g. ``{"accounts": [{"email": "...", ...}]}``).
+    An Outlook-style device-code follow-up is supported via the response handler.
+    See ``_CARD_GROUP_CSS`` / ``_CARD_GROUP_SCRIPT``.
+    """
+    display_name = _escape(schema.get("displayName", schema.get("server", "Configuration")))
+    server = _escape(schema.get("server", ""))
+    description = _escape(schema.get("description", ""))
+    title = page_title if page_title is not None else schema.get("displayName", schema.get("server", "Configuration"))
+    submit_url_escaped = _escape(submit_url)
+
+    group: dict[str, Any] = schema.get("cardGroup", {})
+    group_key = str(group.get("key", "items"))
+    item_label = str(group.get("itemLabel", "Item"))
+    add_label = _escape(group.get("addButtonLabel", "+ Add"))
+    min_items = int(group.get("minItems", 1))
+    title_field = str(group.get("titleField", ""))
+    group_heading = _escape(group.get("heading", item_label + "s"))
+    fields = group.get("fields", [])
+
+    # Field spec drives the client-side card builder. Compact separators match
+    # JS ``JSON.stringify`` byte-for-byte (core-ts parity); ``<`` is escaped to
+    # ``<`` so the JSON cannot terminate the surrounding <script> early.
+    fields_json = json.dumps(fields, separators=(",", ":")).replace("<", "\\u003c")
+
+    username_html = _username_field_html() if include_username_field else ""
+
+    capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
+    capabilities_html = ""
+    if capability_info:
+        items_html = "".join(_render_capability(c) for c in capability_info)
+        capabilities_html = f"""
+        <section class="capabilities-section" aria-labelledby="capabilities-title">
+            <h2 class="capabilities-title" id="capabilities-title">Capabilities Requested</h2>
+            <ul class="capabilities-list">{items_html}
+            </ul>
+        </section>"""
+
+    description_html = f'<p class="server-description" id="server-desc">{description}</p>' if description else ""
+
+    # ``__CARD_FIELDS__`` (the only placeholder carrying user-controlled JSON) is
+    # substituted LAST so a crafted field value cannot be mistaken for another
+    # placeholder token.
+    script = (
+        _CARD_GROUP_SCRIPT.replace("__SUBMIT_URL__", submit_url_escaped)
+        .replace("__GROUP_KEY__", _js_string(group_key))
+        .replace("__TITLE_FIELD__", _js_string(title_field))
+        .replace("__ITEM_LABEL__", _js_string(item_label))
+        .replace("__MIN_ITEMS__", str(min_items))
+        .replace("__CARD_FIELDS__", fields_json)
+    )
+
+    body_html = f"""{_CARD_GROUP_CSS}    <div class="container">
+        <div class="card">
+            <div class="server-header">
+                <h1 class="server-name">{display_name}</h1>
+                <div class="server-id">{server}</div>
+                {description_html}
+            </div>
+
+            <h2 class="form-title" id="form-title">{group_heading}</h2>
+
+            <form id="credential-form" aria-labelledby="form-title" novalidate>
+                <fieldset id="form-fieldset" style="border: none; padding: 0; margin: 0;">
+                    {username_html}<div id="card-group-container"></div>
+
+                    <button type="button" class="card-group-add" id="card-group-add">{add_label}</button>
+
+                    <button type="submit" class="submit-btn" id="submit-btn">Connect</button>
+                </fieldset>
+
+                <div class="status-box" id="status-box" role="alert"></div>
+            </form>
+        </div>
+        {capabilities_html}
+    </div>
+{script}"""
+
+    return render_form_shell(title, body_html)
+
+
+def _js_string(value: str) -> str:
+    """Escape a Python string for safe embedding inside a double-quoted JS literal."""
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("<", "\\u003c")
+
+
+# Card-group behaviour: a JS builder that clones the declared fields per card,
+# Add/Remove with focus management, and a submit that serialises every card into
+# a JSON array under ``__GROUP_KEY__``. All DOM is built with
+# createElement/textContent/setAttribute (no innerHTML with user values).
+# Placeholders substituted at render: ``__SUBMIT_URL__`` (HTML-escaped),
+# ``__CARD_FIELDS__`` (JSON), ``__GROUP_KEY__``/``__TITLE_FIELD__``/``__ITEM_LABEL__``
+# (JS string literals), ``__MIN_ITEMS__`` (int).
+_CARD_GROUP_SCRIPT = """    <script>
+        (function () {
+            var submitUrl = "__SUBMIT_URL__";
+            var CARD_FIELDS = __CARD_FIELDS__;
+            var GROUP_KEY = "__GROUP_KEY__";
+            var TITLE_FIELD = "__TITLE_FIELD__";
+            var ITEM_LABEL = "__ITEM_LABEL__";
+            var MIN_ITEMS = __MIN_ITEMS__;
+
+            var container = document.getElementById("card-group-container");
+            var addBtn = document.getElementById("card-group-add");
+            var form = document.getElementById("credential-form");
+            var submitBtn = document.getElementById("submit-btn");
+            var statusBox = document.getElementById("status-box");
+            var formFieldset = document.getElementById("form-fieldset");
+            var uid = 0;
+            var pendingRedirectUrl = null;
+
+            function showStatus(type, message) {
+                statusBox.className = "status-box " + type;
+                statusBox.textContent = message;
+                statusBox.style.display = "block";
+            }
+            function safeRedirect(url) {
+                try {
+                    var parsed = new URL(url, window.location.origin);
+                    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+                        window.location.replace(parsed.href);
+                        return true;
+                    }
+                } catch (e) { /* fail safe */ }
+                return false;
+            }
+
+            function buildField(spec, cardUid) {
+                var group = document.createElement("div");
+                group.className = "field-group";
+                var fid = "field-" + GROUP_KEY + "-" + spec.key + "-" + cardUid;
+
+                var label = document.createElement("label");
+                label.className = "field-label";
+                label.setAttribute("for", fid);
+                label.textContent = spec.label || "";
+                var badge = document.createElement("span");
+                badge.setAttribute("aria-hidden", "true");
+                if (spec.required) { badge.className = "required-badge"; badge.textContent = "Required"; }
+                else { badge.className = "optional-badge"; badge.textContent = "Optional"; }
+                label.appendChild(document.createTextNode(" "));
+                label.appendChild(badge);
+                group.appendChild(label);
+
+                var input = document.createElement("input");
+                input.id = fid;
+                input.className = "field-input";
+                input.setAttribute("type", spec.type || "text");
+                input.setAttribute("name", GROUP_KEY + "[" + cardUid + "]." + spec.key);
+                input.dataset.field = spec.key;
+                input.setAttribute("autocomplete", "off");
+                input.setAttribute("autocorrect", "off");
+                input.setAttribute("autocapitalize", "off");
+                input.setAttribute("spellcheck", "false");
+                if (spec.placeholder) { input.setAttribute("placeholder", spec.placeholder); }
+                if (spec.required) { input.setAttribute("required", "required"); }
+                group.appendChild(input);
+
+                if (spec.helpText) {
+                    var help = document.createElement("p");
+                    help.className = "help-text";
+                    help.id = "help-" + GROUP_KEY + "-" + spec.key + "-" + cardUid;
+                    if (spec.helpUrl) {
+                        var a = document.createElement("a");
+                        a.setAttribute("href", spec.helpUrl);
+                        a.setAttribute("target", "_blank");
+                        a.setAttribute("rel", "noopener noreferrer");
+                        a.textContent = spec.helpText;
+                        help.appendChild(a);
+                    } else {
+                        help.textContent = spec.helpText;
+                    }
+                    input.setAttribute("aria-describedby", help.id);
+                    group.appendChild(help);
+                }
+
+                input.addEventListener("input", function () {
+                    if (input.hasAttribute("aria-invalid")) { input.removeAttribute("aria-invalid"); }
+                });
+                return input;
+            }
+
+            function updateTitles() {
+                var cards = container.querySelectorAll(".card-group-item");
+                for (var i = 0; i < cards.length; i++) {
+                    var titleEl = cards[i].querySelector(".card-group-title");
+                    var titleInput = TITLE_FIELD ? cards[i].querySelector('input[data-field="' + TITLE_FIELD + '"]') : null;
+                    var titleVal = titleInput && titleInput.value ? titleInput.value.trim() : "";
+                    var titleStr = titleVal ? titleVal : (ITEM_LABEL + " " + (i + 1));
+                    if (titleEl) { titleEl.textContent = titleStr; titleEl.title = titleStr; }
+                    var removeBtn = cards[i].querySelector(".card-group-remove");
+                    if (removeBtn) {
+                        removeBtn.style.display = cards.length > MIN_ITEMS ? "" : "none";
+                        removeBtn.setAttribute("aria-label", "Remove " + titleStr);
+                    }
+                }
+            }
+
+            function createCard() {
+                var cardUid = uid++;
+                var card = document.createElement("div");
+                card.className = "card-group-item";
+                card.dataset.uid = String(cardUid);
+                card.setAttribute("role", "group");
+                var titleId = "card-group-title-" + cardUid;
+                card.setAttribute("aria-labelledby", titleId);
+
+                var header = document.createElement("div");
+                header.className = "card-group-header";
+                var title = document.createElement("h3");
+                title.id = titleId;
+                title.className = "card-group-title";
+                title.textContent = ITEM_LABEL;
+                header.appendChild(title);
+
+                var removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "card-group-remove";
+                removeBtn.textContent = "Remove";
+                removeBtn.addEventListener("click", function () {
+                    var inputs = card.querySelectorAll("input");
+                    var hasData = false;
+                    for (var i = 0; i < inputs.length; i++) { if (inputs[i].value.trim() !== "") { hasData = true; break; } }
+                    if (hasData && !window.confirm("This " + ITEM_LABEL.toLowerCase() + " has unsaved data. Remove it?")) { return; }
+                    var prev = card.previousElementSibling;
+                    var next = card.nextElementSibling;
+                    var focusTarget = (prev && prev.classList && prev.classList.contains("card-group-item")) ? prev :
+                                      (next && next.classList && next.classList.contains("card-group-item")) ? next : null;
+                    card.remove();
+                    updateTitles();
+                    if (focusTarget) {
+                        var fi = focusTarget.querySelector("input");
+                        if (fi) { fi.focus(); return; }
+                    }
+                    if (addBtn) { addBtn.focus(); }
+                });
+                header.appendChild(removeBtn);
+                card.appendChild(header);
+
+                for (var f = 0; f < CARD_FIELDS.length; f++) {
+                    var input = buildField(CARD_FIELDS[f], cardUid);
+                    card.appendChild(input.parentNode);
+                    if (CARD_FIELDS[f].key === TITLE_FIELD) {
+                        input.addEventListener("input", updateTitles);
+                    }
+                }
+                return card;
+            }
+
+            function collectCards() {
+                var cards = container.querySelectorAll(".card-group-item");
+                var arr = [];
+                for (var i = 0; i < cards.length; i++) {
+                    var inputs = cards[i].querySelectorAll(".field-input");
+                    var obj = {};
+                    var hasAny = false;
+                    for (var j = 0; j < inputs.length; j++) {
+                        obj[inputs[j].dataset.field] = inputs[j].value;
+                        if (inputs[j].value.trim() !== "") { hasAny = true; }
+                    }
+                    if (hasAny) { arr.push(obj); }
+                }
+                return arr;
+            }
+
+            function renderOAuthDeviceCode(nextStep) {
+                statusBox.className = "status-box info";
+                statusBox.style.display = "block";
+                while (statusBox.firstChild) { statusBox.removeChild(statusBox.firstChild); }
+                var strong = document.createElement("strong");
+                strong.textContent = "Finish sign-in";
+                statusBox.appendChild(strong);
+                statusBox.appendChild(document.createElement("br"));
+                statusBox.appendChild(document.createElement("br"));
+                statusBox.appendChild(document.createTextNode("Visit:"));
+                statusBox.appendChild(document.createElement("br"));
+                var link = document.createElement("a");
+                link.setAttribute("href", nextStep.verification_url);
+                link.setAttribute("target", "_blank");
+                link.setAttribute("rel", "noopener noreferrer");
+                link.textContent = nextStep.verification_url;
+                statusBox.appendChild(link);
+                statusBox.appendChild(document.createElement("br"));
+                statusBox.appendChild(document.createElement("br"));
+                statusBox.appendChild(document.createTextNode("Enter code: "));
+                var codeEl = document.createElement("strong");
+                codeEl.style.fontSize = "1.2em";
+                codeEl.style.letterSpacing = "0.1em";
+                codeEl.textContent = nextStep.user_code;
+                statusBox.appendChild(codeEl);
+                statusBox.appendChild(document.createElement("br"));
+                statusBox.appendChild(document.createElement("br"));
+                var waiting = document.createElement("span");
+                waiting.id = "device-waiting";
+                waiting.setAttribute("role", "alert");
+                waiting.style.color = "#9ca3af";
+                waiting.textContent = "Waiting for authorization...";
+                statusBox.appendChild(waiting);
+                var statusUrl = submitUrl.replace(/\\/authorize.*/, "/setup-status");
+                var pollId = setInterval(function () {
+                    fetch(statusUrl)
+                        .then(function (r) { return r.json(); })
+                        .then(function (s) {
+                            if (s && s.outlook === "complete") {
+                                clearInterval(pollId);
+                                statusBox.className = "status-box success";
+                                while (statusBox.firstChild) { statusBox.removeChild(statusBox.firstChild); }
+                                var done = document.createElement("strong");
+                                done.textContent = "Setup complete!";
+                                statusBox.appendChild(done);
+                                submitBtn.textContent = "Connected";
+                                if (typeof pendingRedirectUrl === "string" && pendingRedirectUrl.length > 0) {
+                                    statusBox.appendChild(document.createElement("br"));
+                                    statusBox.appendChild(document.createTextNode("Redirecting..."));
+                                    safeRedirect(pendingRedirectUrl);
+                                } else {
+                                    statusBox.appendChild(document.createElement("br"));
+                                    statusBox.appendChild(document.createTextNode("You can close this tab."));
+                                }
+                            } else if (s && typeof s.outlook === "string" && s.outlook.indexOf("error:") === 0) {
+                                clearInterval(pollId);
+                                var w = document.getElementById("device-waiting");
+                                if (w) { w.style.color = "#ff453a"; w.textContent = "Authorization failed: " + s.outlook.slice(6) + ". Please retry setup."; }
+                            }
+                        })
+                        .catch(function () {});
+                }, 3000);
+            }
+
+            container.appendChild(createCard());
+            for (var s = 1; s < MIN_ITEMS; s++) { container.appendChild(createCard()); }
+            updateTitles();
+
+            addBtn.addEventListener("click", function () {
+                var newCard = createCard();
+                container.appendChild(newCard);
+                updateTitles();
+                var fi = newCard.querySelector("input");
+                if (fi) { fi.focus(); }
+            });
+
+            form.addEventListener("submit", function (evt) {
+                evt.preventDefault();
+                statusBox.style.display = "none";
+                if (!form.checkValidity()) {
+                    var firstInvalid = form.querySelector(":invalid");
+                    if (firstInvalid) {
+                        firstInvalid.setAttribute("aria-invalid", "true");
+                        firstInvalid.focus();
+                    }
+                    return;
+                }
+                var items = collectCards();
+                if (items.length === 0) {
+                    showStatus("error", "Please add at least one " + ITEM_LABEL.toLowerCase() + ".");
+                    return;
+                }
+                var payload = {};
+                payload[GROUP_KEY] = items;
+
+                formFieldset.disabled = true;
+                submitBtn.setAttribute("aria-busy", "true");
+                submitBtn.textContent = "Connecting...";
+
+                fetch(submitUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+                    .then(function (resp) { return resp.json().then(function (data) {
+                        if (!data.ok) {
+                            showStatus("error", data.error || data.error_description || "Request failed.");
+                            formFieldset.disabled = false;
+                            submitBtn.removeAttribute("aria-busy");
+                            submitBtn.textContent = "Connect";
+                            submitBtn.focus();
+                            return;
+                        }
+                        if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) { pendingRedirectUrl = data.redirect_url; }
+                        if (data.next_step && data.next_step.type === "oauth_device_code") {
+                            submitBtn.textContent = "Awaiting authorization...";
+                            submitBtn.removeAttribute("aria-busy");
+                            renderOAuthDeviceCode(data.next_step);
+                            return;
+                        }
+                        if (pendingRedirectUrl) {
+                            showStatus("success", "Credentials saved. Redirecting...");
+                            submitBtn.textContent = "Connected";
+                            submitBtn.removeAttribute("aria-busy");
+                            if (!safeRedirect(pendingRedirectUrl)) {
+                                showStatus("error", "Setup complete, but refused to redirect to unsafe URL.");
+                            }
+                            return;
+                        }
+                        showStatus("success", data.message || "Setup complete! You can close this tab.");
+                        submitBtn.textContent = "Connected";
+                        submitBtn.removeAttribute("aria-busy");
+                    }); })
+                    .catch(function (err) {
+                        showStatus("error", "Network error: " + err.message);
+                        formFieldset.disabled = false;
+                        submitBtn.removeAttribute("aria-busy");
+                        submitBtn.textContent = "Connect";
+                        submitBtn.focus();
+                    });
+            });
+        })();
+    </script>"""
+
+
 def render_credential_form(
     schema: dict[str, Any],
     *,
@@ -866,6 +1869,7 @@ def render_credential_form(
     page_title: str | None = None,
     prefill: dict[str, str] | None = None,
     include_username_field: bool = False,
+    initial_tab: str | None = None,
 ) -> str:
     """Render a dark-themed HTML credential form from a RelayConfigSchema dict.
 
@@ -878,9 +1882,32 @@ def render_credential_form(
             query params on the GET so users only type what skret can't
             supply (OTP, 2FA password). Non-matching keys are ignored.
 
+        initial_tab: Optional id of the tab to render active for a ``tabs``
+            schema (defaults to the first tab). Ignored for non-tabbed schemas.
+
     Returns:
         Complete HTML document string, XSS-safe with all dynamic content escaped.
     """
+    # Schema-level capabilities (opt-in): dispatch to the dedicated renderer.
+    # A schema declaring neither key falls through to the unchanged flat form.
+    if schema.get("tabs"):
+        return _render_tabbed_credential_form(
+            schema,
+            submit_url=submit_url,
+            page_title=page_title,
+            prefill=prefill,
+            include_username_field=include_username_field,
+            initial_tab=initial_tab,
+        )
+    if schema.get("cardGroup"):
+        return _render_card_group_credential_form(
+            schema,
+            submit_url=submit_url,
+            page_title=page_title,
+            prefill=prefill,
+            include_username_field=include_username_field,
+        )
+
     display_name = _escape(schema.get("displayName", schema.get("server", "Configuration")))
     server = _escape(schema.get("server", ""))
     description = _escape(schema.get("description", ""))

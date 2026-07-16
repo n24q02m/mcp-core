@@ -65,7 +65,8 @@ describe('isSchemaComplete', () => {
   })
 
   it('schema with missing fields property defaults to empty list', () => {
-    // @ts-expect-error testing runtime robustness for missing fields
+    // `fields` is optional on RelayConfigSchema (schema-level tabs/cardGroup
+    // schemas carry no top-level fields), so omitting it is well-typed.
     const schemaNoFields: RelayConfigSchema = { server: 'test' }
     expect(isSchemaComplete({ _setup_complete: 'true' }, schemaNoFields)).toBe(true)
     expect(isSchemaComplete({}, schemaNoFields)).toBe(false)
