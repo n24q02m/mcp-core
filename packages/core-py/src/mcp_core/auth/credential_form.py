@@ -905,7 +905,7 @@ def render_credential_form(
             '<input id="field-__sub_username" type="text" name="__sub_username"'
             ' class="field-input" placeholder="e.g. alice"'
             ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />'
-            '<p class="field-help">Leave blank for a one-off session. Set the same value on'
+            '<p class="help-text">Leave blank for a one-off session. Set the same value on'
             " every device to keep your saved data (one shared bucket per username).</p>"
             "</div>"
         )
