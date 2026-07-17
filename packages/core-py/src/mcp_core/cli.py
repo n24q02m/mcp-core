@@ -103,9 +103,11 @@ def _config_delete(server_name: str, store: PerPluginStore, *, yes: bool) -> int
     return 0
 
 
-def _build_config_handler(server_name: str) -> Callable[[argparse.Namespace], int]:
+def _build_config_handler(server_name: str, plugin_name: str) -> Callable[[argparse.Namespace], int]:
     def _handler(ns: argparse.Namespace) -> int:
-        store = PerPluginStore(server_name)
+        # Credentials are keyed by the plugin slug (what the server saves under),
+        # while ``server_name`` stays the display label in the printed status.
+        store = PerPluginStore(plugin_name)
         if ns.config_action == "status":
             return _config_status(server_name, store)
         return _config_delete(server_name, store, yes=ns.yes)
@@ -145,7 +147,7 @@ def _build_relay_handler(server_name: str) -> Callable[[argparse.Namespace], int
     return _handler
 
 
-def _run_doctor(server_name: str) -> int:
+def _run_doctor(server_name: str, plugin_name: str) -> int:
     ok = True
 
     if sys.version_info[:2] == (3, 13):
@@ -163,8 +165,9 @@ def _run_doctor(server_name: str) -> int:
 
     # Only check writability if the dir already exists -- doctor must not
     # create it as a side effect (mkdir-probing would leave stray dirs for
-    # servers that were never configured).
-    store_dir = Path.home() / f".{server_name}-mcp"
+    # servers that were never configured). The dir is keyed by the plugin slug
+    # (matching PerPluginStore's on-disk layout), not the console name.
+    store_dir = Path.home() / f".{plugin_name}-mcp"
     if store_dir.exists():
         if os.access(store_dir, os.W_OK):
             print(f"[ok] store dir writable: {store_dir}")
@@ -174,7 +177,7 @@ def _run_doctor(server_name: str) -> int:
     else:
         print(f"[warn] store dir does not exist yet: {store_dir}")
 
-    store = PerPluginStore(server_name)
+    store = PerPluginStore(plugin_name)
     payload = store.load()
     if payload is not None:
         print("[ok] config: configured")
@@ -195,9 +198,9 @@ def _run_doctor(server_name: str) -> int:
     return 0 if ok else 1
 
 
-def _build_doctor_handler(server_name: str) -> Callable[[argparse.Namespace], int]:
+def _build_doctor_handler(server_name: str, plugin_name: str) -> Callable[[argparse.Namespace], int]:
     def _handler(_ns: argparse.Namespace) -> int:
-        return _run_doctor(server_name)
+        return _run_doctor(server_name, plugin_name)
 
     return _handler
 
@@ -217,11 +220,25 @@ def _print_cli_help(server_name: str, handlers: dict[str, ExtraHandler]) -> None
 def build_cli(
     server_name: str,
     *,
+    plugin_name: str | None = None,
     serve: Callable[[list[str]], int | None],
     extra: dict[str, ExtraSpec] | None = None,
     version: str | None = None,
 ) -> Callable[[list[str] | None], int]:
     """Build the console-script entry point for one MCP server.
+
+    ``server_name`` is the console/display name (e.g. ``"wet-mcp"``): it names
+    the program in help/usage and status lines, and keys relay session state
+    and run mode (which servers store under their ``SERVER_NAME``).
+
+    ``plugin_name`` is the credential storage slug that ``PerPluginStore`` keys
+    on (e.g. ``"wet"``): it decides where ``config`` and ``doctor`` read/write
+    credentials. Servers save creds under this slug, not under the console
+    name, so the two must not be conflated. When omitted it defaults to
+    ``server_name`` with a trailing ``"-mcp"`` stripped, which matches the wet/
+    mnemo/crg convention; pass it explicitly when the slug differs (telegram
+    saves under ``"telegram"`` though its console name is
+    ``"better-telegram-mcp"``).
 
     ``extra`` subcommand names take precedence over the reserved built-ins,
     so a server (or a test) can supply its own ``doctor``/``config``/``relay``
@@ -237,10 +254,11 @@ def build_cli(
     parsed. Overriding a built-in name (``config``/``relay``/``doctor``) with
     a tuple replaces that built-in's own argument wiring entirely.
     """
+    plugin_name = plugin_name or server_name.removesuffix("-mcp")
     handlers: dict[str, ExtraHandler] = {
-        "config": _build_config_handler(server_name),
+        "config": _build_config_handler(server_name, plugin_name),
         "relay": _build_relay_handler(server_name),
-        "doctor": _build_doctor_handler(server_name),
+        "doctor": _build_doctor_handler(server_name, plugin_name),
     }
     configurers: dict[str, Callable[[argparse.ArgumentParser], None]] = {}
     for name, spec in (extra or {}).items():
