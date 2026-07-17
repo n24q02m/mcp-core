@@ -8,6 +8,7 @@ import {
   setConfigPath,
   setHomeDirForTesting,
   setLockDir,
+  writeConfig,
   writeSessionLock
 } from '../storage/index.js'
 import { buildCli } from './build-cli.js'
@@ -153,6 +154,19 @@ describe('buildCli — config subcommand', () => {
     expect(logs[0]).toBe(`${SERVER}: configured (source: file)`)
     // A credential value is never printed by a built-in.
     expect(logs.join('\n')).not.toContain('secret')
+  })
+
+  it('sees a single-user credential saved through the unified writeConfig', async () => {
+    // Storage-unify contract: a server that persists single-user credentials
+    // via mcp-core's public `writeConfig` (keyed by console name) writes to the
+    // same per-plugin store `config status` reads (keyed by the derived slug),
+    // so the CLI reports "configured" -- the whole point of the unification.
+    await writeConfig('better-email-mcp', { EMAIL_CREDENTIALS: 'a@b.com:app-pass' })
+    const run = buildCli('better-email-mcp', { serve: () => 0 })
+    expect(await run(['config', 'status'])).toBe(0)
+    expect(logs[0]).toBe('better-email-mcp: configured (source: file)')
+    // A credential value is never printed by a built-in.
+    expect(logs.join('\n')).not.toContain('app-pass')
   })
 
   it('reports a corrupt (undecryptable) config with rc 1', async () => {

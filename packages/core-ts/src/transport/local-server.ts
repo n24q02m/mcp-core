@@ -41,7 +41,7 @@ import { jsonResponse } from '../auth/router.js'
 import { refreshLockTimestamp, sweepStaleLocks, writeLockFile } from '../lifecycle/lock.js'
 import type { JWTIssuer } from '../oauth/jwt-issuer.js'
 import { tryOpenBrowser } from '../relay/browser.js'
-import { readConfig } from '../storage/config-file.js'
+import { readStoredConfig } from '../storage/credential-store.js'
 import { extractBearerToken } from './oauth-middleware.js'
 
 /** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
@@ -381,7 +381,7 @@ export async function runHttpServer(
   // Best-effort: any failure surfaces via tryOpenBrowser's ASCII fallback banner.
   if (oauthApp) {
     try {
-      const existingConfig = await readConfig(options.serverName)
+      const existingConfig = await readStoredConfig(options.serverName)
       // Use schema completeness instead of "config === null" so peer-share
       // paths writing partial entries (e.g. wet inheriting CRG cloud keys)
       // do not suppress the relay form when required fields are missing.

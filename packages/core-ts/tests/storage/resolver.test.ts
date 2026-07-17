@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setConfigPath, writeConfig } from '../../src/storage/config-file.js'
+import { writeStoredConfig } from '../../src/storage/credential-store.js'
+import { PerPluginStore, setHomeDirForTesting } from '../../src/storage/per-plugin-store.js'
 import { resolveConfig } from '../../src/storage/resolver.js'
 
 let tempDir: string
@@ -10,10 +12,14 @@ let tempDir: string
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), 'mcp-resolver-test-'))
   setConfigPath(join(tempDir, 'config.enc'))
+  // resolveConfig now reads the per-plugin store first (legacy config.enc is
+  // the fallback); redirect both stores into the temp dir for isolation.
+  setHomeDirForTesting(tempDir)
 })
 
 afterEach(async () => {
   setConfigPath(null)
+  setHomeDirForTesting(null)
   // Clean env vars
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('MCP_')) {
@@ -45,6 +51,21 @@ describe('resolveConfig', () => {
     const result = await resolveConfig('telegram', ['bot_token', 'chat_id'])
     expect(result.source).toBe('file')
     expect(result.config).toEqual({ bot_token: 'file-token', chat_id: 'file-chat' })
+  })
+
+  it('reads the per-plugin store as source "file"', async () => {
+    // Credentials written through the unified store (the primary single-user
+    // path) resolve as source "file", not just the legacy config.enc fallback.
+    await writeStoredConfig('telegram', { bot_token: 'store-token', chat_id: 'store-chat' })
+
+    const result = await resolveConfig('telegram', ['bot_token', 'chat_id'])
+    expect(result.source).toBe('file')
+    expect(result.config).toEqual({ bot_token: 'store-token', chat_id: 'store-chat' })
+    // Confirm it really came from the per-plugin store, not config.enc.
+    expect(await new PerPluginStore('telegram').load()).toEqual({
+      bot_token: 'store-token',
+      chat_id: 'store-chat'
+    })
   })
 
   it('falls back to defaults when file config incomplete', async () => {

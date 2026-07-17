@@ -32,6 +32,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { tryOpenBrowser } from '../relay/browser.js'
 import { backendFromEnv } from '../storage/backends.js'
+import { pluginNameForServer } from '../storage/credential-store.js'
 import { getHomeDir } from '../storage/home-dir.js'
 import { clearMode, getMode } from '../storage/mode.js'
 import { PerPluginStore } from '../storage/per-plugin-store.js'
@@ -265,7 +266,7 @@ function doctorHandler(serverName: string, pluginName: string): CliHandler {
  * point calls it and exits: `buildCli(name, opts)(process.argv.slice(2)).then((c) => process.exit(c))`.
  */
 export function buildCli(serverName: string, options: BuildCliOptions): (argv?: string[] | null) => Promise<number> {
-  const { serve, extra, version, pluginName = serverName.replace(/-mcp$/, '') } = options
+  const { serve, extra, version, pluginName = pluginNameForServer(serverName) } = options
   const handlers: Record<string, CliHandler> = {
     config: configHandler(serverName, pluginName),
     relay: relayHandler(serverName),
