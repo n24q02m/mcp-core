@@ -294,18 +294,22 @@ describe('buildCli — pluginName / serverName separation (store key vs display)
   })
 
   it('doctor reads config status under the plugin slug', async () => {
+    // Assert on the config-status line only, not the aggregate rc: the
+    // runtime-version check is the only line that varies by test runner (see
+    // the "runs every check" test above), and is orthogonal to plugin_name.
     await new PerPluginStore('w51').save({ token: 'secret' })
     const run = buildCli('w51-mcp', { serve: () => 0 })
-    expect(await run(['doctor'])).toBe(0)
+    await run(['doctor'])
     expect(logs.join('\n')).toContain('[ok] config: configured')
   })
 
   it('doctor probes the store dir under the plugin slug, not a doubled -mcp suffix', async () => {
     // Saving creates <home>/.w51-mcp/. doctor's store-dir probe must point at
-    // that path (plugin slug), not the doubled <home>/.w51-mcp-mcp/.
+    // that path (plugin slug), not the doubled <home>/.w51-mcp-mcp/. Assert on
+    // that line only, not the aggregate rc (see comment above).
     await new PerPluginStore('w51').save({ token: 'secret' })
     const run = buildCli('w51-mcp', { serve: () => 0 })
-    expect(await run(['doctor'])).toBe(0)
+    await run(['doctor'])
     const all = logs.join('\n')
     expect(all).toContain('store dir writable')
     expect(all).not.toContain('.w51-mcp-mcp')
