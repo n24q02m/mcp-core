@@ -57,15 +57,14 @@ export {
   type ToolRegistrar
 } from './relay/tool-helpers.js'
 export type * from './schema/types.js'
+export { exportConfig, importConfig, listConfigs, scheduleReloadExit } from './storage/config-file.js'
+// Single-user credential read/write/delete route through the unified
+// per-plugin store (with legacy config.enc read fallback).
 export {
-  deleteConfig,
-  exportConfig,
-  importConfig,
-  listConfigs,
-  readConfig,
-  scheduleReloadExit,
-  writeConfig
-} from './storage/config-file.js'
+  deleteStoredConfig as deleteConfig,
+  readStoredConfig as readConfig,
+  writeStoredConfig as writeConfig
+} from './storage/credential-store.js'
 export { clearMode, getMode, type ServerMode, setLocalMode } from './storage/mode.js'
 export * from './storage/resolver.js'
 export {

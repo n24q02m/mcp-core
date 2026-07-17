@@ -1,4 +1,4 @@
-import { readConfig } from './config-file.js'
+import { readStoredConfig } from './credential-store.js'
 
 export type ConfigSource = 'env' | 'file' | 'defaults' | null
 
@@ -29,8 +29,8 @@ export async function resolveConfig(
     return { config: envConfig, source: 'env' }
   }
 
-  // 2. Check config file
-  const fileConfig = await readConfig(serverName)
+  // 2. Check stored config (per-plugin store, with legacy config.enc fallback)
+  const fileConfig = await readStoredConfig(serverName)
   if (fileConfig) {
     const hasAllRequired = requiredFields.every((f) => f in fileConfig && fileConfig[f] !== '')
     if (hasAllRequired) {

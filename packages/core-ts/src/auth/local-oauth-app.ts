@@ -25,7 +25,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { JWTIssuer } from '../oauth/jwt-issuer.js'
-import { markSetupComplete as markConfigSetupComplete } from '../storage/config-file.js'
+import { markSetupComplete as markConfigSetupComplete } from '../storage/credential-store.js'
 import {
   isOAuthField,
   isSecretField,
