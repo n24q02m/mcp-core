@@ -318,6 +318,23 @@ describe('renderCredentialForm', () => {
     expect(html).toContain('Google Drive authorization failed')
     expect(html).toContain('Please retry setup')
   })
+
+  it('opts in the username field (parity with core-py include_username_field)', () => {
+    const html = renderCredentialForm(
+      { server: 'test', displayName: 'Test', fields: [{ key: 'API_KEY', label: 'API Key', type: 'password' }] },
+      { submitUrl: '/authorize?nonce=abc', includeUsernameField: true }
+    )
+    expect((html.match(/name="__sub_username"/g) ?? []).length).toBe(1)
+    expect(html).toContain('Workspace / username')
+  })
+
+  it('omits the username field by default (backward-compat)', () => {
+    const html = renderCredentialForm(
+      { server: 'test', displayName: 'Test', fields: [{ key: 'API_KEY', label: 'API Key', type: 'password' }] },
+      { submitUrl: '/authorize?nonce=abc' }
+    )
+    expect(html).not.toContain('__sub_username')
+  })
 })
 
 describe('renderFormShell', () => {

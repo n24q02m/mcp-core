@@ -117,7 +117,7 @@ export interface RenderOptions {
   initialTab?: string
   /**
    * Opt-in workspace-username field (multi-user stable-sub). Honoured by the
-   * `tabs` and `cardGroup` render paths.
+   * flat, `tabs`, and `cardGroup` render paths.
    */
   includeUsernameField?: boolean
 }
@@ -1563,6 +1563,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
   const prefill = options.prefill ?? {}
 
   const fieldsHtml = fields.map((f) => renderField(f, prefill[f.key] ?? '')).join('')
+  const usernameHtml = options.includeUsernameField ? usernameFieldHtml() : ''
 
   let capabilitiesHtml = ''
   if (capabilityInfo.length > 0) {
@@ -1592,7 +1593,7 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
             <p class="form-title" id="form-title">Enter your credentials</p>
 
             <form id="credential-form" aria-labelledby="form-title"${formAria} novalidate>
-                ${fieldsHtml}
+                ${usernameHtml}${fieldsHtml}
 
                 <button type="submit" class="submit-btn" id="submit-btn">
                     Connect
