@@ -390,6 +390,105 @@ def test_regression_config_subcommand_still_dispatches(cli_storage, capsys):
     assert "not configured" in captured.out
 
 
+# --- plugin_name / server_name separation (store-key vs display) -------------
+
+
+def test_config_status_derives_plugin_name_by_stripping_mcp_suffix(cli_storage, capsys):
+    # A server saves credentials under its plugin slug ("wet"), which is the
+    # console name ("wet-mcp") with the "-mcp" suffix stripped. `config status`
+    # must read that same slug, not the literal console name.
+    PerPluginStore("wet").save({"API_KEY": "value"})
+    run = build_cli("wet-mcp", serve=lambda argv: None)
+
+    rc = run(["config", "status"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "configured" in captured.out
+    assert "not configured" not in captured.out
+
+
+def test_config_status_explicit_plugin_name_overrides_suffix_default(cli_storage, capsys):
+    # When the slug is not simply "<name>-mcp" minus "-mcp" (telegram's slug is
+    # "telegram", not "better-telegram"), an explicit plugin_name pins it.
+    PerPluginStore("telegram").save({"API_KEY": "value"})
+    run = build_cli("better-telegram-mcp", plugin_name="telegram", serve=lambda argv: None)
+
+    rc = run(["config", "status"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "configured" in captured.out
+    assert "not configured" not in captured.out
+
+
+def test_config_status_display_label_still_uses_server_name(cli_storage, capsys):
+    # The printed label stays the console/server name even though the store is
+    # keyed by the plugin slug.
+    PerPluginStore("wet").save({"API_KEY": "value"})
+    run = build_cli("wet-mcp", serve=lambda argv: None)
+
+    rc = run(["config", "status"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert captured.out.startswith("wet-mcp: configured")
+
+
+def test_config_delete_uses_plugin_name_store(cli_storage):
+    PerPluginStore("wet").save({"API_KEY": "value"})
+    run = build_cli("wet-mcp", serve=lambda argv: None)
+
+    rc = run(["config", "delete", "--yes"])
+
+    assert rc == 0
+    assert PerPluginStore("wet").load() is None
+
+
+def test_doctor_reads_config_under_plugin_name(cli_storage, capsys):
+    PerPluginStore("wet").save({"API_KEY": "value"})
+    run = build_cli("wet-mcp", serve=lambda argv: None)
+
+    rc = run(["doctor"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "[ok] config: configured" in captured.out
+
+
+def test_doctor_store_dir_uses_plugin_name_not_doubled_suffix(cli_storage, capsys):
+    # Saving creates <home>/.wet-mcp/. doctor's store-dir probe must point at
+    # that path (plugin slug), not the doubled <home>/.wet-mcp-mcp/.
+    PerPluginStore("wet").save({"API_KEY": "value"})
+    run = build_cli("wet-mcp", serve=lambda argv: None)
+
+    rc = run(["doctor"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "store dir writable" in captured.out
+    assert ".wet-mcp-mcp" not in captured.out
+
+
+def test_relay_state_keyed_by_server_name_not_plugin_name(cli_storage, capsys):
+    # Relay session lock + mode stay keyed by the server/console name, distinct
+    # from the storage plugin slug. A lock written under "wet-mcp" must be seen
+    # by build_cli("wet-mcp") even though its store slug is "wet".
+    info = SessionInfo(
+        session_id="abcdefgh12345",
+        relay_url="https://relay.example.com/authorize?s=abc",
+        created_at=time.time(),
+    )
+    asyncio.run(write_session_lock("wet-mcp", info))
+    run = build_cli("wet-mcp", serve=lambda argv: None)
+
+    rc = run(["relay", "status"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "abcdefgh" in captured.out
+
+
 # --- config status ----------------------------------------------------------
 
 
