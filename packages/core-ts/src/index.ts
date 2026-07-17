@@ -23,6 +23,9 @@ export {
   type TokenCallback,
   type UpstreamOAuthConfig
 } from './auth/index.js'
+// Console-script CLI builder shared by every TS MCP server (config/relay/doctor
+// built-ins + version + help; parity with core-py's build_cli).
+export { type BuildCliOptions, buildCli, type CliHandler, type ServeFn } from './cli/build-cli.js'
 export * from './crypto/index.js'
 // OAuth 2.1 multi-user infrastructure (HTTP mode)
 export { JWTIssuer } from './oauth/jwt-issuer.js'
