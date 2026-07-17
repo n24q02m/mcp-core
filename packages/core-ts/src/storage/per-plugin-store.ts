@@ -123,4 +123,15 @@ export class PerPluginStore {
   async clear(): Promise<void> {
     await this.backend.delete(this.credKey)
   }
+
+  /**
+   * Whether a credential blob is stored at all, regardless of whether it
+   * decrypts. `load()` returns null for both "absent" and "corrupt"; a
+   * built-in CLI (`config status` / `doctor`) needs to tell the two apart to
+   * report "not configured" vs "corrupt (re-run setup)". Reads only the
+   * opaque backend blob, never the plaintext.
+   */
+  async hasStoredBlob(): Promise<boolean> {
+    return (await this.backend.get(this.credKey)) !== null
+  }
 }
