@@ -64,6 +64,16 @@ export interface BuildCliOptions {
   extra?: Record<string, CliHandler>
   /** Powers `--version`/`-V`. When unset, those flags fall through to serve. */
   version?: string
+  /**
+   * Credential storage plugin slug (e.g. `"wet"`): decides where `config` and
+   * `doctor` read/write via `PerPluginStore`. Servers save credentials under
+   * this slug, not the console name, so the two must not be conflated. When
+   * omitted it defaults to `serverName` with a trailing `"-mcp"` stripped,
+   * which matches the wet/mnemo/crg convention; pass it explicitly when the
+   * slug differs (telegram saves under `"telegram"` though its console name
+   * is `"better-telegram-mcp"`).
+   */
+  pluginName?: string
 }
 
 function printCliHelp(serverName: string, handlers: Record<string, CliHandler>): void {
@@ -73,8 +83,10 @@ function printCliHelp(serverName: string, handlers: Record<string, CliHandler>):
   console.log(`subcommands: ${names}`)
 }
 
-async function configStatus(serverName: string): Promise<number> {
-  const store = new PerPluginStore(serverName)
+async function configStatus(serverName: string, pluginName: string): Promise<number> {
+  // Credentials are keyed by the plugin slug (what the server saves under),
+  // while `serverName` stays the display label in the printed status.
+  const store = new PerPluginStore(pluginName)
   if ((await store.load()) !== null) {
     console.log(`${serverName}: configured (source: file)`)
     console.log('  (env overrides, if any, take precedence at server start)')
@@ -104,7 +116,7 @@ async function confirmDelete(serverName: string): Promise<boolean> {
   }
 }
 
-async function configDelete(serverName: string, yes: boolean): Promise<number> {
+async function configDelete(serverName: string, pluginName: string, yes: boolean): Promise<number> {
   if (!yes) {
     if (!process.stdin.isTTY) {
       console.error(`${serverName}: refusing to delete without --yes in non-interactive mode`)
@@ -115,16 +127,16 @@ async function configDelete(serverName: string, yes: boolean): Promise<number> {
       return 1
     }
   }
-  await new PerPluginStore(serverName).clear()
+  await new PerPluginStore(pluginName).clear()
   console.log(`${serverName}: config deleted`)
   return 0
 }
 
-function configHandler(serverName: string): CliHandler {
+function configHandler(serverName: string, pluginName: string): CliHandler {
   return async (argv) => {
     const action = argv[0]
-    if (action === 'status') return configStatus(serverName)
-    if (action === 'delete') return configDelete(serverName, argv.includes('--yes'))
+    if (action === 'status') return configStatus(serverName, pluginName)
+    if (action === 'delete') return configDelete(serverName, pluginName, argv.includes('--yes'))
     console.error(`${serverName}: config expects 'status' or 'delete'`)
     return 2
   }
@@ -166,7 +178,7 @@ function relayHandler(serverName: string): CliHandler {
   }
 }
 
-async function runDoctor(serverName: string): Promise<number> {
+async function runDoctor(serverName: string, pluginName: string): Promise<number> {
   let ok = true
 
   const nodeVersion = process.versions.node
@@ -187,8 +199,9 @@ async function runDoctor(serverName: string): Promise<number> {
 
   // Only check writability if the dir already exists -- doctor must not create
   // it as a side effect (mkdir-probing would leave stray dirs for servers that
-  // were never configured).
-  const storeDir = join(getHomeDir(), `.${serverName}-mcp`)
+  // were never configured). The dir is keyed by the plugin slug (matching
+  // PerPluginStore's on-disk layout), not the console name.
+  const storeDir = join(getHomeDir(), `.${pluginName}-mcp`)
   if (existsSync(storeDir)) {
     try {
       accessSync(storeDir, constants.W_OK)
@@ -201,7 +214,7 @@ async function runDoctor(serverName: string): Promise<number> {
     console.log(`[warn] store dir does not exist yet: ${storeDir}`)
   }
 
-  const store = new PerPluginStore(serverName)
+  const store = new PerPluginStore(pluginName)
   if ((await store.load()) !== null) {
     console.log('[ok] config: configured')
   } else if (await store.hasStoredBlob()) {
@@ -223,12 +236,24 @@ async function runDoctor(serverName: string): Promise<number> {
   return ok ? 0 : 1
 }
 
-function doctorHandler(serverName: string): CliHandler {
-  return () => runDoctor(serverName)
+function doctorHandler(serverName: string, pluginName: string): CliHandler {
+  return () => runDoctor(serverName, pluginName)
 }
 
 /**
  * Build the console-script entry point for one MCP server.
+ *
+ * `serverName` is the console/display name (e.g. `"wet-mcp"`): it names the
+ * program in help/usage and status lines, and keys relay session state and
+ * run mode (which servers store under their `SERVER_NAME`).
+ *
+ * `options.pluginName` is the credential storage slug that `PerPluginStore`
+ * keys on (e.g. `"wet"`): it decides where `config` and `doctor` read/write
+ * credentials. Servers save creds under this slug, not under the console
+ * name, so the two must not be conflated. When omitted it defaults to
+ * `serverName` with a trailing `"-mcp"` stripped, which matches the wet/
+ * mnemo/crg convention; pass it explicitly when the slug differs (telegram
+ * saves under `"telegram"` though its console name is `"better-telegram-mcp"`).
  *
  * `extra` subcommand names take precedence over the reserved built-ins, so a
  * server (or a test) can supply its own `doctor`/`config`/`relay` handler.
@@ -240,11 +265,11 @@ function doctorHandler(serverName: string): CliHandler {
  * point calls it and exits: `buildCli(name, opts)(process.argv.slice(2)).then((c) => process.exit(c))`.
  */
 export function buildCli(serverName: string, options: BuildCliOptions): (argv?: string[] | null) => Promise<number> {
-  const { serve, extra, version } = options
+  const { serve, extra, version, pluginName = serverName.replace(/-mcp$/, '') } = options
   const handlers: Record<string, CliHandler> = {
-    config: configHandler(serverName),
+    config: configHandler(serverName, pluginName),
     relay: relayHandler(serverName),
-    doctor: doctorHandler(serverName),
+    doctor: doctorHandler(serverName, pluginName),
     ...extra
   }
 

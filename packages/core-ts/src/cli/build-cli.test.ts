@@ -265,6 +265,66 @@ describe('buildCli — doctor subcommand', () => {
   })
 })
 
+describe('buildCli — pluginName / serverName separation (store key vs display)', () => {
+  it('derives pluginName from serverName by stripping a trailing -mcp suffix', async () => {
+    // Credentials are saved under the plugin slug ("w51"), which is the
+    // console name ("w51-mcp") with the "-mcp" suffix stripped. `config
+    // status` must read that same slug, not the literal console name.
+    await new PerPluginStore('w51').save({ token: 'secret' })
+    const run = buildCli('w51-mcp', { serve: () => 0 })
+    expect(await run(['config', 'status'])).toBe(0)
+    expect(logs[0]).toBe('w51-mcp: configured (source: file)')
+  })
+
+  it('lets an explicit pluginName override the -mcp suffix default', async () => {
+    // When the slug is not simply "<name>-mcp" minus "-mcp" (telegram's slug
+    // is "telegram", not "better-telegram"), an explicit pluginName pins it.
+    await new PerPluginStore('telegram').save({ token: 'secret' })
+    const run = buildCli('better-telegram-mcp', { serve: () => 0, pluginName: 'telegram' })
+    expect(await run(['config', 'status'])).toBe(0)
+    expect(logs[0]).toBe('better-telegram-mcp: configured (source: file)')
+  })
+
+  it('deletes the config under the plugin slug store', async () => {
+    const store = new PerPluginStore('w51')
+    await store.save({ token: 'secret' })
+    const run = buildCli('w51-mcp', { serve: () => 0 })
+    expect(await run(['config', 'delete', '--yes'])).toBe(0)
+    expect(await store.load()).toBeNull()
+  })
+
+  it('doctor reads config status under the plugin slug', async () => {
+    await new PerPluginStore('w51').save({ token: 'secret' })
+    const run = buildCli('w51-mcp', { serve: () => 0 })
+    expect(await run(['doctor'])).toBe(0)
+    expect(logs.join('\n')).toContain('[ok] config: configured')
+  })
+
+  it('doctor probes the store dir under the plugin slug, not a doubled -mcp suffix', async () => {
+    // Saving creates <home>/.w51-mcp/. doctor's store-dir probe must point at
+    // that path (plugin slug), not the doubled <home>/.w51-mcp-mcp/.
+    await new PerPluginStore('w51').save({ token: 'secret' })
+    const run = buildCli('w51-mcp', { serve: () => 0 })
+    expect(await run(['doctor'])).toBe(0)
+    const all = logs.join('\n')
+    expect(all).toContain('store dir writable')
+    expect(all).not.toContain('.w51-mcp-mcp')
+  })
+
+  it('keeps relay state keyed by serverName, not the derived plugin slug', async () => {
+    // A lock written under "w51-mcp" must be seen by buildCli("w51-mcp") even
+    // though its store slug is "w51".
+    await writeSessionLock('w51-mcp', {
+      sessionId: 'abcd1234ef',
+      relayUrl: 'https://relay.example/s/abcd1234',
+      createdAt: Date.now()
+    })
+    const run = buildCli('w51-mcp', { serve: () => 0 })
+    expect(await run(['relay', 'status'])).toBe(0)
+    expect(logs[0]).toContain('session abcd1234')
+  })
+})
+
 describe('buildCli — extra subcommands', () => {
   it('lets an extra subcommand override a built-in', async () => {
     const run = buildCli(SERVER, { serve: () => 0, extra: { doctor: () => 42 } })
