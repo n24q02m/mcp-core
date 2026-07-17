@@ -2,6 +2,63 @@
 
 <!-- version list -->
 
+## v1.20.0-beta.2 (2026-07-17)
+
+### Bug Fixes
+
+- Add aria-live to status messages
+  ([`7a600e4`](https://github.com/n24q02m/mcp-core/commit/7a600e4da535e22229380e175264c13d9c11df12))
+
+- Add orphan-tag integrity guard to release CI
+  ([#660](https://github.com/n24q02m/mcp-core/pull/660),
+  [`058c254`](https://github.com/n24q02m/mcp-core/commit/058c2549c9a01135be20dd25dd97e9b6dc9148ae))
+
+- Make doctor test assert aggregate health not a fixed exit code
+  ([#665](https://github.com/n24q02m/mcp-core/pull/665),
+  [`e12a538`](https://github.com/n24q02m/mcp-core/commit/e12a538dd40c5c4f6ba48d0eeb9f941a2b939baa))
+
+- Optimize D1Backend executemany with /batch endpoint
+  ([`149db78`](https://github.com/n24q02m/mcp-core/commit/149db781af344605bceca8640ee5f62113c1f8b3))
+
+- Pin rangeStrategy on delayed packageRules to fix renovate artifacts failure
+  ([#661](https://github.com/n24q02m/mcp-core/pull/661),
+  [`c36c5c8`](https://github.com/n24q02m/mcp-core/commit/c36c5c83e8c7b1e057a7443b09c94062bd51fc8b))
+
+- Separate plugin store key from display name in core-ts buildCli
+  ([#667](https://github.com/n24q02m/mcp-core/pull/667),
+  [`ed8d442`](https://github.com/n24q02m/mcp-core/commit/ed8d44233505260d443c8b83d75786c8a6165eea))
+
+- Stop doctor plugin-name tests from asserting rc against runtime-version drift
+  ([#667](https://github.com/n24q02m/mcp-core/pull/667),
+  [`ed8d442`](https://github.com/n24q02m/mcp-core/commit/ed8d44233505260d443c8b83d75786c8a6165eea))
+
+- **core-py**: Key build_cli credential store by plugin slug, not console name
+  ([#666](https://github.com/n24q02m/mcp-core/pull/666),
+  [`3915172`](https://github.com/n24q02m/mcp-core/commit/3915172911f1c5c4c1e1ed3a26e1c1da706ad2b1))
+
+- **core-ts**: Separate plugin store key from display name in buildCli
+  ([#667](https://github.com/n24q02m/mcp-core/pull/667),
+  [`ed8d442`](https://github.com/n24q02m/mcp-core/commit/ed8d44233505260d443c8b83d75786c8a6165eea))
+
+- **core-ts**: Unify single-user credential storage onto PerPluginStore
+  ([#668](https://github.com/n24q02m/mcp-core/pull/668),
+  [`9c9b81d`](https://github.com/n24q02m/mcp-core/commit/9c9b81d99609344d93e82b51a2523a03b2899c5a))
+
+### Features
+
+- Add buildCli framework to core-ts for server CLI parity
+  ([#665](https://github.com/n24q02m/mcp-core/pull/665),
+  [`e12a538`](https://github.com/n24q02m/mcp-core/commit/e12a538dd40c5c4f6ba48d0eeb9f941a2b939baa))
+
+- Add includeUsernameField parity to core-ts credential form renderer
+  ([#663](https://github.com/n24q02m/mcp-core/pull/663),
+  [`a94c6dc`](https://github.com/n24q02m/mcp-core/commit/a94c6dc7dac7aaef68f2c548cffd2e0b567d2821))
+
+- Add PR-title conventional-commit gate + no-bump release warning
+  ([#664](https://github.com/n24q02m/mcp-core/pull/664),
+  [`67e4efa`](https://github.com/n24q02m/mcp-core/commit/67e4efa9d5092dc2af0ff972dacf11ad9f9680ba))
+
+
 ## v1.20.0-beta.1 (2026-07-16)
 
 ### Bug Fixes
