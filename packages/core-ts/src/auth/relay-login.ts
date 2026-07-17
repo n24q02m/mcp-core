@@ -165,7 +165,7 @@ function getSafeNext(input: unknown): string {
 function renderLoginForm(next: string, errorMsg?: string): string {
   const safeNext = escapeHtml(String(next))
   const errorHtml = errorMsg
-    ? `\n            <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">\n                ${escapeHtml(errorMsg)}\n            </div>`
+    ? `\n            <div id="login-error" class="status-box error" role="alert" aria-live="polite" aria-atomic="true" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">\n                ${escapeHtml(errorMsg)}\n            </div>`
     : ''
 
   const ariaAttributes = errorMsg
