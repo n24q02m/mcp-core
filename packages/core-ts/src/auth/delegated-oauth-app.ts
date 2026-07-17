@@ -47,6 +47,13 @@ export interface UpstreamOAuthConfig {
   clientSecret?: string
   scopes?: string[]
   /**
+   * Extra query parameters merged verbatim into the upstream /authorize
+   * redirect (redirect flow only). Providers like Google require
+   * `access_type=offline` + `prompt=consent` here to be granted a
+   * refresh_token. Keys set here are applied after the standard params.
+   */
+  authorizeParams?: Record<string, string>
+  /**
    * How to pass client credentials to the upstream token endpoint.
    * Defaults to ``client_secret_basic`` per RFC 6749 §2.3.1 which mandates
    * basic-auth support. Notion, GitHub, Microsoft identity platform all
@@ -335,6 +342,11 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     })
     if (options.upstream.scopes && options.upstream.scopes.length > 0) {
       qs.set('scope', options.upstream.scopes.join(' '))
+    }
+    if (options.upstream.authorizeParams) {
+      for (const [k, v] of Object.entries(options.upstream.authorizeParams)) {
+        qs.set(k, v)
+      }
     }
     const authorizeUrl = options.upstream.authorizeUrl as string
     const separator = authorizeUrl.includes('?') ? '&' : '?'
