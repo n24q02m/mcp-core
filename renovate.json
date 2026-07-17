@@ -19,7 +19,8 @@
       "matchUpdateTypes": ["minor"],
       "groupName": "minor dependencies",
       "groupSlug": "all-minor",
-      "minimumReleaseAge": "7 days"
+      "minimumReleaseAge": "7 days",
+      "rangeStrategy": "pin"
     },
     {
       "description": "Auto-merge dev-scope minor updates after cooldown",
@@ -29,7 +30,8 @@
       "groupSlug": "non-major-dev",
       "automerge": true,
       "automergeType": "pr",
-      "minimumReleaseAge": "7 days"
+      "minimumReleaseAge": "7 days",
+      "rangeStrategy": "pin"
     },
     {
       "description": "Auto-merge patch updates after cooldown",
@@ -38,7 +40,8 @@
       "groupSlug": "all-patch",
       "automerge": true,
       "automergeType": "pr",
-      "minimumReleaseAge": "7 days"
+      "minimumReleaseAge": "7 days",
+      "rangeStrategy": "pin"
     },
     {
       "description": "Auto-merge GitHub Actions digest updates after cooldown",
@@ -90,7 +93,8 @@
       "description": "Pin pydantic <2.13 — cohere>=6.1.0 caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+ which breaks downstream wet/mnemo/crg.",
       "matchPackageNames": ["pydantic"],
       "allowedVersions": "<2.13",
-      "minimumReleaseAge": "7 days"
+      "minimumReleaseAge": "7 days",
+      "rangeStrategy": "pin"
     }
   ],
   "semanticCommits": "enabled",
