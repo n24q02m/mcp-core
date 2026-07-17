@@ -59,6 +59,7 @@ async function startApp(options: {
     clientSecret?: string
     scopes?: string[]
     authorizeUrl?: string
+    authorizeParams?: Record<string, string>
     deviceAuthUrl?: string
     pollIntervalMs?: number
     callbackPath?: string
@@ -204,6 +205,53 @@ describe('redirect flow', () => {
         expect(locUrl.searchParams.get('response_type')).toBe('code')
         expect(locUrl.searchParams.get('scope')).toBe('read write')
         expect(locUrl.searchParams.get('state')).toBeTruthy()
+      } finally {
+        await srv.close()
+      }
+    } finally {
+      await upstream.close()
+    }
+  })
+
+  it('merges upstream.authorizeParams into the /authorize redirect (Google refresh_token support)', async () => {
+    // Google only grants a refresh_token when the upstream /authorize request
+    // carries access_type=offline + prompt=consent. This proves those extras
+    // survive the redirect alongside the existing standard params.
+    const upstream = await startUpstream(() => {
+      // Never called in this test.
+    })
+    try {
+      const srv = await startApp({
+        flow: 'redirect',
+        upstream: {
+          tokenUrl: `${upstream.url}/token`,
+          clientId: 'up-client',
+          clientSecret: 'shh',
+          scopes: ['openid', 'email'],
+          authorizeUrl: `${upstream.url}/authorize`,
+          authorizeParams: { access_type: 'offline', prompt: 'consent' }
+        },
+        onTokenReceived: () => 'sub-1',
+        keysDir: tempKeysDir
+      })
+      try {
+        const { challenge } = pkce()
+        const params = new URLSearchParams({
+          client_id: 'mcp-client',
+          redirect_uri: 'http://localhost/cb',
+          state: 'client-state',
+          code_challenge: challenge,
+          code_challenge_method: 'S256'
+        })
+        const resp = await fetch(`${srv.url}/authorize?${params.toString()}`, {
+          redirect: 'manual'
+        })
+        expect(resp.status).toBe(302)
+        const loc = resp.headers.get('location') as string
+        const locUrl = new URL(loc)
+        expect(locUrl.searchParams.get('access_type')).toBe('offline')
+        expect(locUrl.searchParams.get('prompt')).toBe('consent')
+        expect(locUrl.searchParams.get('scope')).toBe('openid email')
       } finally {
         await srv.close()
       }
