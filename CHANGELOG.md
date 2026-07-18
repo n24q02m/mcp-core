@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.20.0-beta.3 (2026-07-18)
+
+### Bug Fixes
+
+- Adopt better-semantic-release for built-in release guards
+  ([`8b98a60`](https://github.com/n24q02m/mcp-core/commit/8b98a60e05d7f6f028b1921e6cb1341b4fb55e9a))
+
+### Features
+
+- Add authorizeParams to delegated OAuth upstream config
+  ([#669](https://github.com/n24q02m/mcp-core/pull/669),
+  [`f973133`](https://github.com/n24q02m/mcp-core/commit/f973133d1ef94e1a8800237b0ec3eba0df851a04))
+
+
 ## v1.20.0-beta.2 (2026-07-17)
 
 ### Bug Fixes
