@@ -1129,7 +1129,7 @@ _STEP_UI_JS = """
                     buttonEl = document.createElement("button"); buttonEl.type = "button"; buttonEl.id = "step-submit";
                     buttonEl.className = "submit-btn"; buttonEl.textContent = "Verify"; container.appendChild(buttonEl);
                     errorEl = document.createElement("div"); errorEl.id = "step-error"; errorEl.className = "status-box error";
-                    errorEl.setAttribute("role", "alert"); errorEl.style.display = "none"; container.appendChild(errorEl);
+                    errorEl.setAttribute("role", "alert"); errorEl.setAttribute("aria-live", "polite"); errorEl.setAttribute("aria-atomic", "true"); errorEl.style.display = "none"; container.appendChild(errorEl);
                     card.appendChild(container);
                     buttonEl.addEventListener("click", function () { submitStep(); });
                     inputEl.addEventListener("keydown", function (evt) { if (evt.key === "Enter") { evt.preventDefault(); submitStep(); } });
@@ -1165,12 +1165,12 @@ _STEP_UI_JS = """
                             } else if (typeof data.redirect_url === "string" && data.redirect_url.length > 0) {
                                 var c = document.getElementById("step-container"); while (c.firstChild) { c.removeChild(c.firstChild); }
                                 var done = document.createElement("div"); done.className = "status-box success"; done.style.display = "block";
-                                done.setAttribute("role", "alert"); done.textContent = "Setup complete! Redirecting..."; c.appendChild(done);
+                                done.setAttribute("role", "alert"); done.setAttribute("aria-live", "polite"); done.setAttribute("aria-atomic", "true"); done.textContent = "Setup complete! Redirecting..."; c.appendChild(done);
                                 window.location.replace(data.redirect_url);
                             } else {
                                 var c2 = document.getElementById("step-container"); while (c2.firstChild) { c2.removeChild(c2.firstChild); }
                                 var done2 = document.createElement("div"); done2.className = "status-box success"; done2.style.display = "block";
-                                done2.setAttribute("role", "alert"); done2.textContent = "Setup complete! You can close this tab."; c2.appendChild(done2);
+                                done2.setAttribute("role", "alert"); done2.setAttribute("aria-live", "polite"); done2.setAttribute("aria-atomic", "true"); done2.textContent = "Setup complete! You can close this tab."; c2.appendChild(done2);
                             }
                         } else {
                             errorEl.textContent = data.error || data.error_description || "Verification failed."; errorEl.style.display = "block";
@@ -1283,7 +1283,7 @@ def _render_tabbed_credential_form(
 
                 <button type="submit" class="submit-btn" id="submit-btn">Connect</button>
 
-                <div class="status-box" id="status-box" role="alert"></div>
+                <div class="status-box" id="status-box" role="alert" aria-live="polite" aria-atomic="true"></div>
             </form>
         </div>
         {capabilities_html}
@@ -1531,7 +1531,7 @@ def _render_card_group_credential_form(
                     <button type="submit" class="submit-btn" id="submit-btn">Connect</button>
                 </fieldset>
 
-                <div class="status-box" id="status-box" role="alert"></div>
+                <div class="status-box" id="status-box" role="alert" aria-live="polite" aria-atomic="true"></div>
             </form>
         </div>
         {capabilities_html}
@@ -1755,6 +1755,8 @@ _CARD_GROUP_SCRIPT = """    <script>
                 var waiting = document.createElement("span");
                 waiting.id = "device-waiting";
                 waiting.setAttribute("role", "alert");
+                waiting.setAttribute("aria-live", "polite");
+                waiting.setAttribute("aria-atomic", "true");
                 waiting.style.color = "#9ca3af";
                 waiting.textContent = "Waiting for authorization...";
                 statusBox.appendChild(waiting);
@@ -1971,7 +1973,7 @@ def render_credential_form(
                     Connect
                 </button>
 
-                <div class="status-box" id="status-box" role="alert"></div>
+                <div class="status-box" id="status-box" role="alert" aria-live="polite" aria-atomic="true"></div>
             </form>
         </div>
         {capabilities_html}
@@ -2054,6 +2056,8 @@ def render_credential_form(
                     errorEl.id = "step-error";
                     errorEl.className = "status-box error";
                     errorEl.setAttribute("role", "alert");
+                    errorEl.setAttribute("aria-live", "polite");
+                    errorEl.setAttribute("aria-atomic", "true");
                     errorEl.style.display = "none";
                     container.appendChild(errorEl);
 
@@ -2136,6 +2140,8 @@ def render_credential_form(
                                     done.className = "status-box success";
                                     done.style.display = "block";
                                     done.setAttribute("role", "alert");
+                                    done.setAttribute("aria-live", "polite");
+                                    done.setAttribute("aria-atomic", "true");
                                     done.textContent = "Setup complete! Redirecting...";
                                     container.appendChild(done);
                                     window.location.replace(data.redirect_url);
@@ -2149,6 +2155,8 @@ def render_credential_form(
                                     done.className = "status-box success";
                                     done.style.display = "block";
                                     done.setAttribute("role", "alert");
+                                    done.setAttribute("aria-live", "polite");
+                                    done.setAttribute("aria-atomic", "true");
                                     done.textContent = "Setup complete! You can close this tab.";
                                     container.appendChild(done);
                                 }}
@@ -2269,6 +2277,8 @@ def render_credential_form(
                                     waiting.id = "gdrive-waiting";
                                     waiting.style.color = "#9ca3af";
                                     waiting.setAttribute("role", "alert");
+                                    waiting.setAttribute("aria-live", "polite");
+                                    waiting.setAttribute("aria-atomic", "true");
                                     waiting.textContent = "Waiting for authorization...";
                                     statusBox.appendChild(waiting);
                                     statusBox.className = "status-box info";
