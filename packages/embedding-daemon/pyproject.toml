@@ -28,7 +28,7 @@ dependencies = [
     "httpx>=0.28.1",
     # Keep pydantic <2.13 so downstream consumers using cohere>=6.1.0 can resolve
     # (cohere caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+).
-    "pydantic>=2.12.5,<2.13",
+    "pydantic==2.12.5",
 ]
 
 [project.optional-dependencies]
