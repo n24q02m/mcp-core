@@ -1236,6 +1236,8 @@ const CARD_GROUP_SCRIPT = `    <script>
                 var waiting = document.createElement("span");
                 waiting.id = "device-waiting";
                 waiting.setAttribute("role", "alert");
+                waiting.setAttribute("aria-live", "polite");
+                waiting.setAttribute("aria-atomic", "true");
                 waiting.style.color = "#9ca3af";
                 waiting.textContent = "Waiting for authorization...";
                 statusBox.appendChild(waiting);
@@ -1903,6 +1905,8 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                     waiting.id = "gdrive-waiting";
                                     waiting.style.color = "#9ca3af";
                                     waiting.setAttribute("role", "alert");
+                                    waiting.setAttribute("aria-live", "polite");
+                                    waiting.setAttribute("aria-atomic", "true");
                                     waiting.textContent = "Waiting for authorization...";
                                     statusBox.appendChild(waiting);
                                     statusBox.className = "status-box info";

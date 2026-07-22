@@ -119,7 +119,7 @@ def _render_login_form(next_url: str, error_msg: str | None = None) -> str:
     aria_attributes = ' aria-describedby="relay-desc"'
     if error_msg:
         error_html = f"""
-            <div id="login-error" class="status-box error" role="alert" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">
+            <div id="login-error" class="status-box error" role="alert" aria-live="polite" aria-atomic="true" style="display: block; margin-bottom: 1.25rem; margin-top: 0;">
                 {html.escape(error_msg)}
             </div>"""
         aria_attributes = (

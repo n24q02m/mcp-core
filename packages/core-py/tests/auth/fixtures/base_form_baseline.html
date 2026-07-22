@@ -464,7 +464,7 @@
                     Connect
                 </button>
 
-                <div class="status-box" id="status-box" role="alert"></div>
+                <div class="status-box" id="status-box" role="alert" aria-live="polite" aria-atomic="true"></div>
             </form>
         </div>
         
@@ -559,6 +559,8 @@
                     errorEl.id = "step-error";
                     errorEl.className = "status-box error";
                     errorEl.setAttribute("role", "alert");
+                    errorEl.setAttribute("aria-live", "polite");
+                    errorEl.setAttribute("aria-atomic", "true");
                     errorEl.style.display = "none";
                     container.appendChild(errorEl);
 
@@ -641,6 +643,8 @@
                                     done.className = "status-box success";
                                     done.style.display = "block";
                                     done.setAttribute("role", "alert");
+                                    done.setAttribute("aria-live", "polite");
+                                    done.setAttribute("aria-atomic", "true");
                                     done.textContent = "Setup complete! Redirecting...";
                                     container.appendChild(done);
                                     window.location.replace(data.redirect_url);
@@ -654,6 +658,8 @@
                                     done.className = "status-box success";
                                     done.style.display = "block";
                                     done.setAttribute("role", "alert");
+                                    done.setAttribute("aria-live", "polite");
+                                    done.setAttribute("aria-atomic", "true");
                                     done.textContent = "Setup complete! You can close this tab.";
                                     container.appendChild(done);
                                 }
@@ -774,6 +780,8 @@
                                     waiting.id = "gdrive-waiting";
                                     waiting.style.color = "#9ca3af";
                                     waiting.setAttribute("role", "alert");
+                                    waiting.setAttribute("aria-live", "polite");
+                                    waiting.setAttribute("aria-atomic", "true");
                                     waiting.textContent = "Waiting for authorization...";
                                     statusBox.appendChild(waiting);
                                     statusBox.className = "status-box info";
