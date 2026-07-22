@@ -91,6 +91,8 @@ export interface RunHttpServerOptions {
     schema: RelayConfigSchema,
     options: { submitUrl: string; prefill?: Record<string, string> }
   ) => string
+  /** Forwarded to the local OAuth app; see LocalOAuthAppOptions.stableSubEnabled. */
+  stableSubEnabled?: boolean
   /**
    * Optional middleware invoked after JWT verification and before the MCP
    * transport handles the request. Called with verified claims and a ``next``
@@ -180,7 +182,8 @@ export async function runHttpServer(
       relaySchema: options.relaySchema,
       onCredentialsSaved: options.onCredentialsSaved,
       onStepSubmitted: options.onStepSubmitted,
-      customCredentialFormHtml: options.customCredentialFormHtml
+      customCredentialFormHtml: options.customCredentialFormHtml,
+      stableSubEnabled: options.stableSubEnabled
     })
     jwtIssuer = oauthApp.jwtIssuer
   }

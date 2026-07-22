@@ -89,6 +89,34 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
     }
   })
 
+  // Parity with core-py test_local_server.py::test_threads_stable_sub_enabled_to_form.
+  it('threads stableSubEnabled through to the credential form', async () => {
+    async function authorizeHtml(stableSubEnabled: boolean): Promise<string> {
+      const handle = await runHttpServer(makeMcpServer, {
+        serverName: `test-stable-sub-${stableSubEnabled}-${Date.now()}`,
+        relaySchema: SCHEMA,
+        port: 0,
+        stableSubEnabled
+      })
+      try {
+        const params = new URLSearchParams({
+          client_id: 'c',
+          redirect_uri: 'http://localhost:5555/cb',
+          state: 's',
+          code_challenge: 'challenge-placeholder-that-is-long-enough-for-s256',
+          code_challenge_method: 'S256'
+        })
+        const resp = await fetch(`http://${handle.host}:${handle.port}/authorize?${params.toString()}`)
+        return await resp.text()
+      } finally {
+        await handle.close()
+      }
+    }
+
+    expect(await authorizeHtml(true)).toContain('name="__sub_username"')
+    expect(await authorizeHtml(false)).not.toContain('__sub_username')
+  })
+
   it('returns 401 with invalid_token for malformed Bearer', async () => {
     const handle = await runHttpServer(makeMcpServer, {
       serverName: `test-invalid-token-${Date.now()}`,

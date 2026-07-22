@@ -19,5 +19,31 @@
     "info": "mcp-jwt-signing-key-v1:wet-mcp",
     "okp_x": "VGfGsMquscEDCVyGu4sNbM8DihXhYAb2c1s1EDIrAdE",
     "kid": "r71l8IICMLZykZU5"
-  }
+  },
+  "stable_sub": [
+    {
+      "username": "matthias",
+      "server_name": "better-email-mcp",
+      "credential_secret": "test-secret-1",
+      "expected": "7NQNyF1iOJdkpeGrLIV8tg"
+    },
+    {
+      "username": "  Matthias  ",
+      "server_name": "better-email-mcp",
+      "credential_secret": "test-secret-1",
+      "expected": "7NQNyF1iOJdkpeGrLIV8tg"
+    },
+    {
+      "username": "matthias",
+      "server_name": "wet-mcp",
+      "credential_secret": "test-secret-1",
+      "expected": "Ug9a-m7ceWijhVevfp3mVw"
+    },
+    {
+      "username": "matthias",
+      "server_name": "better-email-mcp",
+      "credential_secret": null,
+      "expected": "C4MnUqcjoVOSFLZ-SuGiow"
+    }
+  ]
 }

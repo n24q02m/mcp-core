@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
 import { createLocalOAuthApp, type LocalOAuthAppResult } from '../../src/auth/local-oauth-app.js'
+import { deriveStableSub } from '../../src/auth/stable-sub.js'
 import { JWTIssuer } from '../../src/oauth/jwt-issuer.js'
 
 interface TestServer {
@@ -58,6 +59,7 @@ async function startApp(
   options: {
     onCredentialsSaved?: Parameters<typeof createLocalOAuthApp>[0]['onCredentialsSaved']
     onStepSubmitted?: Parameters<typeof createLocalOAuthApp>[0]['onStepSubmitted']
+    stableSubEnabled?: boolean
   } = {}
 ): Promise<TestServer> {
   const jwtIssuer = new JWTIssuer('test-server', tempKeysDir)
@@ -66,7 +68,8 @@ async function startApp(
     relaySchema: SCHEMA,
     jwtIssuer,
     onCredentialsSaved: options.onCredentialsSaved,
-    onStepSubmitted: options.onStepSubmitted
+    onStepSubmitted: options.onStepSubmitted,
+    stableSubEnabled: options.stableSubEnabled
   })
   const server: Server = createServer(app.handler)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -219,6 +222,139 @@ describe('POST /authorize', () => {
       expect(savedSubjects).toContain(subB)
       expect(savedSubjects.length).toBe(2)
       expect(new Set(savedSubjects).size).toBe(2)
+    } finally {
+      await srv.close()
+    }
+  })
+})
+
+describe('stable subject', () => {
+  const SECRET = 'stable-sub-test-secret'
+  const DERIVED = deriveStableSub('matthias', 'test-server', SECRET)
+  let originalSecret: string | undefined
+
+  beforeEach(() => {
+    originalSecret = process.env.CREDENTIAL_SECRET
+    process.env.CREDENTIAL_SECRET = SECRET
+  })
+
+  afterEach(() => {
+    if (originalSecret === undefined) delete process.env.CREDENTIAL_SECRET
+    else process.env.CREDENTIAL_SECRET = originalSecret
+  })
+
+  async function getAuthorizeHtml(srv: TestServer): Promise<string> {
+    const { challenge } = pkce()
+    const params = new URLSearchParams({
+      client_id: 'c',
+      redirect_uri: 'http://localhost:5555/cb',
+      state: 's',
+      code_challenge: challenge
+    })
+    const resp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+    return await resp.text()
+  }
+
+  /** Drive GET -> POST /authorize once; the callback capture is the assertion surface. */
+  async function submit(srv: TestServer, body: Record<string, string>): Promise<void> {
+    const nonce = extractNonce(await getAuthorizeHtml(srv))
+    const resp = await fetch(`${srv.url}/authorize?nonce=${nonce}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    expect(resp.status).toBe(200)
+  }
+
+  it('renders the username field only when stableSubEnabled is set', async () => {
+    const on = await startApp({ stableSubEnabled: true })
+    try {
+      expect(await getAuthorizeHtml(on)).toContain('name="__sub_username"')
+    } finally {
+      await on.close()
+    }
+    const off = await startApp()
+    try {
+      expect(await getAuthorizeHtml(off)).not.toContain('__sub_username')
+    } finally {
+      await off.close()
+    }
+  })
+
+  it('replaces the random subject with a derived one when a username is submitted', async () => {
+    const subs: string[] = []
+    const srv = await startApp({
+      stableSubEnabled: true,
+      onCredentialsSaved: (_creds, context) => {
+        subs.push(context.sub)
+        return null
+      }
+    })
+    try {
+      await submit(srv, { api_key: 'k', __sub_username: 'matthias' })
+      await submit(srv, { api_key: 'k', __sub_username: '  MATTHIAS  ' })
+      // Stable across two independent authorize round-trips, and equal to the
+      // cross-language derivation (same bucket a returning user reaches).
+      expect(subs).toEqual([DERIVED, DERIVED])
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('never persists the reserved field as a credential', async () => {
+    const received: Record<string, string>[] = []
+    const srv = await startApp({
+      stableSubEnabled: true,
+      onCredentialsSaved: (creds) => {
+        received.push(creds)
+        return null
+      }
+    })
+    try {
+      await submit(srv, { api_key: 'k', __sub_username: 'matthias' })
+      expect(received).toEqual([{ api_key: 'k' }])
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('keeps the random subject when the username is blank', async () => {
+    const subs: string[] = []
+    const srv = await startApp({
+      stableSubEnabled: true,
+      onCredentialsSaved: (_creds, context) => {
+        subs.push(context.sub)
+        return null
+      }
+    })
+    try {
+      await submit(srv, { api_key: 'k', __sub_username: '   ' })
+      await submit(srv, { api_key: 'k', __sub_username: '   ' })
+      expect(subs[0]).not.toBe(DERIVED)
+      expect(subs[0]).not.toBe(subs[1])
+      expect(subs[0]).toMatch(/^[A-Za-z0-9_-]{22}$/)
+    } finally {
+      await srv.close()
+    }
+  })
+
+  it('keeps the random subject when stableSubEnabled is false', async () => {
+    const subs: string[] = []
+    const received: Record<string, string>[] = []
+    const srv = await startApp({
+      onCredentialsSaved: (creds, context) => {
+        received.push(creds)
+        subs.push(context.sub)
+        return null
+      }
+    })
+    try {
+      await submit(srv, { api_key: 'k', __sub_username: 'matthias' })
+      await submit(srv, { api_key: 'k', __sub_username: 'matthias' })
+      expect(subs[0]).not.toBe(DERIVED)
+      expect(subs[0]).not.toBe(subs[1])
+      // The reserved key is stripped regardless of the flag.
+      expect(received).toEqual([{ api_key: 'k' }, { api_key: 'k' }])
     } finally {
       await srv.close()
     }
