@@ -1376,9 +1376,9 @@ function usernameFieldHtml(): string {
     '<label for="field-__sub_username" class="field-label">Workspace / username' +
     ' <span class="optional-badge" aria-hidden="true">Optional</span></label>' +
     '<input id="field-__sub_username" type="text" name="__sub_username"' +
-    ' class="field-input" placeholder="e.g. alice"' +
+    ' class="field-input" placeholder="e.g. alice" aria-describedby="help-__sub_username"' +
     ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />' +
-    '<p class="help-text">Leave blank for a one-off session. Set the same value on' +
+    '<p class="help-text" id="help-__sub_username">Leave blank for a one-off session. Set the same value on' +
     ' every device to keep your saved data (one shared bucket per username).</p>' +
     '</div>'
   )

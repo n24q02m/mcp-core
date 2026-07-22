@@ -19,3 +19,7 @@
 ## 2024-05-18 - ARIA Live Regions on Dynamic Status Boxes
 **Learning:** The credential and login forms across the repository dynamically inject and modify status/error message containers (e.g., `.status-box`). While they had `role="alert"`, they lacked explicit `aria-live` and `aria-atomic` attributes. When manipulating DOM elements via JavaScript (like in `STEP_UI_JS` or the fetch callbacks), screen readers rely heavily on `aria-live` to know when to interrupt or queue announcements, and `aria-atomic` ensures the entire message block is read rather than just the changed node.
 **Action:** When implementing or modifying dynamically updated form status messages (e.g., success or error boxes) in HTML templates or via JS across the codebase, always explicitly set `role="alert"`, `aria-live="polite"`, and `aria-atomic="true"` on the container element to ensure screen readers announce the full content immediately and non-disruptively.
+## 2026-07-15 - Explicit Description Linking
+
+**Learning:** When building custom HTML forms, static inputs with optional help text (such as the optional username field in the credential forms) need to explicitly link their help text for screen readers. While `for` and `id` pair the label, the `<p class="help-text">` remains semantically unlinked without additional attributes.
+**Action:** Always link `<input>` elements to their corresponding help text using the `aria-describedby` attribute pointing to the ID of the help text paragraph.
