@@ -42,6 +42,7 @@ import {
   parseJsonBody,
   type RequestHandler
 } from './router.js'
+import { deriveStableSub } from './stable-sub.js'
 import { authorizationServerMetadata, protectedResourceMetadata } from './well-known.js'
 
 /** Next-step hint returned by credential / step callbacks. */
@@ -123,6 +124,13 @@ export interface LocalOAuthAppOptions {
     schema: RelayConfigSchema,
     options: { submitUrl: string; prefill?: Record<string, string> }
   ) => string
+  /**
+   * Opt in to a stable, username-derived subject. When set, the credential
+   * form shows a workspace-username field and a submitted username replaces
+   * the random per-authorize subject, so a returning user reaches the same
+   * per-sub bucket. Mirrors core-py's ``stable_sub_enabled``.
+   */
+  stableSubEnabled?: boolean
 }
 
 export interface LocalOAuthAppResult {
@@ -370,7 +378,11 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     const html =
       options.customCredentialFormHtml !== undefined
         ? options.customCredentialFormHtml(options.relaySchema, { submitUrl, prefill })
-        : renderCredentialForm(options.relaySchema, { submitUrl, prefill })
+        : renderCredentialForm(options.relaySchema, {
+            submitUrl,
+            prefill,
+            includeUsernameField: options.stableSubEnabled === true
+          })
     htmlResponse(res, 200, html)
   }
 
@@ -405,6 +417,17 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
         error_description: 'Invalid JSON body'
       })
       return
+    }
+
+    // Reserved partition key: remove it so it is never persisted as a provider
+    // credential. When stable-sub is enabled and a username was supplied,
+    // override the random per-authorize sub with a STABLE one derived from it
+    // (same username -> same per-sub bucket across re-auth and devices).
+    // Blank username or disabled flag -> keep the random sub (unchanged).
+    const submittedUsername = String(credentials.__sub_username ?? '').trim()
+    delete credentials.__sub_username
+    if (options.stableSubEnabled === true && submittedUsername) {
+      session.sub = deriveStableSub(submittedUsername, options.serverName, process.env.CREDENTIAL_SECRET)
     }
 
     // Reset stale completion markers from previous authorize submits.
