@@ -19,8 +19,7 @@
       "matchUpdateTypes": ["minor"],
       "groupName": "minor dependencies",
       "groupSlug": "all-minor",
-      "minimumReleaseAge": "7 days",
-      "rangeStrategy": "pin"
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Auto-merge dev-scope minor updates after cooldown",
@@ -30,8 +29,7 @@
       "groupSlug": "non-major-dev",
       "automerge": true,
       "automergeType": "pr",
-      "minimumReleaseAge": "7 days",
-      "rangeStrategy": "pin"
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Auto-merge patch updates after cooldown",
@@ -40,8 +38,7 @@
       "groupSlug": "all-patch",
       "automerge": true,
       "automergeType": "pr",
-      "minimumReleaseAge": "7 days",
-      "rangeStrategy": "pin"
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Auto-merge GitHub Actions digest updates after cooldown",
