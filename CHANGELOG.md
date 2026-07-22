@@ -2,6 +2,86 @@
 
 <!-- version list -->
 
+## v1.21.0-beta.1 (2026-07-22)
+
+### Bug Fixes
+
+- Add aria-describedby to static username field for screen readers
+  ([#674](https://github.com/n24q02m/mcp-core/pull/674),
+  [`f4f2b21`](https://github.com/n24q02m/mcp-core/commit/f4f2b215ca646859afb78c2d927eadd99b2c59ed))
+
+- Add aria-live and aria-atomic to dynamic status alerts
+  ([#671](https://github.com/n24q02m/mcp-core/pull/671),
+  [`c212112`](https://github.com/n24q02m/mcp-core/commit/c212112c430c299b5822984e56e0114d3d56cde5))
+
+- Cache indexOf result in header parsing ([#675](https://github.com/n24q02m/mcp-core/pull/675),
+  [`1423902`](https://github.com/n24q02m/mcp-core/commit/14239021a2c87e3e1b995c2b939916798900a1b6))
+
+- Drop rangeStrategy from update-type package rules
+  ([#678](https://github.com/n24q02m/mcp-core/pull/678),
+  [`6540d05`](https://github.com/n24q02m/mcp-core/commit/6540d0522cd7a71a9741a073787e792598e4497f))
+
+- Link the username field to its help text with aria-describedby
+  ([#674](https://github.com/n24q02m/mcp-core/pull/674),
+  [`f4f2b21`](https://github.com/n24q02m/mcp-core/commit/f4f2b215ca646859afb78c2d927eadd99b2c59ed))
+
+- Pin GitHub Action references to commit SHAs ([#673](https://github.com/n24q02m/mcp-core/pull/673),
+  [`2d0cac0`](https://github.com/n24q02m/mcp-core/commit/2d0cac08517956d089eb70286d38cbe694c6bc12))
+
+- Remove redundant orphan-tag shell guard (better-semantic-release @v1 has a built-in one)
+  ([#670](https://github.com/n24q02m/mcp-core/pull/670),
+  [`19a3caf`](https://github.com/n24q02m/mcp-core/commit/19a3cafa9c1998c394549b17d00fbbabe49ef1a1))
+
+- Remove stray patch_title.json scratch file ([#675](https://github.com/n24q02m/mcp-core/pull/675),
+  [`1423902`](https://github.com/n24q02m/mcp-core/commit/14239021a2c87e3e1b995c2b939916798900a1b6))
+
+- Suppress mutable-action-tag semgrep on first-party @v1 (intentional fork-velocity)
+  ([#670](https://github.com/n24q02m/mcp-core/pull/670),
+  [`19a3caf`](https://github.com/n24q02m/mcp-core/commit/19a3cafa9c1998c394549b17d00fbbabe49ef1a1))
+
+- Use bare nosemgrep for intentional first-party @v1 mutable tag
+  ([#670](https://github.com/n24q02m/mcp-core/pull/670),
+  [`19a3caf`](https://github.com/n24q02m/mcp-core/commit/19a3cafa9c1998c394549b17d00fbbabe49ef1a1))
+
+- 🎨 Palette: Add aria-describedby to static username field for screen readers
+  ([#674](https://github.com/n24q02m/mcp-core/pull/674),
+  [`f4f2b21`](https://github.com/n24q02m/mcp-core/commit/f4f2b215ca646859afb78c2d927eadd99b2c59ed))
+
+- **deps**: Update actions/setup-node action to v7
+  ([#652](https://github.com/n24q02m/mcp-core/pull/652),
+  [`5091f4c`](https://github.com/n24q02m/mcp-core/commit/5091f4cd4fe2a06a897775912fc191deddf4860e))
+
+- **deps**: Update minor dependencies ([#640](https://github.com/n24q02m/mcp-core/pull/640),
+  [`fc944d4`](https://github.com/n24q02m/mcp-core/commit/fc944d40f263ae42dbb25dfeb5ca67207abb9174))
+
+- **deps**: Update patch dependencies ([#647](https://github.com/n24q02m/mcp-core/pull/647),
+  [`f2ef484`](https://github.com/n24q02m/mcp-core/commit/f2ef484b2596623d1bba96f3119072920c2cadbf))
+
+- **deps**: Update typescript to v7 ([#636](https://github.com/n24q02m/mcp-core/pull/636),
+  [`780106e`](https://github.com/n24q02m/mcp-core/commit/780106eaa4bc1b30d238326864a5970262495ecc))
+
+### Features
+
+- Add deriveStableSub to core-ts with cross-language vectors
+  ([#677](https://github.com/n24q02m/mcp-core/pull/677),
+  [`9fcd7e5`](https://github.com/n24q02m/mcp-core/commit/9fcd7e5e214df734d96d0bd19e147d0e4944f076))
+
+- Bring core-ts to stable-sub parity with core-py
+  ([#677](https://github.com/n24q02m/mcp-core/pull/677),
+  [`9fcd7e5`](https://github.com/n24q02m/mcp-core/commit/9fcd7e5e214df734d96d0bd19e147d0e4944f076))
+
+- Cache indexOf result in header parsing ([#675](https://github.com/n24q02m/mcp-core/pull/675),
+  [`1423902`](https://github.com/n24q02m/mcp-core/commit/14239021a2c87e3e1b995c2b939916798900a1b6))
+
+- Wire stableSubEnabled through core-ts OAuth app and transport
+  ([#677](https://github.com/n24q02m/mcp-core/pull/677),
+  [`9fcd7e5`](https://github.com/n24q02m/mcp-core/commit/9fcd7e5e214df734d96d0bd19e147d0e4944f076))
+
+- 🎨 Palette: [UX improvement] add aria-live and aria-atomic to dynamically created status alerts
+  ([#671](https://github.com/n24q02m/mcp-core/pull/671),
+  [`c212112`](https://github.com/n24q02m/mcp-core/commit/c212112c430c299b5822984e56e0114d3d56cde5))
+
+
 ## v1.20.0 (2026-07-18)
 
 
