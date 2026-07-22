@@ -36,4 +36,5 @@ export {
   type SessionStore,
   wrapKvBackendAsSessionKv
 } from './session-store.js'
+export { deriveStableSub } from './stable-sub.js'
 export { authorizationServerMetadata, protectedResourceMetadata } from './well-known.js'

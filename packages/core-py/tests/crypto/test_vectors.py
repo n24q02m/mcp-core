@@ -7,6 +7,7 @@ implementation for the same inputs.
 import json
 from pathlib import Path
 
+from mcp_core.auth.stable_sub import derive_stable_sub
 from mcp_core.crypto.aes import decrypt
 from mcp_core.crypto.kdf import derive_aes_key
 
@@ -66,3 +67,21 @@ class TestAESGCMVectors:
 
         plaintext = decrypt(key, ciphertext, iv, tag)
         assert plaintext == aes["plaintext"]
+
+
+class TestStableSubVectors:
+    def test_derives_expected_subjects(self):
+        """Lock the same vectors core-ts asserts, so the two cannot drift apart."""
+        vectors = _load_vectors()
+
+        for case in vectors["stable_sub"]:
+            derived = derive_stable_sub(case["username"], case["server_name"], case["credential_secret"])
+            assert derived == case["expected"]
+
+    def test_non_ascii_casefold_diverges_from_core_ts(self):
+        """Document the KNOWN divergence: casefold() maps sharp-s to 'ss', JS toLowerCase() does not.
+
+        Parity vectors therefore cover ASCII usernames only. core-ts asserts the
+        mirror image of this (the two values differ there).
+        """
+        assert derive_stable_sub("straße", "a-mcp", "s") == derive_stable_sub("strasse", "a-mcp", "s")
