@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "fastapi>=0.139.0",
+    "fastapi>=0.139.1",
     "uvicorn>=0.51.0",
     "onnxruntime>=1.27.0",
     "numpy>=2.5.1",
@@ -55,7 +55,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.21",
-    "ty>=0.0.59",
+    "ty>=0.0.60",
 ]
 
 [tool.hatch.build.targets.wheel]
