@@ -87,9 +87,9 @@
       "enabled": false
     },
     {
-      "description": "Pin pydantic <2.13 — cohere>=6.1.0 caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+ which breaks downstream wet/mnemo/crg.",
+      "description": "Cap pydantic <3. Per-package pyproject bounds govern the exact ceiling: core-py allows <3 (documented, resolves 2.13.4), embedding-daemon keeps <2.13 for cohere-using consumers. The old repo-wide <2.13 contradicted core-py's declared range.",
       "matchPackageNames": ["pydantic"],
-      "allowedVersions": "<2.13",
+      "allowedVersions": "<3",
       "minimumReleaseAge": "7 days",
       "rangeStrategy": "pin"
     }
