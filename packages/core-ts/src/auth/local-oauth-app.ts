@@ -490,8 +490,13 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
     })
     pruneExpired(authCodes, AUTH_CODE_TTL_S * 1000)
 
+    // RFC 9207 / SEP-2468: carry ``iss`` (this AS's issuer) in the
+    // authorization response so the client can verify the response came from
+    // the AS it started the flow with (mix-up defence).
+    const base = getBaseUrl(req)
     const separator = session.redirectUri.includes('?') ? '&' : '?'
-    const redirectUrl = `${session.redirectUri}${separator}code=${authCode}&state=${session.state}`
+    const redirectUrl =
+      `${session.redirectUri}${separator}code=${authCode}&state=${session.state}` + `&iss=${encodeURIComponent(base)}`
 
     const body: Record<string, unknown> = { ok: true, redirect_url: redirectUrl }
     if (nextStep !== null) {

@@ -401,9 +401,15 @@ def create_delegated_oauth_app(
         }
         _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
 
+        # RFC 9207 / SEP-2468: the authorization response to the MCP client
+        # carries ``iss`` = the LOCAL AS issuer (``base``, already derived
+        # above), so the client can verify the response came from the AS it
+        # started the flow with (mix-up defence).
+        from urllib.parse import quote
+
         redirect_uri = session["redirect_uri"]
         separator = "&" if "?" in redirect_uri else "?"
-        redirect_url = f"{redirect_uri}{separator}code={auth_code}&state={session['state']}"
+        redirect_url = f"{redirect_uri}{separator}code={auth_code}&state={session['state']}&iss={quote(base, safe='')}"
         return RedirectResponse(redirect_url, status_code=302)
 
     # ------------------------------------------------------------------

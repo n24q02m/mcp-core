@@ -12,6 +12,8 @@ describe('authorizationServerMetadata', () => {
     expect(meta.code_challenge_methods_supported).toEqual(['S256'])
     expect(meta.token_endpoint_auth_methods_supported).toEqual(['none'])
     expect(meta.scopes_supported).toEqual(['offline_access'])
+    // RFC 9207 / SEP-2468: the AS emits iss in the authorization response.
+    expect(meta.authorization_response_iss_parameter_supported).toBe(true)
   })
 
   it('trims trailing slashes correctly', () => {

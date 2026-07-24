@@ -208,6 +208,9 @@ def test_redirect_callback_exchanges_code_and_calls_on_token_received(monkeypatc
     assert final_loc.startswith("http://localhost/cb?")
     qs = parse_qs(urlparse(final_loc).query)
     assert qs["state"] == ["client-state"]
+    # RFC 9207 / SEP-2468: the authorization response to the MCP client carries
+    # iss = the LOCAL AS issuer (this server's base URL).
+    assert qs["iss"] == ["http://localhost"]
     auth_code = qs["code"][0]
 
     tok = client.post(

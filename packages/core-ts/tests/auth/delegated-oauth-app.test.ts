@@ -318,6 +318,9 @@ describe('redirect flow', () => {
         const code = new URL(finalLoc).searchParams.get('code') as string
         const state = new URL(finalLoc).searchParams.get('state') as string
         expect(state).toBe('client-state')
+        // RFC 9207 / SEP-2468: the authorization response to the MCP client
+        // carries iss = the LOCAL AS issuer (this server's base URL).
+        expect(new URL(finalLoc).searchParams.get('iss')).toBe(srv.url)
 
         const tok = await fetch(`${srv.url}/token`, {
           method: 'POST',

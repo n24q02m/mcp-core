@@ -143,6 +143,8 @@ class TestWellKnownMetadata:
         assert "authorization_code" in data["grant_types_supported"]
         assert "S256" in data["code_challenge_methods_supported"]
         assert "none" in data["token_endpoint_auth_methods_supported"]
+        # RFC 9207 / SEP-2468: advertise iss support in the authorization response.
+        assert data["authorization_response_iss_parameter_supported"] is True
 
     def test_protected_resource_metadata(self, client):
         """GET /.well-known/oauth-protected-resource returns correct RFC 9728 JSON."""
@@ -257,6 +259,43 @@ class TestAuthorizeEndpoint:
         # Verify credentials were saved
         assert saved["API_KEY"] == "sk-test-123"
         assert saved["WORKSPACE"] == "my-workspace"
+
+    def test_authorize_redirect_includes_iss(self, app_and_issuer):
+        """POST /authorize redirect carries iss = the AS issuer (RFC 9207 / SEP-2468).
+
+        The client verifies the ``iss`` in the authorization response matches
+        the AS it started the flow with (mix-up defence). It is URL-encoded in
+        the redirect and decoded back by ``parse_qs``.
+        """
+        from urllib.parse import parse_qs, urlparse
+
+        app, _issuer, _saved = app_and_issuer
+        client = TestClient(app, base_url="http://localhost")
+
+        _verifier, challenge = _pkce_pair()
+        resp = client.get(
+            "/authorize",
+            params={
+                "client_id": "test-client",
+                "redirect_uri": "http://localhost/callback",
+                "state": "test-state",
+                "code_challenge": challenge,
+                "code_challenge_method": "S256",
+            },
+        )
+        assert resp.status_code == 200
+
+        import re
+
+        nonce = re.search(r'nonce=([^"&]+)', resp.text).group(1)
+        resp = client.post(
+            f"/authorize?nonce={nonce}",
+            json={"API_KEY": "sk-test-123", "WORKSPACE": "my-workspace"},
+        )
+        assert resp.status_code == 200
+        redirect_url = resp.json()["redirect_url"]
+        qs = parse_qs(urlparse(redirect_url).query)
+        assert qs["iss"] == ["http://localhost"]
 
     def test_authorize_isolates_subjects_across_sessions(self):
         """Two authorize flows receive distinct subjects in on_credentials_saved.
