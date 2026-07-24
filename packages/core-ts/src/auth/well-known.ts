@@ -11,7 +11,10 @@ export function authorizationServerMetadata(issuerUrl: string): Record<string, u
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['none'],
-    scopes_supported: ['offline_access']
+    scopes_supported: ['offline_access'],
+    // RFC 9207 / SEP-2468: the AS returns the ``iss`` parameter in every
+    // authorization response so clients can defend against mix-up attacks.
+    authorization_response_iss_parameter_supported: true
   }
 }
 

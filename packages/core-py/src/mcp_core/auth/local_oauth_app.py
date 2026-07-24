@@ -377,10 +377,16 @@ def create_local_oauth_app(
 
         _prune_expired(auth_codes, _AUTH_CODE_TTL_S)
 
+        # RFC 9207 / SEP-2468: carry ``iss`` (this AS's issuer) in the
+        # authorization response so the client can verify the response came
+        # from the AS it started the flow with (mix-up defence).
+        from urllib.parse import quote
+
+        base = derive_base_url(request)
         redirect_uri = session["redirect_uri"]
         state = session["state"]
         separator = "&" if "?" in redirect_uri else "?"
-        redirect_url = f"{redirect_uri}{separator}code={auth_code}&state={state}"
+        redirect_url = f"{redirect_uri}{separator}code={auth_code}&state={state}&iss={quote(base, safe='')}"
 
         response_body: dict = {"ok": True, "redirect_url": redirect_url}
         if next_step:

@@ -155,6 +155,32 @@ describe('POST /authorize', () => {
     }
   })
 
+  it('includes iss in the authorization redirect (RFC 9207 / SEP-2468)', async () => {
+    const srv = await startApp({ onCredentialsSaved: () => null })
+    try {
+      const { challenge } = pkce()
+      const params = new URLSearchParams({
+        client_id: 'c',
+        redirect_uri: 'http://localhost:5555/callback',
+        state: 'xyz',
+        code_challenge: challenge
+      })
+      const getResp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+      const nonce = extractNonce(await getResp.text())
+      const postResp = await fetch(`${srv.url}/authorize?nonce=${nonce}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: 'k' })
+      })
+      const redirectUrl = ((await postResp.json()) as { redirect_url: string }).redirect_url
+      // iss MUST equal the AS issuer (this server's base URL), URL-encoded in
+      // the redirect and decoded back by URL.searchParams.
+      expect(new URL(redirectUrl).searchParams.get('iss')).toBe(srv.url)
+    } finally {
+      await srv.close()
+    }
+  })
+
   it('rejects POST with unknown nonce', async () => {
     const srv = await startApp()
     try {
@@ -586,6 +612,8 @@ describe('well-known metadata', () => {
       expect(body.authorization_endpoint).toBe(`${srv.url}/authorize`)
       expect(body.token_endpoint).toBe(`${srv.url}/token`)
       expect(body.code_challenge_methods_supported).toEqual(['S256'])
+      // RFC 9207 / SEP-2468: advertise iss support in the authorization response.
+      expect(body.authorization_response_iss_parameter_supported).toBe(true)
     } finally {
       await srv.close()
     }

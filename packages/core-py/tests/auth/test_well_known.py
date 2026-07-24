@@ -15,6 +15,8 @@ def test_authorization_server_metadata():
     assert "authorization_code" in meta["grant_types_supported"]
     assert "refresh_token" in meta["grant_types_supported"]
     assert meta["scopes_supported"] == ["offline_access"]
+    # RFC 9207 / SEP-2468: the AS emits iss in the authorization response.
+    assert meta["authorization_response_iss_parameter_supported"] is True
 
 
 def test_protected_resource_metadata():

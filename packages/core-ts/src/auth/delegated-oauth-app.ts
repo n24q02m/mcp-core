@@ -437,8 +437,12 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
       createdAt: Date.now()
     })
 
+    // RFC 9207 / SEP-2468: the authorization response to the MCP client carries
+    // ``iss`` = the LOCAL AS issuer (``base``, already derived above), so the
+    // client can verify the response came from the AS it started the flow with.
     const separator = session.redirectUri.includes('?') ? '&' : '?'
-    const redirectUrl = `${session.redirectUri}${separator}code=${authCode}&state=${session.state}`
+    const redirectUrl =
+      `${session.redirectUri}${separator}code=${authCode}&state=${session.state}` + `&iss=${encodeURIComponent(base)}`
     res.writeHead(302, { Location: redirectUrl })
     res.end()
   }
