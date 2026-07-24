@@ -143,45 +143,27 @@ def test_persist_silent_on_oserror(tmp_path, monkeypatch, caplog):
     assert load_tools_cache("wet-mcp", 55317, srv_version="2.28.4", core_version="1.11.0") is None
 
 
-def test_atomic_write_chmod_non_nt(tmp_path, monkeypatch):
-    """Verify that os.chmod is called on non-Windows platforms."""
-    monkeypatch.setattr("os.name", "posix")
-    chmod_called = False
-
-    def fake_chmod(path, mode):
-        nonlocal chmod_called
-        chmod_called = True
-        assert mode == 0o600
-
-    monkeypatch.setattr("os.chmod", fake_chmod)
-
+def test_atomic_write_creates_with_correct_mode(tmp_path, monkeypatch):
+    """Verify that _atomic_write creates the temporary file with mode 0o600."""
     from mcp_core.transport.cache import _atomic_write
+    import os
+
+    # Mock os.open to verify mode, but still actually create a file descriptor
+    original_open = os.open
+    open_called_with_mode = None
+
+    def fake_open(path, flags, mode=0o777):
+        nonlocal open_called_with_mode
+        open_called_with_mode = mode
+        return original_open(path, flags, mode)
+
+    monkeypatch.setattr(os, "open", fake_open)
 
     path = tmp_path / "test.json"
     _atomic_write(path, "content")
 
     assert path.read_text() == "content"
-    assert chmod_called is True
-
-
-def test_atomic_write_no_chmod_on_nt(tmp_path, monkeypatch):
-    """Verify that os.chmod is NOT called on Windows."""
-    monkeypatch.setattr("os.name", "nt")
-    chmod_called = False
-
-    def fake_chmod(path, mode):
-        nonlocal chmod_called
-        chmod_called = True
-
-    monkeypatch.setattr("os.chmod", fake_chmod)
-
-    from mcp_core.transport.cache import _atomic_write
-
-    path = tmp_path / "test.json"
-    _atomic_write(path, "content")
-
-    assert path.read_text() == "content"
-    assert chmod_called is False
+    assert open_called_with_mode == 0o600
 
 
 def test_cache_traversal_sanitization():
