@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import secrets
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from starlette.testclient import TestClient
@@ -1363,8 +1364,38 @@ def test_on_credentials_saved_exception():
 
 
 def test_on_credentials_saved_returns_error():
+    """#682: a failed credential save must not hand the client an auth code."""
+
     def on_saved(creds, context):
-        return {"type": "error", "text": "Callback-level error"}
+        return {"type": "error", "text": "IMAP connection failed"}
+
+    app, _ = create_local_oauth_app(
+        server_name="test-server",
+        relay_schema=RELAY_SCHEMA,
+        on_credentials_saved=on_saved,
+    )
+    client = TestClient(app, base_url="http://localhost")
+
+    nonce = _extract_nonce(client)
+    resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["ok"] is False
+    assert body["error"] == "IMAP connection failed"
+    assert "redirect_url" not in body
+    assert "code=" not in resp.text
+
+
+@pytest.mark.parametrize("step_type", ["otp_required", "password_required", "oauth_device_code"])
+def test_on_credentials_saved_continuation_still_redirects(step_type):
+    """Regression guard for #682: only ``error`` short-circuits.
+
+    The other next_step types continue a SUCCESSFUL save, so the redirect
+    (code + state + iss) must still be returned alongside the hint.
+    """
+
+    def on_saved(creds, context):
+        return {"type": step_type, "text": "continue"}
 
     app, _ = create_local_oauth_app(
         server_name="test-server",
@@ -1376,8 +1407,13 @@ def test_on_credentials_saved_returns_error():
     nonce = _extract_nonce(client)
     resp = client.post(f"/authorize?nonce={nonce}", json={"API_KEY": "secret"})
     assert resp.status_code == 200
-    assert resp.json()["ok"] is False
-    assert resp.json()["error"] == "Callback-level error"
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["next_step"]["type"] == step_type
+    query = parse_qs(urlparse(body["redirect_url"]).query)
+    assert query["code"][0]
+    assert query["state"][0] == "otp-state"
+    assert query["iss"][0] == "http://localhost"
 
 
 def test_authorize_post_invalid_json():

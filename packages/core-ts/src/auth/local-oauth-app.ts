@@ -462,6 +462,19 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       }
     }
 
+    // Issue #682: a failing save callback must not yield an auth code. The
+    // response used to carry both ``redirect_url`` (with a usable code) and
+    // ``next_step: {type: 'error'}``, so a client reading only the redirect
+    // exchanged the code for a token bound to credentials that were never
+    // persisted. Short-circuit here, before the code is minted. Other
+    // next_step types are legitimate continuations of a successful save and
+    // keep the redirect.
+    if (nextStep !== null && nextStep.type === 'error') {
+      const errText = typeof nextStep.text === 'string' ? nextStep.text : 'credential save failed'
+      jsonResponse(res, 400, { ok: false, error: errText })
+      return
+    }
+
     // Mark the persistent ``_setup_complete`` flag once the user submits
     // successfully. Multi-step flows (OTP / 2FA) defer marking until the
     // final step in ``otpHandler`` — see core-py parity. Best-effort: any
