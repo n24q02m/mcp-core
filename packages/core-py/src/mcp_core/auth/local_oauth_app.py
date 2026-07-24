@@ -344,9 +344,15 @@ def create_local_oauth_app(
                     status_code=500,
                 )
 
+        # Issue #682: a failing save callback must not yield an auth code, and
+        # the failure must be signalled by the HTTP status too — a 200 let
+        # clients that only check the status treat a rejected save as success.
+        # Other next_step types are legitimate continuations of a successful
+        # save and keep the redirect built below.
         if next_step and next_step.get("type") == "error":
             return JSONResponse(
-                {"ok": False, "error": next_step.get("text", "Unknown error")},
+                {"ok": False, "error": next_step.get("text", "credential save failed")},
+                status_code=400,
             )
 
         # Mark the persistent ``_setup_complete`` flag once the user has

@@ -181,6 +181,76 @@ describe('POST /authorize', () => {
     }
   })
 
+  it('does not mint an auth code when the save callback errors (#682)', async () => {
+    const srv = await startApp({
+      onCredentialsSaved: () => ({ type: 'error', text: 'IMAP connection failed' })
+    })
+    try {
+      const { challenge } = pkce()
+      const params = new URLSearchParams({
+        client_id: 'c',
+        redirect_uri: 'http://localhost:5555/callback',
+        state: 'xyz',
+        code_challenge: challenge
+      })
+      const getResp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+      const nonce = extractNonce(await getResp.text())
+      const postResp = await fetch(`${srv.url}/authorize?nonce=${nonce}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: 'k' })
+      })
+      // The credential save failed, so the client must NOT walk away with a
+      // code it can exchange for a token bound to credentials that were never
+      // persisted.
+      expect(postResp.status).toBe(400)
+      const body = (await postResp.json()) as Record<string, unknown>
+      expect(body.ok).toBe(false)
+      expect(body.redirect_url).toBeUndefined()
+      expect(JSON.stringify(body)).not.toContain('code=')
+      expect(body.error).toBe('IMAP connection failed')
+    } finally {
+      await srv.close()
+    }
+  })
+
+  // Regression guard for #682: only ``error`` short-circuits. The other
+  // next_step types are legitimate continuations of a SUCCESSFUL save and
+  // must keep returning the redirect (code + state + iss) alongside the hint.
+  for (const stepType of ['otp_required', 'password_required', 'oauth_device_code']) {
+    it(`still returns a redirect for a ${stepType} next_step`, async () => {
+      const srv = await startApp({
+        onCredentialsSaved: () => ({ type: stepType, text: 'continue' })
+      })
+      try {
+        const { challenge } = pkce()
+        const params = new URLSearchParams({
+          client_id: 'c',
+          redirect_uri: 'http://localhost:5555/callback',
+          state: 'xyz',
+          code_challenge: challenge
+        })
+        const getResp = await fetch(`${srv.url}/authorize?${params.toString()}`)
+        const nonce = extractNonce(await getResp.text())
+        const postResp = await fetch(`${srv.url}/authorize?nonce=${nonce}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: 'k' })
+        })
+        expect(postResp.status).toBe(200)
+        const body = (await postResp.json()) as Record<string, unknown>
+        expect(body.ok).toBe(true)
+        expect((body.next_step as Record<string, string>).type).toBe(stepType)
+        const redirect = new URL(body.redirect_url as string)
+        expect(redirect.searchParams.get('code')).toBeTruthy()
+        expect(redirect.searchParams.get('state')).toBe('xyz')
+        expect(redirect.searchParams.get('iss')).toBe(srv.url)
+      } finally {
+        await srv.close()
+      }
+    })
+  }
+
   it('rejects POST with unknown nonce', async () => {
     const srv = await startApp()
     try {
