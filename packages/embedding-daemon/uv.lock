@@ -199,7 +199,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.5.1" },
     { name = "onnxruntime", specifier = ">=1.27.0" },
     { name = "onnxruntime-gpu", marker = "extra == 'cuda'", specifier = ">=1.27.0" },
-    { name = "pydantic", specifier = ">=2.12.5,<2.13" },
+    { name = "pydantic", specifier = "==2.12.5" },
     { name = "uvicorn", specifier = ">=0.51.0" },
 ]
 provides-extras = ["gguf", "cuda"]
