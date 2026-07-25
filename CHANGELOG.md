@@ -2,6 +2,57 @@
 
 <!-- version list -->
 
+## v1.21.0-beta.2 (2026-07-25)
+
+### Bug Fixes
+
+- Align pydantic Renovate cap with core-py declared range
+  ([#683](https://github.com/n24q02m/mcp-core/pull/683),
+  [`434f6f2`](https://github.com/n24q02m/mcp-core/commit/434f6f2964b545e65db9ae651b203f77cd51962c))
+
+- Create cache files with restrictive permissions instead of chmod after write
+  ([`d36f43e`](https://github.com/n24q02m/mcp-core/commit/d36f43eb41ec741158019c8f48258863b1356fe2))
+
+- Declare ruff lint rules explicitly so releases cannot change them
+  ([`61f7203`](https://github.com/n24q02m/mcp-core/commit/61f72034b7cad6941e8bc889c22f1fd5d8f7cdf2))
+
+- Do not mint an auth code when credential save fails (#682)
+  ([#689](https://github.com/n24q02m/mcp-core/pull/689),
+  [`2fb97a1`](https://github.com/n24q02m/mcp-core/commit/2fb97a1e525eab0581ed702c4a71effa4349c4f3))
+
+- Keep pydantic a range in the published libraries instead of an exact pin
+  ([`1529dbb`](https://github.com/n24q02m/mcp-core/commit/1529dbb582083deff12c103086b9ceeb7f547369))
+
+- Let Renovate move only the lock for pydantic, not the declared floor
+  ([`0a773bb`](https://github.com/n24q02m/mcp-core/commit/0a773bb6493256cd25722382a46ea7ec90e47986))
+
+- **deps**: Pin dependencies ([#684](https://github.com/n24q02m/mcp-core/pull/684),
+  [`7d73289`](https://github.com/n24q02m/mcp-core/commit/7d7328972d6c2a6de074c459cecb0facab924334))
+
+- **deps**: Update astral-sh/setup-uv action to v9
+  ([#681](https://github.com/n24q02m/mcp-core/pull/681),
+  [`e91f264`](https://github.com/n24q02m/mcp-core/commit/e91f264bcc7b316bbec097d61cbfe4cda1195885))
+
+- **deps**: Update better-sqlite3 to v13 ([#687](https://github.com/n24q02m/mcp-core/pull/687),
+  [`0c3f7b2`](https://github.com/n24q02m/mcp-core/commit/0c3f7b21f53851b6d93661537f62ff3be4bdc4e0))
+
+- **deps**: Update patch dependencies
+  ([`e3b8239`](https://github.com/n24q02m/mcp-core/commit/e3b8239507643e7b9b6726c3e0b3bf1cbcb578ae))
+
+- **deps**: Update patch dependencies ([#680](https://github.com/n24q02m/mcp-core/pull/680),
+  [`f6a27c8`](https://github.com/n24q02m/mcp-core/commit/f6a27c84d398d9f8d62594456bfc5d6328e4c9d8))
+
+- **deps**: Update semgrep/semgrep Docker digest to 98c2572
+  ([#651](https://github.com/n24q02m/mcp-core/pull/651),
+  [`4d17235`](https://github.com/n24q02m/mcp-core/commit/4d172355bb557a6428a96495d8a6a5c71b29985f))
+
+### Features
+
+- Add iss to authorization response (RFC 9207 / SEP-2468)
+  ([#688](https://github.com/n24q02m/mcp-core/pull/688),
+  [`9bd4aea`](https://github.com/n24q02m/mcp-core/commit/9bd4aeacd4643f18c1507f7d8bb7501e0f5e19fb))
+
+
 ## v1.21.0-beta.1 (2026-07-22)
 
 ### Bug Fixes
