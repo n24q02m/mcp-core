@@ -12,7 +12,7 @@
  * (crg #384).
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -35,14 +35,7 @@ export function atomicWrite(path: string, content: string): void {
   const dir = dirname(path)
   if (dir && !existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
   const tmp = `${path}.tmp`
-  writeFileSync(tmp, content, { encoding: 'utf-8' })
-  if (process.platform !== 'win32') {
-    try {
-      chmodSync(tmp, 0o600)
-    } catch {
-      /* ignore */
-    }
-  }
+  writeFileSync(tmp, content, { encoding: 'utf-8', mode: 0o600 })
   renameSync(tmp, path)
 }
 

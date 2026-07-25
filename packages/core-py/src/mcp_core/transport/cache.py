@@ -38,9 +38,9 @@ def _atomic_write(path: Path, content: str) -> None:
     """Atomic write via .tmp + os.replace (Windows-safe)."""
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    if os.name != "nt":
-        os.chmod(tmp, 0o600)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(content)
     os.replace(tmp, path)
 
 
