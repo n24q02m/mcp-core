@@ -636,6 +636,28 @@ def test_relay_open_with_session_calls_try_open_browser(cli_storage, monkeypatch
     assert opened == [info.relay_url]
 
 
+def test_relay_open_does_not_claim_opened_when_browser_declines(cli_storage, monkeypatch, capsys):
+    """This used to print "opened" whatever the outcome, so under headless / CI /
+    the env-guard it was wrong in the very first line and the user waited for a
+    tab that never appeared. Failing to open is not a failure of the command:
+    the URL is still correct, so the exit code is still 0."""
+    info = SessionInfo(
+        session_id="abcdefgh12345",
+        relay_url="https://relay.example.com/authorize?s=abc",
+        created_at=time.time(),
+    )
+    asyncio.run(write_session_lock("test-server", info))
+    monkeypatch.setattr("mcp_core.cli.try_open_browser", lambda url: False)
+    run = build_cli("test-server", serve=lambda argv: None)
+
+    rc = run(["relay", "open"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "opened" not in out
+    assert info.relay_url in out
+
+
 # --- relay reset ---------------------------------------------------------------
 
 

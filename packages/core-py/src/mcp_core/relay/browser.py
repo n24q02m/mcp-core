@@ -18,6 +18,23 @@ _BROWSER_OPEN_DEDUPE_WINDOW_S = 5 * 60
 _recent_browser_opens: dict[str, float] = {}
 
 
+def _env_flag(name: str) -> bool:
+    """Read an on/off environment flag: set, and not ``''`` / ``'false'`` / ``'0'``.
+
+    One rule for all three guard variables. ``CI`` has to follow it because it is
+    a variable we READ from someone else's environment, where ``CI=false`` is a
+    real idiom for "do not apply CI behavior" (Create React App, Netlify) -- the
+    ``ci-info`` package uses the same rule. Our own two then follow it as well,
+    for two reasons: a plain truthy check makes ``MCP_NO_BROWSER=false`` SUPPRESS
+    the browser, which is wrong under every reading of a negative variable name
+    (writing ``=false`` means "no, don't no-browser" -- that person is asking for
+    auto-open and would be blocked silently), and two rules inside one condition
+    is a trap for whoever reads it next.
+    """
+    value = os.environ.get(name)
+    return value is not None and value not in ("", "false", "0")
+
+
 def _is_wsl() -> bool:
     """Detect if running inside WSL."""
     try:
@@ -84,8 +101,9 @@ def try_open_browser(url: str) -> bool:
     # Env-guard: suppress auto-open in headless / CI / autonomous-test contexts so a
     # relay/clean-state server never hijacks the user's real browser with /authorize?nonce
     # or 127.0.0.1 tabs. Set MCP_NO_BROWSER=1 (or NO_BROWSER / CI) to disable.
-    if os.environ.get("MCP_NO_BROWSER") or os.environ.get("NO_BROWSER"):
-        logger.debug("Browser open suppressed by env guard (MCP_NO_BROWSER/NO_BROWSER): %s", url)
+    # All three go through the same rule -- see _env_flag for why.
+    if _env_flag("MCP_NO_BROWSER") or _env_flag("NO_BROWSER") or _env_flag("CI"):
+        logger.debug("Browser open suppressed by env guard (MCP_NO_BROWSER/NO_BROWSER/CI): %s", url)
         return False
 
     # Validate URL

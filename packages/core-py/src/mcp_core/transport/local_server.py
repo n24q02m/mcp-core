@@ -424,7 +424,16 @@ async def run_http_server(
         relay_schema: RelayConfigSchema dict describing the credential form.
             Mutually exclusive with ``delegated_oauth``.
         port: TCP port to bind. 0 means auto-find a free port.
-        open_browser: Deprecated, ignored.
+        open_browser: Whether to auto-open the setup URL in the user's browser
+            when the stored config is not yet complete. Default ``True`` --
+            first-run setup for the servers built on this function depends on
+            it. Pass ``False`` when the consumer already hands the setup URL to
+            the user by another route (a tool-call result, a log line, its own
+            UI). Otherwise there are two entry points into the SAME temporary
+            server, so the user starts two consent flows: whichever finishes
+            first resolves the flow and closes the server, and the other tab's
+            redirect then lands on a dead port. The URL is still logged when
+            this is ``False``, so nothing is lost by turning it off.
         on_credentials_saved: Optional callback invoked when user submits creds.
             Only used in relay (non-delegated) mode.
         on_step_submitted: Optional callback invoked when user submits a
@@ -608,16 +617,25 @@ async def run_http_server(
             # see ``local_oauth_app.root()`` docstring ("one-URL UX without
             # exposing raw OAuth machinery").
             setup_url = f"http://{actual_host}:{actual_port}/"
-            logger.info(
-                "Configuration incomplete. Opening {} in browser to configure",
-                setup_url,
-            )
-            # Auto-open browser so user sees relay form immediately on first
-            # connect. Best-effort: any failure is reported via the ASCII
-            # banner inside try_open_browser.
-            from mcp_core.relay.browser import try_open_browser
+            if open_browser:
+                logger.info(
+                    "Configuration incomplete. Opening {} in browser to configure",
+                    setup_url,
+                )
+                # Auto-open browser so user sees relay form immediately on first
+                # connect. Best-effort: any failure is reported via the ASCII
+                # banner inside try_open_browser.
+                from mcp_core.relay.browser import try_open_browser
 
-            try_open_browser(setup_url)
+                try_open_browser(setup_url)
+            else:
+                # The consumer already hands this URL to the user by another
+                # route, so log it rather than open it -- see the parameter's
+                # docstring for why a second entry point breaks the flow.
+                logger.info(
+                    "Configuration incomplete. Visit {} to configure",
+                    setup_url,
+                )
         else:
             logger.info("Credentials already configured for {}", server_name)
 

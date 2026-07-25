@@ -19,6 +19,21 @@ def _clear_browser_dedupe():
     browser._recent_browser_opens.clear()
 
 
+# The three variables that turn browser-opening OFF. These tests have to own
+# them rather than let the environment decide: EVERY CI runner sets CI=1, and a
+# dev machine may export MCP_NO_BROWSER=1 -- leave them in place and this suite
+# reads the config of whatever machine runs it instead of reading the code, a
+# kind of red that only shows up after a push.
+BROWSER_GUARD_ENV = ("MCP_NO_BROWSER", "NO_BROWSER", "CI")
+
+
+@pytest.fixture(autouse=True)
+def _clear_browser_guard_env(monkeypatch):
+    """Clear all three guard variables; monkeypatch restores them afterwards."""
+    for name in BROWSER_GUARD_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+
 class TestIsWsl:
     def test_detects_wsl_from_proc_version(self):
         content = "Linux version 5.15.90.1-microsoft-standard-WSL2"
@@ -130,15 +145,36 @@ class TestTryOpenBrowser:
                     assert try_open_browser(url) is True
                     assert mock_wb.open.call_count == 2
 
-    @pytest.mark.parametrize("env_var", ["MCP_NO_BROWSER", "NO_BROWSER"])
-    def test_env_guard_suppresses_open(self, monkeypatch, env_var):
-        """MCP_NO_BROWSER / NO_BROWSER suppress auto-open so a relay/clean-state server
-        never hijacks the user's real browser in headless / autonomous-test contexts."""
-        monkeypatch.setenv(env_var, "1")
+    # Three variables, ONE rule, one value table -- shared on purpose: anyone
+    # changing the semantics of one of them sees straight away what the other
+    # two promise. CI has to follow the community convention (ci-info) because
+    # it is a variable read from someone else's environment; our own two follow
+    # the same rule so the guard has only one reading -- and because
+    # MCP_NO_BROWSER=false SUPPRESSING the browser is wrong under every way of
+    # reading a negative name.
+    @pytest.mark.parametrize("env_var", BROWSER_GUARD_ENV)
+    @pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "anything"])
+    def test_env_guard_suppresses_open(self, monkeypatch, env_var, value):
+        """MCP_NO_BROWSER / NO_BROWSER / CI suppress auto-open so a relay/clean-state
+        server never hijacks the user's real browser in headless / CI contexts."""
+        monkeypatch.setenv(env_var, value)
         with patch("mcp_core.relay.browser._is_wsl", return_value=False):
             with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
                 assert try_open_browser("https://example.com/authorize?nonce=abc") is False
                 mock_wb.open.assert_not_called()
+
+    @pytest.mark.parametrize("env_var", BROWSER_GUARD_ENV)
+    @pytest.mark.parametrize("value", ["false", "0", ""])
+    def test_env_guard_does_not_suppress_for_off_values(self, monkeypatch, env_var, value):
+        """``CI=false`` is a real idiom for "do not apply CI behavior", and
+        ``MCP_NO_BROWSER=false`` means "no, do not no-browser" -- that person is
+        asking for auto-open and must not be blocked silently."""
+        monkeypatch.setenv(env_var, value)
+        with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+            with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                mock_wb.open.return_value = True
+                assert try_open_browser("https://example.com/authorize?nonce=abc") is True
+                mock_wb.open.assert_called_once()
 
 
 class TestOpenInWsl:

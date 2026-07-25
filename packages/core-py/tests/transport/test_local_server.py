@@ -446,6 +446,46 @@ class TestRunLocalServer:
 
             mock_server.serve.assert_awaited_once()
 
+    def _run_with_empty_config(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path, **kwargs) -> None:
+        """Drive run_http_server down the "config incomplete" branch."""
+        import asyncio
+
+        mock_server = _mock_uvicorn_server()
+        with (
+            patch("mcp_core.storage.config_file.read_config", return_value=None),
+            patch("uvicorn.Server", return_value=mock_server),
+            patch("mcp_core.lifecycle.lock.LifecycleLock") as mock_lock,
+        ):
+            mock_lock.return_value.__enter__ = lambda self: self
+            mock_lock.return_value.__exit__ = lambda self, *a: None
+            asyncio.run(
+                _run_server_for_test(
+                    mcp,
+                    relay_schema=relay_schema,
+                    server_name="test",
+                    port=12345,
+                    jwt_keys_dir=tmp_path / "jwt-keys",
+                    **kwargs,
+                )
+            )
+
+    def test_open_browser_false_suppresses_auto_open(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
+        """A consumer that already hands the setup URL to the user by another
+        route passes ``open_browser=False`` and must not get a second entry point
+        into the same temporary server. imagine-mcp already passes
+        ``open_browser=not public_url`` for exactly this reason."""
+        with patch("mcp_core.relay.browser.try_open_browser") as mock_open:
+            self._run_with_empty_config(mcp, relay_schema, tmp_path, open_browser=False)
+            mock_open.assert_not_called()
+
+    def test_open_browser_defaults_to_opening(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
+        """Default stays True -- first-run setup for the servers built on this
+        function depends on the browser opening by itself."""
+        with patch("mcp_core.relay.browser.try_open_browser") as mock_open:
+            self._run_with_empty_config(mcp, relay_schema, tmp_path)
+            mock_open.assert_called_once()
+            assert mock_open.call_args[0][0].startswith("http://127.0.0.1:12345")
+
     def test_skips_browser_when_credentials_exist(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         """Verify server starts normally when credentials already exist."""
         mock_server = _mock_uvicorn_server()
