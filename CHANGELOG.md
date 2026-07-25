@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.22.0-beta.1 (2026-07-25)
+
+### Features
+
+- Let a consumer turn off runHttpServer's automatic browser open
+  ([`07a5999`](https://github.com/n24q02m/mcp-core/commit/07a5999169248aeb5f17e5a78fee7a6afa800215))
+
+- Let servers register extra HTTP routes on the runHttpServer port
+  ([`05e51df`](https://github.com/n24q02m/mcp-core/commit/05e51df77c59bfb6b6aac31b0079704c50f4d1ea))
+
+
 ## v1.21.0 (2026-07-25)
 
 
