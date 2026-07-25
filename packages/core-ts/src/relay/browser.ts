@@ -72,8 +72,17 @@ export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Env-guard: suppress auto-open in headless / CI / autonomous-test contexts so a
     // relay/clean-state server never hijacks the user's real browser with /authorize?nonce
-    // or 127.0.0.1 tabs. Set MCP_NO_BROWSER=1 (or NO_BROWSER / CI) to disable.
-    if (process.env.MCP_NO_BROWSER || process.env.NO_BROWSER) {
+    // or 127.0.0.1 tabs. Set MCP_NO_BROWSER=1 or NO_BROWSER=1 to disable it explicitly;
+    // `CI` counts too because every CI provider sets it (GitHub Actions: CI=true) and a
+    // build agent has no browser to hijack.
+    //
+    // `CI=false` / `CI=0` do NOT suppress: exporting CI=false is a real idiom for "do not
+    // apply CI behavior" (Create React App, Netlify), so treating it as a browser
+    // suppressor would be exactly the surprise this guard exists to avoid. Same rule the
+    // `ci-info` package uses.
+    const ci = process.env.CI
+    const inCi = ci !== undefined && ci !== '' && ci !== 'false' && ci !== '0'
+    if (process.env.MCP_NO_BROWSER || process.env.NO_BROWSER || inCi) {
       return false
     }
 

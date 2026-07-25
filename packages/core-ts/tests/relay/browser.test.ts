@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock child_process and fs/promises before importing the module
 vi.mock('node:child_process', () => ({
@@ -20,7 +20,30 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { tryOpenBrowser } from '../../src/relay/browser.js'
 
+/**
+ * Ba biến TẮT việc mở browser. Test phải tự làm chủ chúng, không để môi trường
+ * quyết định: máy dev ở đây export `MCP_NO_BROWSER=1`, và MỌI CI runner có
+ * `CI=1` -- không xoá thì suite này đọc cấu hình của máy chạy chứ không đọc
+ * code, và kiểu đỏ đó chỉ hiện sau khi push. Xoá trước mỗi test, khôi phục sau
+ * (cũng chặn một test set biến rồi rò sang test kế).
+ */
+const BROWSER_GUARD_ENV = ['MCP_NO_BROWSER', 'NO_BROWSER', 'CI'] as const
+
 describe('tryOpenBrowser', () => {
+  let savedGuardEnv: Record<string, string | undefined>
+
+  beforeEach(() => {
+    savedGuardEnv = Object.fromEntries(BROWSER_GUARD_ENV.map((key) => [key, process.env[key]]))
+    for (const key of BROWSER_GUARD_ENV) delete process.env[key]
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedGuardEnv)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  })
+
   describe('URL validation', () => {
     it('rejects non-http URLs', async () => {
       expect(await tryOpenBrowser('file:///etc/passwd')).toBe(false)
@@ -136,6 +159,56 @@ describe('tryOpenBrowser', () => {
         delete process.env[envVar]
       }
       expect(execFile).not.toHaveBeenCalled()
+    })
+
+    it('does not open when CI is set', async () => {
+      // Mọi CI provider đều set CI (GitHub Actions: CI=true). Không honor nó thì
+      // mcp-core vẫn thử mở browser trong CI; trên runner Linux `xdg-open` ENOENT
+      // nên vô hại -- nhưng đó là may mắn về nền tảng, không phải thiết kế.
+      vi.mocked(execFile).mockClear()
+      process.env.CI = 'true'
+
+      const result = await tryOpenBrowser('https://example.com/authorize?nonce=ci')
+
+      expect(result).toBe(false)
+      expect(execFile).not.toHaveBeenCalled()
+    })
+
+    it('does not open when all three guard variables are set', async () => {
+      vi.mocked(execFile).mockClear()
+      process.env.MCP_NO_BROWSER = '1'
+      process.env.NO_BROWSER = '1'
+      process.env.CI = 'true'
+
+      const result = await tryOpenBrowser('https://example.com/authorize?nonce=all-three')
+
+      expect(result).toBe(false)
+      expect(execFile).not.toHaveBeenCalled()
+    })
+
+    it('still opens when CI is explicitly false or 0', async () => {
+      // `CI=false` là idiom có thật (Create React App / Netlify: "đừng áp dụng
+      // hành vi CI"). Coi nó là "chặn browser" sẽ đúng là kiểu bất ngờ mà guard
+      // này sinh ra để tránh. Cùng quy ước với package `ci-info`.
+      Object.defineProperty(process, 'platform', { value: 'darwin' })
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
+        }
+        return {} as any
+      })
+
+      for (const value of ['false', '0', '']) {
+        vi.mocked(execFile).mockClear()
+        process.env.CI = value
+        const url = `https://example.com/ci-${value || 'empty'}-${Date.now()}`
+
+        expect(await tryOpenBrowser(url)).toBe(true)
+        expect(execFile).toHaveBeenCalledOnce()
+      }
     })
   })
 
