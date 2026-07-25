@@ -126,10 +126,19 @@ def register_open_relay_tool(mcp, server_name: str, public_url: str | None) -> N
     URL-mode elicitation when the client supports it, falling back to the
     legacy browser-open dict otherwise.
     """
+    # Deliberately conditional, and worded to match the core-ts helper so both
+    # sides read as one decision. The handler returns ``browser_opened: False``
+    # whenever no browser could be launched (headless, CI, the env-guard, no
+    # desktop session), and this text is read by a model that then speaks for
+    # the tool. "Open the ... form in the user's browser" reads as a guarantee,
+    # so a model can report "opened it in your browser" while the result says
+    # otherwise -- the user is then waiting on a tab that will never appear.
+    # The URL is what the tool always delivers; the browser is a convenience on
+    # top, and the wording says so in that order.
     description = (
-        f"Open the relay configuration form for {server_name} in the user's "
-        "browser. Returns the relay URL, whether the browser launched, and "
-        "the current status."
+        f"Get the relay configuration URL for {server_name}, opening it in the "
+        "user's browser when possible. Returns the relay URL, whether the "
+        "browser launched, and the current status."
     )
 
     @mcp.tool(name="config__open_relay", description=description)

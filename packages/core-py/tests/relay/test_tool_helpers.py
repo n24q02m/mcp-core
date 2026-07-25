@@ -218,6 +218,29 @@ async def test_register_open_relay_tool_http(monkeypatch) -> None:
     assert "elicitation" not in result
 
 
+async def test_description_describes_browser_as_possibility_not_promise() -> None:
+    """The audience for a tool description is a model, not a person.
+
+    The handler returns ``browser_opened: False`` whenever no browser could be
+    launched (headless, CI, the env-guard, no desktop session), so a description
+    that states the form opens in the browser hands the model a promise the tool
+    cannot keep -- and the model passes it on as "I've opened the form in your
+    browser". Keep the mention of the browser, because that capability is real
+    and worth advertising; keep it conditional, because it is.
+    """
+    import re
+    from unittest.mock import MagicMock
+
+    from mcp_core.relay.tool_helpers import register_open_relay_tool
+
+    mcp = MagicMock()
+    register_open_relay_tool(mcp, "test-server", "http://127.0.0.1:8080")
+
+    description = mcp.tool.call_args.kwargs["description"]
+    assert re.search(r"browser", description, re.IGNORECASE)
+    assert re.search(r"when possible|if possible|when available|if available", description, re.IGNORECASE)
+
+
 async def test_register_open_relay_tool_http_elicits(monkeypatch) -> None:
     from unittest.mock import MagicMock
 
