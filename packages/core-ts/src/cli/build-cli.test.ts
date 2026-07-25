@@ -2,6 +2,14 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Mock rather than lean on the env-guard: `relay open` now BRANCHES on what
+// tryOpenBrowser returns, so the test has to be able to drive both branches. The
+// mock is also the stronger guarantee that no real browser opens during a test
+// run -- stronger than an env var that whoever runs the tests could clear.
+const { tryOpenBrowserMock } = vi.hoisted(() => ({ tryOpenBrowserMock: vi.fn(async () => true) }))
+vi.mock('../relay/browser.js', () => ({ tryOpenBrowser: tryOpenBrowserMock }))
+
 import {
   LocalFsBackend,
   PerPluginStore,
@@ -35,8 +43,8 @@ beforeEach(() => {
   setHomeDirForTesting(tmp)
   setLockDir(join(tmp, 'locks'))
   setConfigPath(join(tmp, 'config.enc'))
-  // Never hijack the real browser during `relay open` tests.
-  process.env.MCP_NO_BROWSER = '1'
+  tryOpenBrowserMock.mockReset()
+  tryOpenBrowserMock.mockResolvedValue(true)
   capture()
 })
 
@@ -240,6 +248,25 @@ describe('buildCli — relay subcommand', () => {
     const run = buildCli(SERVER, { serve: () => 0 })
     expect(await run(['relay', 'open'])).toBe(0)
     expect(logs[0]).toBe(`${SERVER}: opened https://relay.example/s/abcd1234`)
+  })
+
+  // This used to print "opened" whatever the outcome, so under headless / CI /
+  // the env-guard it was wrong in the very first line and the user waited for a
+  // tab that never appeared.
+  it('says it could not launch a browser, and still hands over the URL', async () => {
+    tryOpenBrowserMock.mockResolvedValue(false)
+    await writeSessionLock(SERVER, {
+      sessionId: 'abcd1234ef',
+      relayUrl: 'https://relay.example/s/abcd1234',
+      createdAt: Date.now()
+    })
+    const run = buildCli(SERVER, { serve: () => 0 })
+
+    // Failing to open a browser is not a failure of the command: the URL is
+    // still correct, so the exit code is still 0.
+    expect(await run(['relay', 'open'])).toBe(0)
+    expect(logs[0]).not.toContain('opened')
+    expect(logs[0]).toContain('https://relay.example/s/abcd1234')
   })
 
   it('reports no session to open with rc 1', async () => {

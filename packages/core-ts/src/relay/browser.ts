@@ -14,6 +14,23 @@ const execFileAsync = promisify(execFile)
 const BROWSER_OPEN_DEDUPE_WINDOW_MS = 5 * 60 * 1000
 const recentBrowserOpens = new Map<string, number>()
 
+/**
+ * Read an on/off environment flag: set, and not `''` / `'false'` / `'0'`.
+ *
+ * One rule for all three variables the guard below reads, deliberately. `CI` has to
+ * follow this rule because it is a variable we READ from someone else's environment and
+ * `CI=false` is a real idiom for "do not apply CI behavior" (Create React App, Netlify) —
+ * the `ci-info` package uses the same rule. Our own two then follow it as well, for two
+ * reasons: a plain truthy-string check makes `MCP_NO_BROWSER=false` SUPPRESS the browser,
+ * which is wrong under every reading of a negative variable name (writing `=false` means
+ * "no, don't no-browser" — that person is asking for auto-open and would be blocked
+ * silently); and two rules inside one `if` is a trap for whoever reads it next.
+ */
+function envFlag(name: string): boolean {
+  const value = process.env[name]
+  return value !== undefined && value !== '' && value !== 'false' && value !== '0'
+}
+
 async function isWsl(): Promise<boolean> {
   try {
     const version = await readFile('/proc/version', 'utf-8')
@@ -72,8 +89,10 @@ export async function tryOpenBrowser(url: string): Promise<boolean> {
   try {
     // Env-guard: suppress auto-open in headless / CI / autonomous-test contexts so a
     // relay/clean-state server never hijacks the user's real browser with /authorize?nonce
-    // or 127.0.0.1 tabs. Set MCP_NO_BROWSER=1 (or NO_BROWSER / CI) to disable.
-    if (process.env.MCP_NO_BROWSER || process.env.NO_BROWSER) {
+    // or 127.0.0.1 tabs. Set MCP_NO_BROWSER=1 or NO_BROWSER=1 to disable it explicitly;
+    // `CI` counts too because every CI provider sets it (GitHub Actions: CI=true) and a
+    // build agent has no browser to hijack.
+    if (envFlag('MCP_NO_BROWSER') || envFlag('NO_BROWSER') || envFlag('CI')) {
       return false
     }
 

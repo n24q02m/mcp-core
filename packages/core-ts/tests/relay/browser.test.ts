@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock child_process and fs/promises before importing the module
 vi.mock('node:child_process', () => ({
@@ -20,7 +20,31 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { tryOpenBrowser } from '../../src/relay/browser.js'
 
+/**
+ * The three variables that turn browser-opening OFF. These tests have to own
+ * them rather than let the environment decide: a dev machine here exports
+ * `MCP_NO_BROWSER=1`, and EVERY CI runner sets `CI=1` -- leave them in place and
+ * this suite reads the config of whatever machine runs it instead of reading the
+ * code, a kind of red that only shows up after a push. Cleared before each test
+ * and restored after (which also stops one test leaking a value into the next).
+ */
+const BROWSER_GUARD_ENV = ['MCP_NO_BROWSER', 'NO_BROWSER', 'CI'] as const
+
 describe('tryOpenBrowser', () => {
+  let savedGuardEnv: Record<string, string | undefined>
+
+  beforeEach(() => {
+    savedGuardEnv = Object.fromEntries(BROWSER_GUARD_ENV.map((key) => [key, process.env[key]]))
+    for (const key of BROWSER_GUARD_ENV) delete process.env[key]
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedGuardEnv)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  })
+
   describe('URL validation', () => {
     it('rejects non-http URLs', async () => {
       expect(await tryOpenBrowser('file:///etc/passwd')).toBe(false)
@@ -127,14 +151,65 @@ describe('tryOpenBrowser', () => {
       expect(execFile).not.toHaveBeenCalled()
     })
 
-    it('does not open when MCP_NO_BROWSER / NO_BROWSER is set', async () => {
+    // Three variables, ONE rule, one value table -- shared on purpose: anyone
+    // changing the semantics of one of them sees straight away what the other
+    // two promise. `CI` has to follow the community convention (`ci-info`)
+    // because it is a variable we read from someone else's environment; our own
+    // two follow the same rule so the `if` in browser.ts has only one reading --
+    // and because `MCP_NO_BROWSER=false` SUPPRESSING the browser is wrong under
+    // every way of reading a negative name.
+    const SUPPRESSING = ['1', 'true', 'TRUE', 'yes', 'anything']
+    const NOT_SUPPRESSING = ['false', '0', '']
+
+    function mockExecFileSuccess(): void {
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
+        }
+        return {} as any
+      })
+    }
+
+    for (const name of BROWSER_GUARD_ENV) {
+      it(`does not open when ${name} is set to a real value`, async () => {
+        Object.defineProperty(process, 'platform', { value: 'darwin' })
+        mockExecFileSuccess()
+
+        for (const value of SUPPRESSING) {
+          vi.mocked(execFile).mockClear()
+          process.env[name] = value
+
+          expect(await tryOpenBrowser(`https://example.com/${name}-${value}-${Date.now()}`)).toBe(false)
+          expect(execFile).not.toHaveBeenCalled()
+        }
+      })
+
+      it(`still opens when ${name} is empty, 'false' or '0'`, async () => {
+        Object.defineProperty(process, 'platform', { value: 'darwin' })
+        mockExecFileSuccess()
+
+        for (const value of NOT_SUPPRESSING) {
+          vi.mocked(execFile).mockClear()
+          process.env[name] = value
+
+          expect(await tryOpenBrowser(`https://example.com/${name}-${value || 'empty'}-${Date.now()}`)).toBe(true)
+          expect(execFile).toHaveBeenCalledOnce()
+        }
+      })
+    }
+
+    it('does not open when all three guard variables are set', async () => {
       vi.mocked(execFile).mockClear()
-      for (const envVar of ['MCP_NO_BROWSER', 'NO_BROWSER']) {
-        process.env[envVar] = '1'
-        const result = await tryOpenBrowser('https://example.com/authorize?nonce=abc')
-        expect(result).toBe(false)
-        delete process.env[envVar]
-      }
+      process.env.MCP_NO_BROWSER = '1'
+      process.env.NO_BROWSER = '1'
+      process.env.CI = 'true'
+
+      const result = await tryOpenBrowser('https://example.com/authorize?nonce=all-three')
+
+      expect(result).toBe(false)
       expect(execFile).not.toHaveBeenCalled()
     })
   })

@@ -133,7 +133,15 @@ export function registerOpenRelayTool(
   mcp.tool(
     {
       name: 'config__open_relay',
-      description: `Open the relay configuration form for ${serverName} in the user's browser.`
+      // Deliberately conditional. The handler returns `browserOpened: false`
+      // whenever no browser could be launched (headless, CI, the env-guard, no
+      // desktop session), and this text is read by a model that then speaks for
+      // the tool. "Open the ... form in the user's browser" reads as a
+      // guarantee, so a model can report "opened it in your browser" while the
+      // result says otherwise -- the user is then waiting on a tab that will
+      // never appear. The URL is what the tool always delivers; the browser is
+      // a convenience on top, and the wording says so in that order.
+      description: `Get the relay configuration URL for ${serverName}, opening it in the user's browser when possible.`
     },
     handler
   )
