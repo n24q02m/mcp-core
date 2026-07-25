@@ -150,29 +150,54 @@ describe('tryOpenBrowser', () => {
       expect(execFile).not.toHaveBeenCalled()
     })
 
-    it('does not open when MCP_NO_BROWSER / NO_BROWSER is set', async () => {
-      vi.mocked(execFile).mockClear()
-      for (const envVar of ['MCP_NO_BROWSER', 'NO_BROWSER']) {
-        process.env[envVar] = '1'
-        const result = await tryOpenBrowser('https://example.com/authorize?nonce=abc')
-        expect(result).toBe(false)
-        delete process.env[envVar]
-      }
-      expect(execFile).not.toHaveBeenCalled()
-    })
+    // Ba biến, MỘT quy tắc, một bảng giá trị -- cố ý gộp: ai đổi semantics của
+    // một biến sẽ thấy ngay hai biến kia đang hứa điều gì. `CI` phải theo quy
+    // ước cộng đồng (`ci-info`) vì nó là biến đọc ké của môi trường; hai biến
+    // của chính mình theo cùng luật để `if` trong browser.ts chỉ có một cách đọc
+    // -- và vì `MCP_NO_BROWSER=false` mà lại CHẶN browser là sai theo mọi cách
+    // đọc một cái tên phủ định.
+    const SUPPRESSING = ['1', 'true', 'TRUE', 'yes', 'anything']
+    const NOT_SUPPRESSING = ['false', '0', '']
 
-    it('does not open when CI is set', async () => {
-      // Mọi CI provider đều set CI (GitHub Actions: CI=true). Không honor nó thì
-      // mcp-core vẫn thử mở browser trong CI; trên runner Linux `xdg-open` ENOENT
-      // nên vô hại -- nhưng đó là may mắn về nền tảng, không phải thiết kế.
-      vi.mocked(execFile).mockClear()
-      process.env.CI = 'true'
+    function mockExecFileSuccess(): void {
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
+        }
+        return {} as any
+      })
+    }
 
-      const result = await tryOpenBrowser('https://example.com/authorize?nonce=ci')
+    for (const name of BROWSER_GUARD_ENV) {
+      it(`does not open when ${name} is set to a real value`, async () => {
+        Object.defineProperty(process, 'platform', { value: 'darwin' })
+        mockExecFileSuccess()
 
-      expect(result).toBe(false)
-      expect(execFile).not.toHaveBeenCalled()
-    })
+        for (const value of SUPPRESSING) {
+          vi.mocked(execFile).mockClear()
+          process.env[name] = value
+
+          expect(await tryOpenBrowser(`https://example.com/${name}-${value}-${Date.now()}`)).toBe(false)
+          expect(execFile).not.toHaveBeenCalled()
+        }
+      })
+
+      it(`still opens when ${name} is empty, 'false' or '0'`, async () => {
+        Object.defineProperty(process, 'platform', { value: 'darwin' })
+        mockExecFileSuccess()
+
+        for (const value of NOT_SUPPRESSING) {
+          vi.mocked(execFile).mockClear()
+          process.env[name] = value
+
+          expect(await tryOpenBrowser(`https://example.com/${name}-${value || 'empty'}-${Date.now()}`)).toBe(true)
+          expect(execFile).toHaveBeenCalledOnce()
+        }
+      })
+    }
 
     it('does not open when all three guard variables are set', async () => {
       vi.mocked(execFile).mockClear()
@@ -184,31 +209,6 @@ describe('tryOpenBrowser', () => {
 
       expect(result).toBe(false)
       expect(execFile).not.toHaveBeenCalled()
-    })
-
-    it('still opens when CI is explicitly false or 0', async () => {
-      // `CI=false` là idiom có thật (Create React App / Netlify: "đừng áp dụng
-      // hành vi CI"). Coi nó là "chặn browser" sẽ đúng là kiểu bất ngờ mà guard
-      // này sinh ra để tránh. Cùng quy ước với package `ci-info`.
-      Object.defineProperty(process, 'platform', { value: 'darwin' })
-      vi.mocked(execFile).mockImplementation((...args: any[]) => {
-        const _options = args[2]
-        const cb = args[3]
-        const callback = typeof _options === 'function' ? _options : cb
-        if (callback) {
-          callback(null)
-        }
-        return {} as any
-      })
-
-      for (const value of ['false', '0', '']) {
-        vi.mocked(execFile).mockClear()
-        process.env.CI = value
-        const url = `https://example.com/ci-${value || 'empty'}-${Date.now()}`
-
-        expect(await tryOpenBrowser(url)).toBe(true)
-        expect(execFile).toHaveBeenCalledOnce()
-      }
     })
   })
 

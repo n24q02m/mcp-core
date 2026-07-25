@@ -173,8 +173,15 @@ function relayHandler(serverName: string): CliHandler {
       console.error(`${serverName}: no active relay session`)
       return 1
     }
-    await tryOpenBrowser(info.relayUrl)
-    console.log(`${serverName}: opened ${info.relayUrl}`)
+    // Xét giá trị trả về: `tryOpenBrowser` từ chối trong headless / CI / khi có
+    // env-guard, và in "opened" lúc đó là nói sai với người dùng ngay câu đầu --
+    // họ sẽ chờ một tab không bao giờ hiện. Không mở được KHÔNG phải lỗi của
+    // lệnh (URL vẫn đúng và vẫn dùng được), nên exit code giữ nguyên 0.
+    if (await tryOpenBrowser(info.relayUrl)) {
+      console.log(`${serverName}: opened ${info.relayUrl}`)
+    } else {
+      console.log(`${serverName}: could not launch a browser here; visit ${info.relayUrl}`)
+    }
     return 0
   }
 }
