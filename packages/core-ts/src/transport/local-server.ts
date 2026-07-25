@@ -129,6 +129,20 @@ export interface RunHttpServerOptions {
    */
   authDisabled?: boolean
   /**
+   * Whether to auto-open the setup URL in the user's browser when the stored
+   * config is not yet complete. Default ``true`` -- first-run setup for the
+   * servers built on this function depends on it.
+   *
+   * Set ``false`` when the consumer already hands the setup URL to the user by
+   * another route (a tool-call result, a log line, its own UI). Otherwise there
+   * are two entry points into the SAME temporary server, so the user starts two
+   * consent flows: whichever finishes first resolves the flow and closes the
+   * server, and the other tab's redirect then lands on a dead port
+   * (ERR_CONNECTION_REFUSED). The user is left with one "Setup complete" page
+   * and one connection error, unable to tell which one counted.
+   */
+  openBrowser?: boolean
+  /**
    * Extra HTTP routes served on the same port, matched by exact pathname and
    * method. Tried after ``/mcp`` and ``/health`` (which always win) and before
    * the OAuth app, whose handler is a catch-all for every other path -- so a
@@ -412,7 +426,9 @@ export async function runHttpServer(
   // invalid_request because it requires client_id/redirect_uri/state/
   // code_challenge. See `local-oauth-app.ts` root handler docstring.
   // Best-effort: any failure surfaces via tryOpenBrowser's ASCII fallback banner.
-  if (oauthApp) {
+  // ``openBrowser: false`` opts out entirely -- see the option's docstring for
+  // why a consumer that already published the URL must not get a second tab.
+  if (oauthApp && options.openBrowser !== false) {
     try {
       const existingConfig = await readStoredConfig(options.serverName)
       // Use schema completeness instead of "config === null" so peer-share

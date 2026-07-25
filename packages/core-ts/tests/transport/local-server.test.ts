@@ -18,6 +18,7 @@ vi.mock('../../src/relay/browser.js', () => ({
 }))
 
 import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
+import { tryOpenBrowser } from '../../src/relay/browser.js'
 import { type HttpServerHandle, runHttpServer } from '../../src/transport/local-server.js'
 
 const SCHEMA: RelayConfigSchema = {
@@ -531,6 +532,81 @@ describe('runHttpServer — delegated mode', () => {
         }
       })
     ).rejects.toThrow(/mutually exclusive/)
+  })
+})
+
+describe('runHttpServer — openBrowser option', () => {
+  // The auto-open branch is gated on NODE_ENV !== 'test' and vitest sets
+  // NODE_ENV=test, so these tests have to lift that gate or every assertion
+  // below passes vacuously (tryOpenBrowser never reached). Save/restore is the
+  // same shape the PUBLIC_URL suite above uses.
+  let savedNodeEnv: string | undefined
+
+  beforeEach(() => {
+    savedNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    vi.mocked(tryOpenBrowser).mockClear()
+  })
+
+  afterEach(() => {
+    if (savedNodeEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = savedNodeEnv
+  })
+
+  // Delegated (not relaySchema) because that is the shape of the consumer this
+  // option exists for: better-workspace-mcp's config(action="account_add")
+  // returns the setup URL in its tool result for the user to open.
+  const delegatedOAuth = {
+    flow: 'redirect' as const,
+    upstream: {
+      authorizeUrl: 'https://example.com/oauth/authorize',
+      tokenUrl: 'https://example.com/oauth/token',
+      clientId: 'test-client',
+      clientSecret: 'test-secret'
+    },
+    onTokenReceived: () => {}
+  }
+
+  it('never opens a browser when openBrowser is false, even with no stored config', async () => {
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName: `test-openbrowser-off-${Date.now()}`,
+      delegatedOAuth,
+      port: 0,
+      openBrowser: false
+    })
+    try {
+      expect(tryOpenBrowser).not.toHaveBeenCalled()
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('still opens a browser when openBrowser is omitted (default unchanged)', async () => {
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName: `test-openbrowser-default-${Date.now()}`,
+      delegatedOAuth,
+      port: 0
+    })
+    try {
+      expect(tryOpenBrowser).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(tryOpenBrowser).mock.calls[0][0]).toBe(`http://${handle.host}:${handle.port}/`)
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('opens a browser when openBrowser is explicitly true', async () => {
+    const handle = await runHttpServer(makeMcpServer, {
+      serverName: `test-openbrowser-on-${Date.now()}`,
+      delegatedOAuth,
+      port: 0,
+      openBrowser: true
+    })
+    try {
+      expect(tryOpenBrowser).toHaveBeenCalledTimes(1)
+    } finally {
+      await handle.close()
+    }
   })
 })
 
