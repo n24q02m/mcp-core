@@ -44,6 +44,16 @@ mise run setup                 # Install tools + deps + pre-commit hooks
 - `packages/core-ts/`: TypeScript parity với core-py. Crypto output phải identical cho cùng inputs.
 - `packages/embedding-daemon/`: FastAPI + ONNX runtime. Serves embedding inference cho các MCP servers cần embeddings (wet, mnemo, crg).
 
+### Divergence ts/py CÓ CHỦ ĐÍCH (đừng "sửa parity")
+
+Parity nghĩa là **cùng hành vi**, không phải cùng cách nối dây. Ba chỗ dưới đây khác nhau có lý do; ai định đồng nhất chúng thì đọc lý do trước.
+
+| Chỗ | Trạng thái | Vì sao |
+|---|---|---|
+| `elicitation` | **GIỮ khác nhau** | ts nhận tham số `elicitation?: ElicitationServer`; py đọc `ctx.session`. Do framework: fastmcp inject `Context` nên py lấy tự nhiên, TS SDK không có cơ chế đó. Ép giống nhau làm một bên xấu đi, không ai lợi. |
+| Banner `ACTION REQUIRED` khi mở browser thất bại | **GIỮ chỉ ở py** | Consumer Python chạy như CLI/daemon trong terminal người dùng nhìn thấy → banner stderr có tác dụng. Consumer TS chạy trong client MCP nơi stderr thường bị nuốt → banner chỉ là rác. KHÔNG thêm banner vào ts để "cho giống". |
+| `extra_routes` | **NÊN đóng, nhưng chờ consumer thật** | Đây là khác biệt **năng lực**, không phải cư xử: `extraRoutes` có ở core-ts (`local-server.ts`), py không có đối ứng, nên consumer Python muốn sở hữu một route chỉ còn đường fork. Chưa làm vì chưa có call-site Python nào cần — viết API general-purpose cho một người dùng tưởng tượng là đúng cái bẫy `registerOpenRelayTool` đã dính (0 consumer TS gọi nó). Có consumer Python thật thì đóng ngay. |
+
 ## Release & Deploy
 
 - Conventional Commits (feat: / fix: only). Tag format: `v{version}` (config: `semantic-release.toml`)
