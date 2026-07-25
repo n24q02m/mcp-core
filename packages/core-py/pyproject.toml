@@ -39,7 +39,7 @@ dependencies = [
     "loguru>=0.7.3",
     "platformdirs>=4.10.0",
     "tomli-w>=1.2.0",
-    "filelock>=3.30.0",
+    "filelock>=3.30.3",
 ]
 
 [project.optional-dependencies]
@@ -61,9 +61,9 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.15.21",
+    "ruff>=0.15.22",
     "telethon>=1.44.0",
-    "ty>=0.0.60",
+    "ty>=0.0.61",
 ]
 
 [tool.hatch.build.targets.wheel]
