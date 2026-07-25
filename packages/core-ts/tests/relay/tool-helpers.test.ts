@@ -185,10 +185,29 @@ describe('registerOpenRelayTool', () => {
     expect(mcp.tool).toHaveBeenCalledWith(
       {
         name: 'config__open_relay',
-        description: `Open the relay configuration form for ${serverName} in the user's browser.`
+        description: `Get the relay configuration URL for ${serverName}, opening it in the user's browser when possible.`
       },
       expect.any(Function)
     )
+  })
+
+  // The audience for a tool description is a model, not a person. The handler
+  // can and does return `browserOpened: false` (headless, CI, env-guard, no
+  // desktop session), so a description that states the form opens in the
+  // browser hands the model a promise the tool cannot keep -- and the model
+  // passes it on as "I've opened the form in your browser". Keep the mention of
+  // the browser, because that capability is real and worth advertising; keep it
+  // conditional, because it is.
+  it('describes the browser as a possibility, not a promise', () => {
+    const mcp: ToolRegistrar = {
+      tool: vi.fn()
+    }
+
+    registerOpenRelayTool(mcp, 'test-server', 'https://example.com')
+
+    const { description } = (mcp.tool as Mock).mock.calls[0][0]
+    expect(description).toMatch(/browser/i)
+    expect(description).toMatch(/when possible|if possible|when available|if available/i)
   })
 
   it('registered handler works correctly (fallback path)', async () => {

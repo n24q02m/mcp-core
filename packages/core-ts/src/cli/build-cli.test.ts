@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Mock thay vì dựa vào env-guard: `relay open` giờ RẼ NHÁNH theo giá trị trả về
-// của tryOpenBrowser, nên test phải lái được cả hai nhánh. Mock cũng là lớp an
-// toàn thật sự để không có browser nào bị mở trong test -- chắc hơn một biến môi
-// trường mà người chạy test có thể vô tình xoá.
+// Mock rather than lean on the env-guard: `relay open` now BRANCHES on what
+// tryOpenBrowser returns, so the test has to be able to drive both branches. The
+// mock is also the stronger guarantee that no real browser opens during a test
+// run -- stronger than an env var that whoever runs the tests could clear.
 const { tryOpenBrowserMock } = vi.hoisted(() => ({ tryOpenBrowserMock: vi.fn(async () => true) }))
 vi.mock('../relay/browser.js', () => ({ tryOpenBrowser: tryOpenBrowserMock }))
 
@@ -250,8 +250,9 @@ describe('buildCli — relay subcommand', () => {
     expect(logs[0]).toBe(`${SERVER}: opened https://relay.example/s/abcd1234`)
   })
 
-  // Trước đây lệnh in "opened" bất kể kết quả, nên trong headless / CI / khi có
-  // env-guard nó nói sai ngay câu đầu và người dùng chờ một tab không bao giờ hiện.
+  // This used to print "opened" whatever the outcome, so under headless / CI /
+  // the env-guard it was wrong in the very first line and the user waited for a
+  // tab that never appeared.
   it('says it could not launch a browser, and still hands over the URL', async () => {
     tryOpenBrowserMock.mockResolvedValue(false)
     await writeSessionLock(SERVER, {
@@ -261,7 +262,8 @@ describe('buildCli — relay subcommand', () => {
     })
     const run = buildCli(SERVER, { serve: () => 0 })
 
-    // Không mở được browser KHÔNG phải lỗi của lệnh: URL vẫn đúng, exit code vẫn 0.
+    // Failing to open a browser is not a failure of the command: the URL is
+    // still correct, so the exit code is still 0.
     expect(await run(['relay', 'open'])).toBe(0)
     expect(logs[0]).not.toContain('opened')
     expect(logs[0]).toContain('https://relay.example/s/abcd1234')

@@ -21,11 +21,12 @@ import { readFile } from 'node:fs/promises'
 import { tryOpenBrowser } from '../../src/relay/browser.js'
 
 /**
- * Ba biến TẮT việc mở browser. Test phải tự làm chủ chúng, không để môi trường
- * quyết định: máy dev ở đây export `MCP_NO_BROWSER=1`, và MỌI CI runner có
- * `CI=1` -- không xoá thì suite này đọc cấu hình của máy chạy chứ không đọc
- * code, và kiểu đỏ đó chỉ hiện sau khi push. Xoá trước mỗi test, khôi phục sau
- * (cũng chặn một test set biến rồi rò sang test kế).
+ * The three variables that turn browser-opening OFF. These tests have to own
+ * them rather than let the environment decide: a dev machine here exports
+ * `MCP_NO_BROWSER=1`, and EVERY CI runner sets `CI=1` -- leave them in place and
+ * this suite reads the config of whatever machine runs it instead of reading the
+ * code, a kind of red that only shows up after a push. Cleared before each test
+ * and restored after (which also stops one test leaking a value into the next).
  */
 const BROWSER_GUARD_ENV = ['MCP_NO_BROWSER', 'NO_BROWSER', 'CI'] as const
 
@@ -150,12 +151,13 @@ describe('tryOpenBrowser', () => {
       expect(execFile).not.toHaveBeenCalled()
     })
 
-    // Ba biến, MỘT quy tắc, một bảng giá trị -- cố ý gộp: ai đổi semantics của
-    // một biến sẽ thấy ngay hai biến kia đang hứa điều gì. `CI` phải theo quy
-    // ước cộng đồng (`ci-info`) vì nó là biến đọc ké của môi trường; hai biến
-    // của chính mình theo cùng luật để `if` trong browser.ts chỉ có một cách đọc
-    // -- và vì `MCP_NO_BROWSER=false` mà lại CHẶN browser là sai theo mọi cách
-    // đọc một cái tên phủ định.
+    // Three variables, ONE rule, one value table -- shared on purpose: anyone
+    // changing the semantics of one of them sees straight away what the other
+    // two promise. `CI` has to follow the community convention (`ci-info`)
+    // because it is a variable we read from someone else's environment; our own
+    // two follow the same rule so the `if` in browser.ts has only one reading --
+    // and because `MCP_NO_BROWSER=false` SUPPRESSING the browser is wrong under
+    // every way of reading a negative name.
     const SUPPRESSING = ['1', 'true', 'TRUE', 'yes', 'anything']
     const NOT_SUPPRESSING = ['false', '0', '']
 
