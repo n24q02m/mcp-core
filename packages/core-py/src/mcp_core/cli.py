@@ -140,8 +140,15 @@ def _build_relay_handler(server_name: str) -> Callable[[argparse.Namespace], int
         if info is None:
             print(f"{server_name}: no active relay session", file=sys.stderr)
             return 1
-        try_open_browser(info.relay_url)
-        print(f"{server_name}: opened {info.relay_url}")
+        # Branch on the return value: try_open_browser declines under headless /
+        # CI / the env-guard, and printing "opened" there is untrue in the very
+        # first line the user reads -- they wait for a tab that never appears.
+        # Failing to open is not a failure of the command (the URL is still
+        # correct and still usable), so the exit code stays 0.
+        if try_open_browser(info.relay_url):
+            print(f"{server_name}: opened {info.relay_url}")
+        else:
+            print(f"{server_name}: could not launch a browser here; visit {info.relay_url}")
         return 0
 
     return _handler
