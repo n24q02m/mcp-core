@@ -17,9 +17,9 @@ def lock_root(tmp_path: Path) -> Path:
 
 
 def test_open_fails(lock_root: Path) -> None:
-    """Test that RuntimeError is raised when open() fails."""
+    """Test that RuntimeError is raised when os.open() fails."""
     lock = LifecycleLock(name="test", port=9000, root=lock_root)
-    with patch("builtins.open", side_effect=OSError("Permission denied")):
+    with patch("os.open", side_effect=OSError("Permission denied")):
         with pytest.raises(RuntimeError, match="Failed to open lock file"):
             with lock:
                 pass
@@ -69,9 +69,9 @@ def test_windows_release_ignores_oserror(lock_root: Path) -> None:
 
         with patch.dict("sys.modules", {"msvcrt": mock_msvcrt}):
             # Successfully "acquire"
-            # We need to mock open to return a mock file handle that doesn't actually call msvcrt
+            # We need to mock os.open and os.fdopen to return a mock file handle
             mock_fh = MagicMock()
-            with patch("builtins.open", return_value=mock_fh):
+            with patch("os.open", return_value=999), patch("os.fdopen", return_value=mock_fh):
                 lock.__enter__()
 
                 # Now set locking to fail for release

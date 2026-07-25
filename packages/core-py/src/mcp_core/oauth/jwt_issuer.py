@@ -25,6 +25,7 @@ import base64
 import datetime
 import hashlib
 import logging
+import os
 from pathlib import Path
 
 import jwt
@@ -104,7 +105,6 @@ class JWTIssuer:
         # would briefly be world-readable before the chmod below; the chmod
         # still runs to fix an already-existing dir and to override umask.
         self.keys_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        import os
 
         if os.name != "nt":
             self.keys_dir.chmod(0o700)
@@ -130,7 +130,8 @@ class JWTIssuer:
             )
             self.public_key = self.private_key.public_key()
 
-            with open(self.private_key_path, "wb") as f:
+            fd_priv = os.open(self.private_key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd_priv, "wb") as f:
                 f.write(
                     self.private_key.private_bytes(
                         encoding=serialization.Encoding.PEM,
@@ -139,16 +140,14 @@ class JWTIssuer:
                     )
                 )
 
-            with open(self.public_key_path, "wb") as f:
+            fd_pub = os.open(self.public_key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+            with os.fdopen(fd_pub, "wb") as f:
                 f.write(
                     self.public_key.public_bytes(
                         encoding=serialization.Encoding.PEM,
                         format=serialization.PublicFormat.SubjectPublicKeyInfo,
                     )
                 )
-            # Ensure proper file permissions
-            self.private_key_path.chmod(0o600)
-            self.public_key_path.chmod(0o644)
 
     def get_jwks(self) -> dict:
         """Return JWKS payload for /.well-known/jwks.json.

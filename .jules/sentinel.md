@@ -30,3 +30,8 @@
 **Vulnerability:** Files written with default permissions (like `writeFileSync` or `write_text`) and subsequently restricted using `chmod` are vulnerable to Time-Of-Check to Time-Of-Use (TOCTOU) race conditions.
 **Learning:** During the window between file creation and the `chmod` operation, an attacker could potentially access or modify the file content, because it briefly exists with broader system default permissions (e.g., `0o644`).
 **Prevention:** Instead of modifying permissions retroactively, permissions should be explicitly defined during file creation. For Node.js, `writeFileSync` should use `mode: 0o600`. For Python, use `os.open(..., mode=0o600)` with `os.fdopen`.
+
+## 2024-05-18 - Prevent TOCTOU via Explicit File Creation Permissions
+**Vulnerability:** File creation using standard mechanisms like `open(..., "w")` followed by `os.chmod()` leaves a Time-Of-Check to Time-Of-Use (TOCTOU) vulnerability window where the file exists with the system default umask permissions before being restricted.
+**Learning:** This is particularly dangerous for sensitive files like cryptographic keys (e.g. RSA keys), configuration stores (`config.enc`), and session locks which require strict owner-only access (`0o600` or `0o644`). The window allows a concurrent attacker to read or modify the file during this brief interval.
+**Prevention:** Always create sensitive files using `os.open` with `os.O_CREAT` and specify the strict `mode` directly (e.g. `os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)`). Then, wrap the file descriptor in `os.fdopen()` to interact with it as a standard file object. Do not rely on a subsequent `os.chmod()` after creation.

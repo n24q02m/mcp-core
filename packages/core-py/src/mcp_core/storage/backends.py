@@ -103,12 +103,11 @@ def _atomic_write_bytes(path: Path, blob: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = path.with_name(path.name + ".tmp")
     try:
-        with open(tmp, "wb") as f:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as f:
             f.write(blob)
             f.flush()
             os.fsync(f.fileno())
-        if os.name != "nt":
-            os.chmod(tmp, 0o600)
         tmp.replace(path)
     except BaseException:
         tmp.unlink(missing_ok=True)
