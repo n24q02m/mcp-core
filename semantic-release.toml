@@ -8,13 +8,24 @@ commit_message = "chore(release): v{version}"
 major_on_zero = false
 # PSR bumps the two pyproject versions but does NOT relock, so the editable
 # self-version in each uv.lock drifts (a lock said 1.18.0b9 while the release was
-# 1.18.0b14). The build_command re-locks after the version stamp; PSR then commits
-# the modified uv.lock files together with the version bump (it commits the working
-# tree it changed — no `assets` needed; `assets` are GitHub *release attachments*
-# and both files share the basename uv.lock, which collides on upload). uv is not
-# in the PSR action image, so install it first; `uv lock` (no --upgrade) only
-# updates the editable self-version, not the resolved dependency pins.
-build_command = "pip install uv && uv --directory packages/core-py lock && uv --directory packages/embedding-daemon lock"
+# 1.18.0b14). The build_command re-locks after the version stamp -- but relocking
+# alone was NOT enough, and v1.22.0-beta.1 proves it: the build ran, and the
+# release commit still carried only CHANGELOG + the two pyproject.toml files.
+#
+# The reason is what PSR stages. Its version command builds one explicit list --
+# changelog + the version_toml targets + `assets` -- and calls `git add` with just
+# that list (cli/commands/version.py); a file the build_command touched is not in
+# it. So the relock happened, and its result was left behind in the working tree.
+#
+# `assets` is not the fix: PSR passes the same list to `create_release(assets=...)`
+# for UPLOAD, and both files are named uv.lock, which collides -- that is what the
+# earlier attempt hit. What does work is staging them here. build_command runs
+# BEFORE PSR's `git add`, and PSR's commit takes the whole index (`git commit -m`,
+# no pathspec), so anything staged by this line rides along with the version bump.
+#
+# uv is not in the PSR action image, so install it first; `uv lock` (no --upgrade)
+# only updates the editable self-version, not the resolved dependency pins.
+build_command = "pip install uv && uv --directory packages/core-py lock && uv --directory packages/embedding-daemon lock && git add packages/core-py/uv.lock packages/embedding-daemon/uv.lock"
 
 [semantic_release.changelog]
 changelog_file = "CHANGELOG.md"
