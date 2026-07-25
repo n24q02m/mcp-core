@@ -1,4 +1,5 @@
 export {
+  type HttpRoute,
   type HttpServerHandle,
   type JWTClaims,
   type RunHttpServerOptions,
