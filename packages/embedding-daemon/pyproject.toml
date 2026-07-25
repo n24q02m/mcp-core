@@ -64,3 +64,9 @@ packages = ["src/mcp_embedding_daemon"]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
+
+# Ruff's default rule set is not a stable contract across releases: 0.16.0
+# widened it and lint started failing with no code change. Select the rules
+# explicitly so a ruff upgrade can never silently change what is enforced.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

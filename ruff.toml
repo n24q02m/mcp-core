@@ -1,0 +1,14 @@
+# Root ruff config for the Python files outside packages/ (scripts/, tooling).
+# Ruff resolves settings per file from the closest pyproject.toml that carries a
+# [tool.ruff] section; scripts/ has none, so without this file it silently falls
+# back to whatever ruff ships as its defaults.
+#
+# Ruff's default rule set is not a stable contract across releases: 0.16.0
+# widened it and lint started failing with no code change. Select the rules
+# explicitly so a ruff upgrade can never silently change what is enforced.
+#
+# Formatter settings are deliberately left at their defaults: scripts/ is
+# already formatted that way, and each package under packages/ sets its own
+# line-length in its own [tool.ruff] section.
+[lint]
+select = ["E4", "E7", "E9", "F"]
