@@ -87,11 +87,10 @@
       "enabled": false
     },
     {
-      "description": "Cap pydantic <3. Per-package pyproject bounds govern the exact ceiling: core-py allows <3 (documented, resolves 2.13.4), embedding-daemon keeps <2.13 for cohere-using consumers. The old repo-wide <2.13 contradicted core-py's declared range.",
+      "description": "Cap pydantic <3 for every package; core-py and embedding-daemon both declare >=2.12.5,<3. No rangeStrategy override here: these packages are published libraries, so their runtime deps must stay ranges and inherit the top-level bump strategy — pin would rewrite them to == and force every consumer onto one build. embedding-daemon used to hold at <2.13 so cohere-using consumers could resolve, but cohere 7.x lifted that pin (pydantic-core <3.0.0) and the stack no longer depends on the cohere SDK directly.",
       "matchPackageNames": ["pydantic"],
       "allowedVersions": "<3",
-      "minimumReleaseAge": "7 days",
-      "rangeStrategy": "pin"
+      "minimumReleaseAge": "7 days"
     }
   ],
   "semanticCommits": "enabled",

@@ -33,7 +33,9 @@ dependencies = [
     # to. mcp-core itself only uses stable 2.9+ surface — no 2.13 lock-in.
     # Earlier cap to <2.13 was to humour cohere's pydantic-core pin, but that
     # is downstream-only and should not block plugins that don't use cohere.
-    "pydantic==2.13.4",
+    # Must stay a range: this is a published library, so an exact `==` pin here
+    # propagates to every consumer's resolve.
+    "pydantic>=2.12.5,<3",
     "loguru>=0.7.3",
     "platformdirs>=4.10.0",
     "tomli-w>=1.2.0",

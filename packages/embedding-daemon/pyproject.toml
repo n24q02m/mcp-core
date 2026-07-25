@@ -26,9 +26,14 @@ dependencies = [
     "onnxruntime>=1.27.0",
     "numpy>=2.5.1",
     "httpx>=0.28.1",
-    # Keep pydantic <2.13 so downstream consumers using cohere>=6.1.0 can resolve
-    # (cohere caps pydantic-core <2.44.0; pydantic 2.13.x ships pydantic-core 2.46+).
-    "pydantic==2.12.5",
+    # Keep this a RANGE, never an exact pin: this package is published to PyPI,
+    # so an `==` here would force every consumer onto that one pydantic build.
+    # The ceiling is <3, same as core-py. It used to be <2.13 so downstream
+    # consumers on cohere>=6.1.0 could resolve — cohere 6.1.0 capped
+    # pydantic-core <2.44.0 while pydantic 2.13.x ships pydantic-core 2.46+.
+    # That reason is gone: cohere 7.x caps pydantic-core <3.0.0, and the stack
+    # no longer depends on the cohere SDK directly.
+    "pydantic>=2.12.5,<3",
 ]
 
 [project.optional-dependencies]
