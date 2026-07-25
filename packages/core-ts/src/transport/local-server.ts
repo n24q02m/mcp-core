@@ -47,6 +47,20 @@ import { extractBearerToken } from './oauth-middleware.js'
 /** Decoded JWT claims returned by JWTIssuer.verifyAccessToken. */
 export type JWTClaims = JWTPayload & { anonymous?: boolean }
 
+/**
+ * A route a consumer registers on the same port ``runHttpServer`` serves.
+ *
+ * The built-in ``/mcp`` and ``/health`` routes are matched FIRST and cannot be
+ * overridden -- a consumer cannot accidentally shadow the MCP transport or the
+ * liveness probe. Everything else is tried against ``extraRoutes`` before the
+ * OAuth app, which is a catch-all for the remaining paths.
+ */
+export interface HttpRoute {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  path: string
+  handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void
+}
+
 export interface RunHttpServerOptions {
   /** Identifier used for JWT iss/aud and credential storage. */
   serverName: string
@@ -114,6 +128,15 @@ export interface RunHttpServerOptions {
    * `{ sub: 'anonymous', anonymous: true }`.
    */
   authDisabled?: boolean
+  /**
+   * Extra HTTP routes served on the same port, matched by exact pathname and
+   * method. Tried after ``/mcp`` and ``/health`` (which always win) and before
+   * the OAuth app, whose handler is a catch-all for every other path -- so a
+   * route registered here is the only way for a consumer to own an endpoint
+   * inside this process. Used by servers that need their own OAuth callback,
+   * e.g. adding a second upstream account to an already-authenticated subject.
+   */
+  extraRoutes?: HttpRoute[]
 }
 
 export interface HttpServerHandle {
@@ -320,6 +343,17 @@ export async function runHttpServer(
     if (pathname === '/health') {
       jsonResponse(res, 200, { status: 'ok', server: options.serverName })
       return
+    }
+
+    // Consumer-registered routes. After the built-ins (which win) and before
+    // the OAuth app, whose handler is a catch-all for the remaining paths.
+    if (options.extraRoutes) {
+      for (const route of options.extraRoutes) {
+        if (route.path === pathname && route.method === req.method) {
+          await route.handler(req, res)
+          return
+        }
+      }
     }
 
     // Route everything else to OAuth app if present.

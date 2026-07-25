@@ -75,6 +75,7 @@ export {
 } from './storage/session-lock.js'
 // HTTP MCP server entry point (OAuth AS + /mcp transport on 127.0.0.1)
 export {
+  type HttpRoute,
   type HttpServerHandle,
   type RunHttpServerOptions,
   runHttpServer
