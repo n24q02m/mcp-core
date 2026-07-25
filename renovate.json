@@ -87,10 +87,11 @@
       "enabled": false
     },
     {
-      "description": "Cap pydantic <3 for every package; core-py and embedding-daemon both declare >=2.12.5,<3. No rangeStrategy override here: these packages are published libraries, so their runtime deps must stay ranges and inherit the top-level bump strategy — pin would rewrite them to == and force every consumer onto one build. embedding-daemon used to hold at <2.13 so cohere-using consumers could resolve, but cohere 7.x lifted that pin (pydantic-core <3.0.0) and the stack no longer depends on the cohere SDK directly.",
+      "description": "Cap pydantic <3. core-py and embedding-daemon deliberately declare a wide >=2.12.5,<3 so consumers can resolve whatever pydantic they already run; core-py's comment states the intent as 'no 2.13 lock-in'. Renovate may therefore move only the lock file, never the declared floor: update-lockfile takes in-range updates into uv.lock and leaves pyproject alone. History of this rule: pin (wrong — rewrote the deps to == and forced every consumer onto one build), then bump (still wrong — raised the floor to >=2.13.4, which is exactly the lock-in the comment rules out), now update-lockfile. embedding-daemon used to hold at <2.13 so cohere-using consumers could resolve, but cohere 7.x lifted that pin (pydantic-core <3.0.0) and the stack no longer depends on the cohere SDK directly.",
       "matchPackageNames": ["pydantic"],
       "allowedVersions": "<3",
-      "minimumReleaseAge": "7 days"
+      "minimumReleaseAge": "7 days",
+      "rangeStrategy": "update-lockfile"
     }
   ],
   "semanticCommits": "enabled",
