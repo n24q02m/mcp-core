@@ -30,3 +30,8 @@
 **Vulnerability:** Files written with default permissions (like `writeFileSync` or `write_text`) and subsequently restricted using `chmod` are vulnerable to Time-Of-Check to Time-Of-Use (TOCTOU) race conditions.
 **Learning:** During the window between file creation and the `chmod` operation, an attacker could potentially access or modify the file content, because it briefly exists with broader system default permissions (e.g., `0o644`).
 **Prevention:** Instead of modifying permissions retroactively, permissions should be explicitly defined during file creation. For Node.js, `writeFileSync` should use `mode: 0o600`. For Python, use `os.open(..., mode=0o600)` with `os.fdopen`.
+
+## 2026-07-26 - [TOCTOU in Session Lock Permissions]
+**Vulnerability:** Session lock files were created with default permissions (via `Path.write_text`) and subsequently restricted using `chmod`, which leaves a Time-Of-Check to Time-Of-Use (TOCTOU) race condition window where the file is briefly accessible with broader system default permissions.
+**Learning:** During the window between file creation and the `chmod` operation, an attacker could potentially access or modify the lock file content. To ensure secure permissions from the moment of creation, files should be created explicitly with restricted permissions.
+**Prevention:** Use `os.open` with `os.O_CREAT` and an explicit `mode` parameter (e.g., `mode=0o600`), and then use `os.fdopen` to write to the file. This ensures the file is created with the correct permissions atomically.
