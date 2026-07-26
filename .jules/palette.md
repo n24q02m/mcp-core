@@ -1,4 +1,4 @@
-## $(date +%Y-%m-%d) - Explicit Label Linking
+## 2024-08-01 - Explicit Label Linking
 
 **Learning:** When building custom HTML forms, using implicit labeling (e.g., `<label>Text <input></label>`) is valid but explicitly linking `<label>` and `<input>` elements with `for` and `id` attributes is recognized as an accessibility best practice. This provides more robust support across a wider range of assistive technologies.
 
@@ -23,3 +23,6 @@
 
 **Learning:** When building custom HTML forms, static inputs with optional help text (such as the optional username field in the credential forms) need to explicitly link their help text for screen readers. While `for` and `id` pair the label, the `<p class="help-text">` remains semantically unlinked without additional attributes.
 **Action:** Always link `<input>` elements to their corresponding help text using the `aria-describedby` attribute pointing to the ID of the help text paragraph.
+## 2024-08-01 - Accessible Error States in Card Groups
+**Learning:** When dynamically validating form fields built via JavaScript (like in a repeating card group) and focusing the first invalid input, explicitly setting `aria-errormessage` alongside `aria-invalid` links the input to the status box containing the validation message. This provides screen readers with context on *why* the input is invalid, not just that it *is* invalid.
+**Action:** When implementing manual form validation that sets `aria-invalid="true"`, ensure `aria-errormessage` is also set on the invalid input, pointing to the ID of the element displaying the error message.
