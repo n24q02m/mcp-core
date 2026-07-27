@@ -91,7 +91,7 @@ export function refreshLockTimestamp(path: string): void {
   const now = new Date().toISOString()
   const payload = `${md.pid}\n${md.port}\n${md.token}\n${now}\n`
   try {
-    writeFileSync(path, payload.padEnd(512, ' '), { encoding: 'utf-8' })
+    writeFileSync(path, payload.padEnd(512, ' '), { encoding: 'utf-8', mode: 0o600 })
   } catch {
     // Best-effort
   }
