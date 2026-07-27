@@ -28,7 +28,7 @@ def test_username_field_help_text_uses_styled_class():
     """The username help text must use the same styled class (.help-text) as
     every other field's help text, not the undefined .field-help typo."""
     html = render_credential_form(_USERNAME_SCHEMA, submit_url="/authorize?nonce=x", include_username_field=True)
-    assert '<p class="help-text">Leave blank for a one-off session.' in html
+    assert '<p class="help-text" id="help-__sub_username">Leave blank for a one-off session.' in html
     assert "field-help" not in html
 
 
@@ -330,3 +330,10 @@ def test_render_omits_pattern_without_validation():
     }
     html = render_credential_form(schema, submit_url="/submit")
     assert "pattern=" not in html
+
+
+def test_username_field_help_text_linked_correctly():
+    """Verify that the username field input correctly links its help text via aria-describedby for accessibility."""
+    html = render_credential_form(_USERNAME_SCHEMA, submit_url="/authorize?nonce=x", include_username_field=True)
+    assert 'aria-describedby="help-__sub_username"' in html
+    assert '<p class="help-text" id="help-__sub_username">' in html

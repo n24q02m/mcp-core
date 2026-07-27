@@ -23,3 +23,7 @@
 
 **Learning:** When building custom HTML forms, static inputs with optional help text (such as the optional username field in the credential forms) need to explicitly link their help text for screen readers. While `for` and `id` pair the label, the `<p class="help-text">` remains semantically unlinked without additional attributes.
 **Action:** Always link `<input>` elements to their corresponding help text using the `aria-describedby` attribute pointing to the ID of the help text paragraph.
+## 2026-07-16 - Consistent Explicit Description Linking in Forms
+
+**Learning:** When generating custom HTML forms, static inputs with optional help text (such as the optional username field in the credential forms) need to explicitly link their help text for screen readers. The TypeScript implementation already did this, but the Python implementation was missing it, leading to inconsistent accessibility between `core-ts` and `core-py`.
+**Action:** Always maintain UI accessibility parity between Python and TS frontend string templates. Ensure `<input>` elements are linked to their corresponding help text using the `aria-describedby` attribute pointing to the ID of the help text paragraph in both codebases.
