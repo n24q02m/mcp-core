@@ -201,7 +201,10 @@ class LifecycleLock:
         # Open in read+write without truncation so concurrent openers never
         # race on truncate. We explicitly truncate *after* acquiring the lock.
         try:
-            self._fh = open(self._lock_file, "a+", encoding="utf-8")
+            flags = os.O_RDWR | os.O_CREAT | os.O_APPEND
+            mode = 0o600 if sys.platform != "win32" else 0o666
+            fd = os.open(self._lock_file, flags, mode)
+            self._fh = os.fdopen(fd, "a+", encoding="utf-8")
         except OSError as e:
             raise RuntimeError(f"Failed to open lock file: {e}") from e
         if sys.platform == "win32":
@@ -232,8 +235,6 @@ class LifecycleLock:
         payload = f"{os.getpid()}\n{self._port}\n{self._token or ''}\n{spawned_at}\n"
         self._fh.write(payload.ljust(512, " "))
         self._fh.flush()
-        if sys.platform != "win32":
-            os.chmod(self._lock_file, 0o600)
         return self
 
     def __exit__(

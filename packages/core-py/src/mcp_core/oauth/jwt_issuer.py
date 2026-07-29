@@ -130,7 +130,12 @@ class JWTIssuer:
             )
             self.public_key = self.private_key.public_key()
 
-            with open(self.private_key_path, "wb") as f:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            mode_private = 0o600 if os.name != "nt" else 0o666
+            mode_public = 0o644 if os.name != "nt" else 0o666
+
+            fd_priv = os.open(self.private_key_path, flags, mode_private)
+            with os.fdopen(fd_priv, "wb") as f:
                 f.write(
                     self.private_key.private_bytes(
                         encoding=serialization.Encoding.PEM,
@@ -139,16 +144,14 @@ class JWTIssuer:
                     )
                 )
 
-            with open(self.public_key_path, "wb") as f:
+            fd_pub = os.open(self.public_key_path, flags, mode_public)
+            with os.fdopen(fd_pub, "wb") as f:
                 f.write(
                     self.public_key.public_bytes(
                         encoding=serialization.Encoding.PEM,
                         format=serialization.PublicFormat.SubjectPublicKeyInfo,
                     )
                 )
-            # Ensure proper file permissions
-            self.private_key_path.chmod(0o600)
-            self.public_key_path.chmod(0o644)
 
     def get_jwks(self) -> dict:
         """Return JWKS payload for /.well-known/jwks.json.

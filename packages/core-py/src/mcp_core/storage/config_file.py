@@ -143,9 +143,12 @@ def _save_store(store: dict[str, Any]) -> None:
     final_data = salt + encrypted
 
     def _write() -> None:
-        config_path.write_bytes(final_data)
-        if os.name != "nt":
-            os.chmod(config_path, 0o600)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        # 0o600: read/write for owner only
+        mode = 0o600 if os.name != "nt" else 0o666
+        fd = os.open(config_path, flags, mode)
+        with os.fdopen(fd, "wb") as f:
+            f.write(final_data)
 
     _with_retry(_write)
 
