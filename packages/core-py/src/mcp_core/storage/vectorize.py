@@ -33,7 +33,8 @@ class VectorizeBackend:
         return {"Authorization": f"Bearer {self._token}"} if self._token else {}
 
     def upsert(self, vectors: list[dict]) -> str:
-        ndjson = "\n".join(json.dumps(v) for v in vectors).encode()
+        # ⚡ Bolt: Use list comprehension in str.join for faster string building vs generator expression.
+        ndjson = "\n".join([json.dumps(v) for v in vectors]).encode()
         status, data = self._http.request("POST", f"{self.base_url}/upsert", ndjson, self._headers())
         if status != 200:
             raise RuntimeError(f"VectorizeBackend upsert failed: HTTP {status}")

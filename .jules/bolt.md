@@ -23,3 +23,7 @@
 ## 2025-05-05 - [Optimize String Indexing in Hot Paths]
 **Learning:** In TypeScript, when extracting a substring based on a delimiter character (e.g. parsing `x-forwarded-proto`), calling `indexOf(',')` twice (once for existence check and once for the bound) incurs a double string traversal. Although V8 optimizes short strings well, avoiding redundant O(N) traversals per HTTP request reduces overall CPU overhead on hot paths.
 **Action:** When a delimited index is needed both for checking existence and for substring extraction, cache the result of `indexOf` instead of making a duplicate call.
+
+## 2024-07-29 - Generator expressions in string joining
+**Learning:** Python's C-optimized `str.join()` method runs significantly slower when provided with a generator expression compared to a list comprehension in typical usage. While list comprehensions allocate an intermediate list, they construct it using fast loops and `str.join()` operates optimally on the predefined size list. Generator expressions incur repeated evaluations in the Python interpreter loop for every yielded item.
+**Action:** Always prefer `"".join([f(x) for x in l])` over `"".join(f(x) for x in l)` in hot paths or when joining reasonably sized string datasets, unless dealing with extremely large datasets where memory allocation becomes the primary bottleneck.
