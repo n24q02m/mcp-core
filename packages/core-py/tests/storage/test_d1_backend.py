@@ -140,22 +140,6 @@ def test_d1_default_httpx_transport(monkeypatch):
     assert called_args["url"] == "http://d1.internal/query"
 
 
-def test_d1_executescript():
-    calls = []
-
-    class Http:
-        def request(self, method, url, data=None, headers=None):
-            calls.append(json.loads(data.decode()))
-            return (200, json.dumps({"results": []}).encode())
-
-    db = D1Backend(base_url="http://d1.internal", http=Http())
-    db.executescript("CREATE TABLE t1 (id INT); DROP TABLE t2;  ;   ")
-
-    assert len(calls) == 1  # 1 batched /batch request, not 1 per statement
-    assert calls[0][0]["sql"] == "CREATE TABLE t1 (id INT)"
-    assert calls[0][1]["sql"] == "DROP TABLE t2"
-
-
 def test_d1_batch_parses_worker_dict_envelope():
     # worker thật trả Response.json({ results }) -> dict, KHÔNG phải array.
     class Http:
@@ -194,7 +178,7 @@ def test_d1_executescript_sends_one_batched_request():
 
     db = D1Backend(base_url="http://d1.internal", http=Http())
     db.executescript("CREATE TABLE t1 (id INT); CREATE INDEX i1 ON t1 (id);  ;  ")
-    assert len(calls) == 1  # 1 request, khong phai 1/cau lenh
+    assert len(calls) == 1  # 1 request, không phải 1 request mỗi câu lệnh
     assert calls[0][0] == "http://d1.internal/batch"
     assert [q["sql"] for q in calls[0][1]] == ["CREATE TABLE t1 (id INT)", "CREATE INDEX i1 ON t1 (id)"]
 
