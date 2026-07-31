@@ -2,7 +2,7 @@
 
 import re
 
-from mcp_core.auth.credential_form import render_credential_form
+from mcp_core.auth.credential_form import _username_field_html, render_credential_form
 
 _USERNAME_SCHEMA = {
     "server": "wet",
@@ -339,4 +339,14 @@ def test_username_field_help_text_linked_correctly():
     assert '<p class="help-text" id="help-__sub_username">' in html
 
 
-# trigger CI update
+def test_username_field_is_not_a_second_copy_of_the_markup():
+    """The flat form must render the shared helper, not its own duplicate.
+
+    The two used to be separate string literals, and the copy inside
+    ``render_credential_form`` is the one that drifted -- it went on emitting
+    unlinked help text after the helper had already been fixed. Comparing the
+    rendered output is what catches a re-introduced copy; asserting on the
+    attributes alone would pass either way.
+    """
+    html = render_credential_form(_USERNAME_SCHEMA, submit_url="/authorize?nonce=x", include_username_field=True)
+    assert _username_field_html() in html
