@@ -2,6 +2,115 @@
 
 <!-- version list -->
 
+## v1.22.0-beta.2 (2026-07-31)
+
+### Bug Fixes
+
+- Batch D1Backend.batch/executemany/executescript through /batch's dict envelope
+  ([#711](https://github.com/n24q02m/mcp-core/pull/711),
+  [`25191f0`](https://github.com/n24q02m/mcp-core/commit/25191f039bede1f09de2a3fe5a6422ae58345523))
+
+- Create sensitive core-py files already restricted, and stop the lock file appending
+  ([#716](https://github.com/n24q02m/mcp-core/pull/716),
+  [`352191b`](https://github.com/n24q02m/mcp-core/commit/352191bf5b79bcb81f272c7994f8aef2e582c371))
+
+- Drop the duplicate executescript batching test
+  ([#711](https://github.com/n24q02m/mcp-core/pull/711),
+  [`25191f0`](https://github.com/n24q02m/mcp-core/commit/25191f039bede1f09de2a3fe5a6422ae58345523))
+
+- Drop the emoji comments and bound the ledger entry
+  ([#709](https://github.com/n24q02m/mcp-core/pull/709),
+  [`bdb1842`](https://github.com/n24q02m/mcp-core/commit/bdb1842181ed71a96882b654b71242ee7d7e85cb))
+
+- Hand str.join a list instead of a generator in core-py
+  ([#709](https://github.com/n24q02m/mcp-core/pull/709),
+  [`bdb1842`](https://github.com/n24q02m/mcp-core/commit/bdb1842181ed71a96882b654b71242ee7d7e85cb))
+
+- Improve error message accessibility in credential form
+  ([#703](https://github.com/n24q02m/mcp-core/pull/703),
+  [`355de6e`](https://github.com/n24q02m/mcp-core/commit/355de6e293161774dbac482d589bf3f3bc219467))
+
+- Link invalid card-group fields to a visible error message
+  ([#703](https://github.com/n24q02m/mcp-core/pull/703),
+  [`355de6e`](https://github.com/n24q02m/mcp-core/commit/355de6e293161774dbac482d589bf3f3bc219467))
+
+- Link username field to help text via aria-describedby
+  ([#706](https://github.com/n24q02m/mcp-core/pull/706),
+  [`5601ad1`](https://github.com/n24q02m/mcp-core/commit/5601ad15e0184c33bd13eba50756aa0e1903f75f))
+
+- Make the Python browser guard behave like the TypeScript one
+  ([`39242af`](https://github.com/n24q02m/mcp-core/commit/39242afb4735175d3b55fc776b8d9aafa9820d1f))
+
+- Move the E2E driver onto the MCP SDK v2 transport
+  ([#712](https://github.com/n24q02m/mcp-core/pull/712),
+  [`d607104`](https://github.com/n24q02m/mcp-core/commit/d6071044d315be302f9fe52ae98372ea08453e1d))
+
+- One rule for the browser env-guard, and stop claiming a browser opened
+  ([`7f9d071`](https://github.com/n24q02m/mcp-core/commit/7f9d071068650e6494b16aa271f008ca054a9a62))
+
+- Optimize string joining performance by using list comprehensions
+  ([#709](https://github.com/n24q02m/mcp-core/pull/709),
+  [`bdb1842`](https://github.com/n24q02m/mcp-core/commit/bdb1842181ed71a96882b654b71242ee7d7e85cb))
+
+- Record which ts/py differences are deliberate so nobody 'fixes' them
+  ([`635687d`](https://github.com/n24q02m/mcp-core/commit/635687d42cfb5cae4226e1da0a506f54142ebf99))
+
+- Refuse unknown and missing MCP session IDs instead of minting a server
+  ([#713](https://github.com/n24q02m/mcp-core/pull/713),
+  [`363be3f`](https://github.com/n24q02m/mcp-core/commit/363be3f04eb89e1c09a315b22f93bba50ed062d2))
+
+- Render the shared username field instead of a drifted copy
+  ([#706](https://github.com/n24q02m/mcp-core/pull/706),
+  [`5601ad1`](https://github.com/n24q02m/mcp-core/commit/5601ad15e0184c33bd13eba50756aa0e1903f75f))
+
+- Route D1 /batch through one correctly-parsed helper
+  ([#711](https://github.com/n24q02m/mcp-core/pull/711),
+  [`25191f0`](https://github.com/n24q02m/mcp-core/commit/25191f039bede1f09de2a3fe5a6422ae58345523))
+
+- Stage the relocked uv.lock files so a release actually carries them
+  ([`72a06de`](https://github.com/n24q02m/mcp-core/commit/72a06de9d779f353f41df33fb1a371308a5393f6))
+
+- Stop bot PRs being born red at the title gate, and let a fixed title clear it
+  ([#718](https://github.com/n24q02m/mcp-core/pull/718),
+  [`4012e10`](https://github.com/n24q02m/mcp-core/commit/4012e109a1c120f14ea74132ff6787b4604409ee))
+
+- Test the card-group a11y wiring and correct the ledger dates
+  ([#703](https://github.com/n24q02m/mcp-core/pull/703),
+  [`355de6e`](https://github.com/n24q02m/mcp-core/commit/355de6e293161774dbac482d589bf3f3bc219467))
+
+- 🎨 Palette: improve error message accessibility in credential form
+  ([#703](https://github.com/n24q02m/mcp-core/pull/703),
+  [`355de6e`](https://github.com/n24q02m/mcp-core/commit/355de6e293161774dbac482d589bf3f3bc219467))
+
+- **deps**: Lock file maintenance
+  ([`ea0f62c`](https://github.com/n24q02m/mcp-core/commit/ea0f62c0b05cc41448d2e7ab1ad4e5c5e4aa6261))
+
+- **deps**: Refresh bun.lock, core-py and e2e uv.lock
+  ([`c6b5e6a`](https://github.com/n24q02m/mcp-core/commit/c6b5e6af08d80eed012f79d80cc64aca837999c4))
+
+- **deps**: Update cryptography to v50 ([#714](https://github.com/n24q02m/mcp-core/pull/714),
+  [`a2bd087`](https://github.com/n24q02m/mcp-core/commit/a2bd08732a4d0a0adb7ab784d2f3620b9b3f111c))
+
+- **deps**: Update patch dependencies ([#699](https://github.com/n24q02m/mcp-core/pull/699),
+  [`3545765`](https://github.com/n24q02m/mcp-core/commit/35457654ecddcd15d8ad206f12367be858ba23ff))
+
+- **deps**: Update platformdirs to >=4.11.0
+  ([`9f3b256`](https://github.com/n24q02m/mcp-core/commit/9f3b256a3928d1c7a6fc475c8149e5eeecfe37f0))
+
+### Features
+
+- Add delete-by-ids to the shared Vectorize backend, and say when top_k is clamped
+  ([#717](https://github.com/n24q02m/mcp-core/pull/717),
+  [`fd1da1f`](https://github.com/n24q02m/mcp-core/commit/fd1da1fec75852219f74a3d8db2f0e747674aa22))
+
+- Link username field to help text via aria-describedby
+  ([#706](https://github.com/n24q02m/mcp-core/pull/706),
+  [`5601ad1`](https://github.com/n24q02m/mcp-core/commit/5601ad15e0184c33bd13eba50756aa0e1903f75f))
+
+- Sync cross-promo section ([#704](https://github.com/n24q02m/mcp-core/pull/704),
+  [`05835be`](https://github.com/n24q02m/mcp-core/commit/05835be999b19fa3a72a8ce9d41e3be48dc10eb8))
+
+
 ## v1.22.0-beta.1 (2026-07-25)
 
 ### Features
