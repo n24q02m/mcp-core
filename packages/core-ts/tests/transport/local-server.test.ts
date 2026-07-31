@@ -491,6 +491,136 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
       await handle.close()
     }
   })
+
+  it('rejects an unknown Mcp-Session-Id with 404 and builds no server for it', async () => {
+    // The other half of the per-session contract. V3 above fixed the happy
+    // path but treated "session ID I have never seen" the same as "no session
+    // ID at all" and minted a fresh transport for it. Two consequences:
+    //
+    //  1. Wrong status. Both the SDK (stateful mode: "Requests with invalid
+    //     session IDs are rejected with 404 Not Found") and core-py's
+    //     StreamableHTTPSessionManager answer 404 "Session not found". A
+    //     client whose session died on a server restart reads 404 as "start a
+    //     new session"; anything else leaves it retrying a dead ID.
+    //  2. A leak. The fresh transport only reaches ``transports`` through
+    //     ``onsessioninitialized``, which never fires for a non-initialize
+    //     request -- so the McpServer built for it is unreachable from
+    //     ``close()`` and lives until the process exits. Every stale-ID
+    //     request costs one, which is a cheap way to exhaust a public server.
+    const factory = vi.fn(makeMcpServer)
+    const handle = await runHttpServer(factory, {
+      serverName: `test-unknown-session-${Date.now()}`,
+      port: 0
+    })
+    try {
+      const res = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'mcp-session-id': 'e7f1c0de-0000-4000-8000-000000000000',
+          'mcp-protocol-version': '2025-03-26'
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
+      })
+      expect(res.status).toBe(404)
+      expect(factory).not.toHaveBeenCalled()
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('rejects a non-initialize POST that carries no session ID with 400', async () => {
+    // Same leak, reached without guessing an ID: a bare tools/call POST also
+    // fell through to "no transport -> build one". Only ``initialize`` may
+    // open a session, so everything else without an ID is a client bug and
+    // must cost the server nothing.
+    const factory = vi.fn(makeMcpServer)
+    const handle = await runHttpServer(factory, {
+      serverName: `test-no-session-${Date.now()}`,
+      port: 0
+    })
+    try {
+      const res = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream'
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' })
+      })
+      expect(res.status).toBe(400)
+      expect(factory).not.toHaveBeenCalled()
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('rejects a GET stream that carries no session ID with 400', async () => {
+    // GET opens the server-to-client SSE stream and can never be the request
+    // that opens a session, so a missing ID here is unambiguous.
+    const factory = vi.fn(makeMcpServer)
+    const handle = await runHttpServer(factory, {
+      serverName: `test-bare-get-${Date.now()}`,
+      port: 0
+    })
+    try {
+      const res = await fetch(`http://${handle.host}:${handle.port}/mcp`, {
+        method: 'GET',
+        headers: { Accept: 'text/event-stream' }
+      })
+      expect(res.status).toBe(400)
+      expect(factory).not.toHaveBeenCalled()
+    } finally {
+      await handle.close()
+    }
+  })
+
+  it('still opens a session on initialize and keeps it reachable by close()', async () => {
+    // Guard rail for the fix: the bootstrap path must still buffer the body,
+    // hand it to the SDK, and register the session -- one server per session,
+    // not one per request.
+    const factory = vi.fn(makeMcpServer)
+    const handle = await runHttpServer(factory, {
+      serverName: `test-bootstrap-${Date.now()}`,
+      port: 0
+    })
+    try {
+      const baseUrl = `http://${handle.host}:${handle.port}/mcp`
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream'
+      }
+      const init = await fetch(baseUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'bootstrap-test', version: '0' }
+          }
+        })
+      })
+      expect(init.status).toBe(200)
+      const sessionId = init.headers.get('mcp-session-id')
+      expect(sessionId).toBeTruthy()
+      expect(factory).toHaveBeenCalledTimes(1)
+
+      const list = await fetch(baseUrl, {
+        method: 'POST',
+        headers: { ...headers, 'mcp-session-id': sessionId!, 'mcp-protocol-version': '2025-03-26' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' })
+      })
+      expect(list.status).toBe(200)
+      expect(factory).toHaveBeenCalledTimes(1)
+    } finally {
+      await handle.close()
+    }
+  })
 })
 
 describe('runHttpServer — delegated mode', () => {
