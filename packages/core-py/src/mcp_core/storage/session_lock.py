@@ -126,11 +126,13 @@ async def write_session_lock(server_name: str, info: SessionInfo) -> None:
         "created_at": info.created_at,
     }
 
-    # Write atomically via temp file + rename
+    # Write atomically via temp file + rename. Explicit mode at creation
+    # rather than chmod afterwards -- the relay URL in here is a capability,
+    # and the write window would otherwise expose it under the process umask.
     tmp_path = path.with_suffix(".tmp")
-    tmp_path.write_text(json.dumps(data), encoding="utf-8")
-    if os.name != "nt":
-        os.chmod(tmp_path, 0o600)
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(json.dumps(data))
     tmp_path.replace(path)
 
     logger.debug("Wrote session lock for %s", server_name)

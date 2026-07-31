@@ -73,7 +73,7 @@ def test_d1_executemany_batch_fallback():
         def request(self, method, url, data=None, headers=None):
             assert method == "POST" and url == "http://d1.internal/batch"
             calls.append(json.loads(data.decode()))
-            return (200, json.dumps([{"results": []}, {"results": []}]).encode())
+            return (200, json.dumps({"results": [{"results": []}, {"results": []}]}).encode())
 
     db = D1Backend(base_url="http://d1.internal", http=Http(), max_rows_per_insert=2)
     db.executemany("UPDATE memories SET name = ? WHERE id = ?", [["alpha", "c1"], ["beta", "c2"]])
@@ -140,20 +140,47 @@ def test_d1_default_httpx_transport(monkeypatch):
     assert called_args["url"] == "http://d1.internal/query"
 
 
-def test_d1_executescript():
+def test_d1_batch_parses_worker_dict_envelope():
+    # worker thật trả Response.json({ results }) -> dict, KHÔNG phải array.
+    class Http:
+        def request(self, method, url, data=None, headers=None):
+            assert url == "http://d1.internal/batch"
+            return (200, json.dumps({"results": [{"results": [{"n": 1}]}]}).encode())
+
+    db = D1Backend(base_url="http://d1.internal", http=Http())
+    assert db.batch([{"sql": "SELECT 1", "params": []}]) == [{"results": [{"n": 1}]}]
+
+
+def test_d1_batch_empty_makes_no_request():
+    class Http:
+        def request(self, *a, **k):
+            raise AssertionError("no request for an empty batch")
+
+    assert D1Backend(base_url="http://d1.internal", http=Http()).batch([]) == []
+
+
+def test_d1_batch_raises_on_http_error():
+    class Http:
+        def request(self, *a, **k):
+            return (500, b"")
+
+    with pytest.raises(RuntimeError, match="D1Backend batch failed"):
+        D1Backend(base_url="http://d1.internal", http=Http()).batch([{"sql": "SELECT 1", "params": []}])
+
+
+def test_d1_executescript_sends_one_batched_request():
     calls = []
 
     class Http:
         def request(self, method, url, data=None, headers=None):
-            calls.append(json.loads(data.decode()))
+            calls.append((url, json.loads(data.decode())))
             return (200, json.dumps({"results": []}).encode())
 
     db = D1Backend(base_url="http://d1.internal", http=Http())
-    db.executescript("CREATE TABLE t1 (id INT); DROP TABLE t2;  ;   ")
-
-    assert len(calls) == 2
-    assert calls[0]["sql"] == "CREATE TABLE t1 (id INT)"
-    assert calls[1]["sql"] == "DROP TABLE t2"
+    db.executescript("CREATE TABLE t1 (id INT); CREATE INDEX i1 ON t1 (id);  ;  ")
+    assert len(calls) == 1  # 1 request, không phải 1 request mỗi câu lệnh
+    assert calls[0][0] == "http://d1.internal/batch"
+    assert [q["sql"] for q in calls[0][1]] == ["CREATE TABLE t1 (id INT)", "CREATE INDEX i1 ON t1 (id)"]
 
 
 def test_d1_backend_from_env(monkeypatch):

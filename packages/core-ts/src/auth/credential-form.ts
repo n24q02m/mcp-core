@@ -1288,9 +1288,11 @@ const CARD_GROUP_SCRIPT = `    <script>
                 evt.preventDefault();
                 statusBox.style.display = "none";
                 if (!form.checkValidity()) {
+                    showStatus("error", "Please fill in all required fields.");
                     var firstInvalid = form.querySelector(":invalid");
                     if (firstInvalid) {
                         firstInvalid.setAttribute("aria-invalid", "true");
+                        firstInvalid.setAttribute("aria-errormessage", "status-box");
                         firstInvalid.focus();
                     }
                     return;

@@ -23,6 +23,7 @@ import * as path from 'node:path'
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import type { JWTPayload } from 'jose'
 import type { RelayConfigSchema } from '../auth/credential-form.js'
 import { isSchemaComplete } from '../auth/credential-form.js'
@@ -235,6 +236,10 @@ export async function runHttpServer(
   //    carry Mcp-Session-Id and are routed to the same transport, so the SDK's
   //    ``_initialized`` flag is in the right state for ``validateSession`` /
   //    ``validateProtocolVersion`` to accept the request.
+  //  - Anything else -- an ID we never issued, or no ID on a request that
+  //    cannot open a session -- is refused without building anything. Only
+  //    ``initialize`` may open a session, which is what keeps the count of
+  //    live ``McpServer`` instances tied to sessions rather than to requests.
   //
   // Stateless mode (sessionIdGenerator: undefined) was an earlier attempt; it
   // returned HTTP 500 on the SDK-mandatory ``notifications/initialized`` POST
@@ -244,32 +249,102 @@ export async function runHttpServer(
   const transports = new Map<string, StreamableHTTPServerTransport>()
   const servers = new Map<string, McpServer>()
 
+  /** JSON-RPC error envelope, shaped like core-py's session manager replies. */
+  function jsonRpcError(res: ServerResponse, status: number, code: number, message: string): void {
+    jsonResponse(res, status, {
+      jsonrpc: '2.0',
+      id: 'server-error',
+      error: { code, message }
+    })
+  }
+
+  /**
+   * Buffer and parse the body of a request that carries no session ID.
+   *
+   * Only the bootstrap path pays this cost. Once a session exists the request
+   * stream is handed to the SDK untouched, as before -- we need the body here
+   * solely to tell an ``initialize`` apart from a request that has no business
+   * opening a session, and the SDK cannot re-read a stream we consumed, so the
+   * parsed value is passed on to ``handleRequest``.
+   *
+   * The size ceiling matches the SDK transport's own ``maximumMessageSize``
+   * default; without one, this buffer is an unbounded allocation reachable
+   * before any session exists.
+   */
+  async function readBootstrapBody(
+    req: IncomingMessage
+  ): Promise<{ ok: true; body: unknown } | { ok: false; status: number; code: number; message: string }> {
+    const MAX_BYTES = 4 * 1024 * 1024
+    const chunks: Buffer[] = []
+    let size = 0
+    for await (const chunk of req) {
+      const buf = chunk as Buffer
+      size += buf.length
+      if (size > MAX_BYTES) {
+        return { ok: false, status: 413, code: -32600, message: 'Request body too large' }
+      }
+      chunks.push(buf)
+    }
+    try {
+      return { ok: true, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) }
+    } catch {
+      return { ok: false, status: 400, code: -32700, message: 'Parse error' }
+    }
+  }
+
   async function handleSessionRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const sessionHeader = req.headers['mcp-session-id']
     const incomingSessionId = Array.isArray(sessionHeader) ? sessionHeader[0] : sessionHeader
 
-    let transport = incomingSessionId ? transports.get(incomingSessionId) : undefined
-
-    if (!transport) {
-      const server = serverFactory()
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (sessionId) => {
-          transports.set(sessionId, transport!)
-          servers.set(sessionId, server)
-        },
-        onsessionclosed: (sessionId) => {
-          transports.delete(sessionId)
-          servers.delete(sessionId)
-          server.close().catch(() => {
-            /* best-effort cleanup */
-          })
-        }
-      })
-      await server.connect(transport)
+    if (incomingSessionId) {
+      const known = transports.get(incomingSessionId)
+      if (!known) {
+        // 404 is the spec's signal for "that session is gone" and the status
+        // core-py returns. A client that lost its session to a restart reads
+        // it as "open a new one"; a 400 would read as "your request is
+        // malformed" and it would retry the dead ID.
+        jsonRpcError(res, 404, -32600, 'Session not found')
+        return
+      }
+      await known.handleRequest(req, res)
+      return
     }
 
-    await transport.handleRequest(req, res)
+    // No session ID. GET (opens the server-to-client SSE stream) and DELETE
+    // (closes a session) both presuppose one, so only a POST can get further.
+    if (req.method !== 'POST') {
+      jsonRpcError(res, 400, -32600, 'Bad Request: Mcp-Session-Id header is required')
+      return
+    }
+
+    const parsed = await readBootstrapBody(req)
+    if (!parsed.ok) {
+      jsonRpcError(res, parsed.status, parsed.code, parsed.message)
+      return
+    }
+    if (!isInitializeRequest(parsed.body)) {
+      jsonRpcError(res, 400, -32600, 'Bad Request: no valid session ID provided')
+      return
+    }
+
+    const server = serverFactory()
+    let transport: StreamableHTTPServerTransport
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (sessionId) => {
+        transports.set(sessionId, transport)
+        servers.set(sessionId, server)
+      },
+      onsessionclosed: (sessionId) => {
+        transports.delete(sessionId)
+        servers.delete(sessionId)
+        server.close().catch(() => {
+          /* best-effort cleanup */
+        })
+      }
+    })
+    await server.connect(transport)
+    await transport.handleRequest(req, res, parsed.body)
   }
 
   // Derive the RFC 9728 protected-resource-metadata URL for the Bearer
