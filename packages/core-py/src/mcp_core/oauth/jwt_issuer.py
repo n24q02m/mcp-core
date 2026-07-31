@@ -130,7 +130,12 @@ class JWTIssuer:
             )
             self.public_key = self.private_key.public_key()
 
-            with open(self.private_key_path, "wb") as f:
+            # Create the private key already restricted. ``open()`` +
+            # ``chmod`` would put an unencrypted PKCS8 RSA key on disk under
+            # the process umask first, readable by anyone on the box for as
+            # long as the write takes.
+            fd = os.open(self.private_key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "wb") as f:
                 f.write(
                     self.private_key.private_bytes(
                         encoding=serialization.Encoding.PEM,
@@ -139,6 +144,10 @@ class JWTIssuer:
                     )
                 )
 
+            # The public key is public, so there is no window worth closing
+            # here -- and going through ``os.open`` would hand its mode to the
+            # umask, which on a tight umask silently drops the group/other
+            # read bits this deliberately grants. Keep the explicit chmod.
             with open(self.public_key_path, "wb") as f:
                 f.write(
                     self.public_key.public_bytes(
@@ -146,9 +155,8 @@ class JWTIssuer:
                         format=serialization.PublicFormat.SubjectPublicKeyInfo,
                     )
                 )
-            # Ensure proper file permissions
-            self.private_key_path.chmod(0o600)
-            self.public_key_path.chmod(0o644)
+            if os.name != "nt":
+                self.public_key_path.chmod(0o644)
 
     def get_jwks(self) -> dict:
         """Return JWKS payload for /.well-known/jwks.json.

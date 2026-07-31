@@ -13,25 +13,30 @@ import time
 from collections.abc import Generator
 
 import httpx
+import httpx2
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
 
-class _BearerAuth(httpx.Auth):
+class _BearerAuth(httpx2.Auth):
     """Inject ``Authorization: Bearer <token>`` on every request.
 
-    The MCP Python SDK's ``streamablehttp_client`` deprecated the ``headers``
-    kwarg in favour of ``auth=httpx.Auth``; passing a string token there
-    silently drops it. This auth class is the supported way to attach a
-    JWT to both the SSE GET and the JSON POST that the transport opens.
+    Must derive from ``httpx2.Auth``, not ``httpx.Auth``: the MCP SDK's
+    transport runs on httpx2, a separate package installed alongside httpx,
+    and its client accepts only the httpx2 flavour. Handing it the httpx one
+    drops the JWT with no error -- the failure surfaces later as a 401.
+
+    The transport takes no ``auth`` kwarg of its own; auth rides on the
+    ``http_client`` the caller builds, and covers both the SSE GET and the
+    JSON POST the transport opens.
     """
 
     def __init__(self, token: str) -> None:
         self._token = token
 
     def auth_flow(
-        self, request: httpx.Request
-    ) -> Generator[httpx.Request, httpx.Response]:
+        self, request: httpx2.Request
+    ) -> Generator[httpx2.Request, httpx2.Response]:
         request.headers["Authorization"] = f"Bearer {self._token}"
         yield request
 
@@ -51,16 +56,22 @@ async def run_e2e_http(
     is not advertised by the server. Extra tools are tolerated.
     """
     auth = _BearerAuth(access_token) if access_token else None
-    async with streamablehttp_client(f"{base_url}/mcp", auth=auth) as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            tools = await session.list_tools()
-            actual = {t.name for t in tools.tools}
-            missing = set(expected_tool_names) - actual
-            if missing:
-                raise AssertionError(
-                    f"Tools missing from {base_url}: {sorted(missing)}; got: {sorted(actual)}"
-                )
+    # A caller-supplied http_client is not entered by the transport, so own
+    # its lifecycle here. ``create_mcp_http_client`` keeps the SDK's
+    # recommended MCP timeouts that the transport would otherwise apply.
+    async with create_mcp_http_client(auth=auth) as http_client:
+        async with streamable_http_client(
+            f"{base_url}/mcp", http_client=http_client
+        ) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                actual = {t.name for t in tools.tools}
+                missing = set(expected_tool_names) - actual
+                if missing:
+                    raise AssertionError(
+                        f"Tools missing from {base_url}: {sorted(missing)}; got: {sorted(actual)}"
+                    )
 
 
 def wait_for_health(base_url: str, timeout: float = 60.0) -> None:

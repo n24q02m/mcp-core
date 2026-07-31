@@ -37,7 +37,7 @@ dependencies = [
     # propagates to every consumer's resolve.
     "pydantic>=2.12.5,<3",
     "loguru>=0.7.3",
-    "platformdirs>=4.10.0",
+    "platformdirs>=4.11.0",
     "tomli-w>=1.2.0",
     "filelock>=3.30.3",
 ]
