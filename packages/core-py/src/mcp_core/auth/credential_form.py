@@ -1240,7 +1240,7 @@ def _render_tabbed_credential_form(
             f' role="tab" aria-selected="{aria_selected}" tabindex="{tabindex}"'
             f' aria-controls="panel-{tid}">{label}</button>'
         )
-        panel_fields = "".join(_render_field(f, prefill.get(f.get("key", ""), "")) for f in tab.get("fields", []))
+        panel_fields = "".join([_render_field(f, prefill.get(f.get("key", ""), "")) for f in tab.get("fields", [])])
         tab_panels.append(
             f'<div id="panel-{tid}" class="tab-panel{active_cls}" data-panel="{tid}"'
             f' role="tabpanel" aria-labelledby="tab-{tid}">{panel_fields}\n                </div>'
@@ -1254,7 +1254,7 @@ def _render_tabbed_credential_form(
     capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
     capabilities_html = ""
     if capability_info:
-        items_html = "".join(_render_capability(c) for c in capability_info)
+        items_html = "".join([_render_capability(c) for c in capability_info])
         capabilities_html = f"""
         <section class="capabilities-section" aria-labelledby="capabilities-title">
             <h2 class="capabilities-title" id="capabilities-title">Capabilities Requested</h2>
@@ -1490,7 +1490,7 @@ def _render_card_group_credential_form(
     capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
     capabilities_html = ""
     if capability_info:
-        items_html = "".join(_render_capability(c) for c in capability_info)
+        items_html = "".join([_render_capability(c) for c in capability_info])
         capabilities_html = f"""
         <section class="capabilities-section" aria-labelledby="capabilities-title">
             <h2 class="capabilities-title" id="capabilities-title">Capabilities Requested</h2>
@@ -1924,7 +1924,7 @@ def render_credential_form(
     capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
 
     prefill = prefill or {}
-    fields_html = "".join(_render_field(f, prefill.get(f.get("key", ""), "")) for f in fields)
+    fields_html = "".join([_render_field(f, prefill.get(f.get("key", ""), "")) for f in fields])
 
     # Optional workspace-username field (opt-in via include_username_field). It has
     # the .field-input class so the form's field collector picks it up into the POST
@@ -1945,7 +1945,7 @@ def render_credential_form(
 
     capabilities_html = ""
     if capability_info:
-        items_html = "".join(_render_capability(c) for c in capability_info)
+        items_html = "".join([_render_capability(c) for c in capability_info])
         capabilities_html = f"""
         <section class="capabilities-section" aria-labelledby="capabilities-title">
             <h2 class="capabilities-title" id="capabilities-title">Capabilities Requested</h2>
