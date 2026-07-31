@@ -1928,22 +1928,11 @@ def render_credential_form(
     prefill = prefill or {}
     fields_html = "".join([_render_field(f, prefill.get(f.get("key", ""), "")) for f in fields])
 
-    # Optional workspace-username field (opt-in via include_username_field). It has
-    # the .field-input class so the form's field collector picks it up into the POST
-    # JSON as __sub_username; the local OAuth AS pops it and derives a STABLE sub.
-    username_html = ""
-    if include_username_field:
-        username_html = (
-            '<div class="field-group">'
-            '<label for="field-__sub_username" class="field-label">Workspace / username'
-            ' <span class="optional-badge" aria-hidden="true">Optional</span></label>'
-            '<input id="field-__sub_username" type="text" name="__sub_username"'
-            ' class="field-input" placeholder="e.g. alice"'
-            ' autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />'
-            '<p class="help-text">Leave blank for a one-off session. Set the same value on'
-            " every device to keep your saved data (one shared bucket per username).</p>"
-            "</div>"
-        )
+    # Optional workspace-username field (opt-in via include_username_field).
+    # Shared with the tabbed + card-group forms: this used to be an inline copy
+    # of the same markup, and the copy is what drifted -- it kept its help text
+    # unlinked long after the helper had gained aria-describedby.
+    username_html = _username_field_html() if include_username_field else ""
 
     capabilities_html = ""
     if capability_info:
