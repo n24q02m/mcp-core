@@ -1,4 +1,4 @@
-## 2024-08-01 - Explicit Label Linking
+## 2026-05-26 - Explicit Label Linking
 
 **Learning:** When building custom HTML forms, using implicit labeling (e.g., `<label>Text <input></label>`) is valid but explicitly linking `<label>` and `<input>` elements with `for` and `id` attributes is recognized as an accessibility best practice. This provides more robust support across a wider range of assistive technologies.
 
@@ -16,13 +16,15 @@
 ## 2026-07-07 - Added accessible focus states to model chain widget
 **Learning:** Parity between core-py and core-ts for frontend UI involves shared HTML/CSS templates inside strings. Interactive elements rendered inside these components must have focus states applied via CSS (like `:focus-within` and `:focus-visible`) for accessibility since the baseline templates may lack them.
 **Action:** Always maintain UI parity between the Python and TS frontend string templates when introducing a11y improvements to credential forms or login pages.
-## 2024-05-18 - ARIA Live Regions on Dynamic Status Boxes
+## 2026-07-17 - ARIA Live Regions on Dynamic Status Boxes
 **Learning:** The credential and login forms across the repository dynamically inject and modify status/error message containers (e.g., `.status-box`). While they had `role="alert"`, they lacked explicit `aria-live` and `aria-atomic` attributes. When manipulating DOM elements via JavaScript (like in `STEP_UI_JS` or the fetch callbacks), screen readers rely heavily on `aria-live` to know when to interrupt or queue announcements, and `aria-atomic` ensures the entire message block is read rather than just the changed node.
 **Action:** When implementing or modifying dynamically updated form status messages (e.g., success or error boxes) in HTML templates or via JS across the codebase, always explicitly set `role="alert"`, `aria-live="polite"`, and `aria-atomic="true"` on the container element to ensure screen readers announce the full content immediately and non-disruptively.
 ## 2026-07-15 - Explicit Description Linking
 
 **Learning:** When building custom HTML forms, static inputs with optional help text (such as the optional username field in the credential forms) need to explicitly link their help text for screen readers. While `for` and `id` pair the label, the `<p class="help-text">` remains semantically unlinked without additional attributes.
 **Action:** Always link `<input>` elements to their corresponding help text using the `aria-describedby` attribute pointing to the ID of the help text paragraph.
-## 2024-08-01 - Accessible Error States in Card Groups
-**Learning:** When dynamically validating form fields built via JavaScript (like in a repeating card group) and focusing the first invalid input, explicitly setting `aria-errormessage` alongside `aria-invalid` links the input to the status box containing the validation message. This provides screen readers with context on *why* the input is invalid, not just that it *is* invalid.
-**Action:** When implementing manual form validation that sets `aria-invalid="true"`, ensure `aria-errormessage` is also set on the invalid input, pointing to the ID of the element displaying the error message.
+## 2026-08-01 - Accessible Error States in Card Groups (sweep complete)
+**Learning:** `aria-errormessage` is only honoured while the input also carries `aria-invalid="true"` AND the element it points at is rendered. The card-group form set `aria-invalid` but left the status box at `display: none`, so a reference to it would have pointed at nothing -- the fix has to reveal the box in the same branch, not just add the attribute.
+**Action:** The sweep is finished -- all 9 `setAttribute("aria-invalid", "true")` sites in `credential_form.py` and all 9 in `credential-form.ts` now set `aria-errormessage` in the same branch, pointing at `status-box` or `step-error`, and every branch that sets it also makes that element visible. Treat this class as closed; a new proposal here should first show a call site that still sets `aria-invalid` alone.
+
+Note on dates: three entries above carried impossible dates (`$(date +%Y-%m-%d)` unexpanded, and two `2024-` dates predating the repository). They have been corrected from `git log -S` on the line that introduced each. Write the real date -- an undated or wrongly dated ledger cannot be used to tell which decision came first.

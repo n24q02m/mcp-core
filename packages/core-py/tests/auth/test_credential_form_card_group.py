@@ -115,3 +115,19 @@ def test_uses_safe_dom_methods():
 def test_username_field_opt_in_with_cards():
     html = _render(include_username_field=True)
     assert html.count('name="__sub_username"') == 1
+
+
+def test_invalid_submit_points_the_screen_reader_at_a_visible_message():
+    """``aria-errormessage`` is inert unless the element it names is rendered.
+
+    The card-group submit handler hides the status box on entry, so the branch
+    that marks a field invalid has to bring it back -- otherwise the reference
+    resolves to a ``display: none`` node and the screen reader announces the
+    field as invalid with no reason attached.
+    """
+    html = _render()
+    branch = html.split("if (!form.checkValidity())")[1].split("return;")[0]
+    assert 'showStatus("error"' in branch
+    assert 'setAttribute("aria-invalid", "true")' in branch
+    assert 'setAttribute("aria-errormessage", "status-box")' in branch
+    assert 'id="status-box"' in html

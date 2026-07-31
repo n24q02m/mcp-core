@@ -104,4 +104,17 @@ describe('renderCredentialForm cardGroup', () => {
     const html = render({ includeUsernameField: true })
     expect((html.match(/name="__sub_username"/g) ?? []).length).toBe(1)
   })
+
+  // aria-errormessage is inert unless the element it names is rendered. The
+  // submit handler hides the status box on entry, so the branch that marks a
+  // field invalid has to bring it back -- otherwise the reference resolves to
+  // a display:none node and the field is announced as invalid with no reason.
+  it('points the screen reader at a visible message on an invalid submit', () => {
+    const html = render()
+    const branch = html.split('if (!form.checkValidity())')[1].split('return;')[0]
+    expect(branch).toContain('showStatus("error"')
+    expect(branch).toContain('setAttribute("aria-invalid", "true")')
+    expect(branch).toContain('setAttribute("aria-errormessage", "status-box")')
+    expect(html).toContain('id="status-box"')
+  })
 })
