@@ -1,0 +1,54 @@
+name: PR Title
+
+# Squash-merge uses the PR title as the commit subject and bypasses the local
+# enforce-commit pre-commit commit-msg hook (bot PRs never run local git
+# hooks). Without a server-side check, a bot title like
+# "Sentinel: [HIGH] Fix ..." squash-merges with a non-conventional subject ->
+# PSR's commit parser silently ignores it -> no version bump, even for a
+# security fix. This job only surfaces a red check; it does not block merge (no
+# required-status-check rule), so the person merging still must retype the
+# squash-commit subject to start with fix:/feat: when this is red.
+#
+# It lives in its own workflow so that `edited` can be a trigger. In ci.yml it
+# could not: `edited` fires on every title and description change, and there it
+# would have re-run the whole lint/test matrix each time. Without `edited` the
+# check was unclearable -- fixing the title, which is exactly what the red
+# check asks for, produced no new run, so the check kept reporting the old
+# title forever (seen on #715). A gate whose own remedy does not clear it
+# teaches people to ignore it.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    name: Validate PR title (Conventional Commits subset)
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Repo rule: only feat: and fix: (feedback_commit_prefix.md). This is
+          # narrower than PSR's own default allowed_tags (which also treats
+          # perf: as patch-worthy) -- we enforce the project convention here,
+          # not just what PSR itself would accept.
+          types: |
+            fix
+            feat
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject must not start with an uppercase character.

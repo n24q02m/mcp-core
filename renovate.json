@@ -94,8 +94,10 @@
       "rangeStrategy": "update-lockfile"
     }
   ],
+  "description": [
+    "Do not set commitMessagePrefix here. semanticCommitType + semanticCommitScope already produce the exact same 'fix(deps):' string (CommitMessage.formatPrefix appends the colon), so it adds nothing -- but Renovate only computes the prefix, and only sets its internal toLowerCase flag, inside `if (semanticCommits === 'enabled' && !commitMessagePrefix)`. Setting it therefore silently disables the lowercasing that commitMessageLowerCase='auto' is supposed to do. That went unnoticed because our own commitMessageAction ('update') is already lowercase; the presets' are not -- lockFileMaintenance uses 'Lock file maintenance', pin/pinDigest use 'Pin', rollback 'Roll back', replacement 'Replace'. Each of those produced a title starting with a capital, which the CI job 'Validate PR title' rejects (subjectPattern ^(?![A-Z]).+$), so the bot PR was born red and could never automerge. Seen on #715."
+  ],
   "semanticCommits": "enabled",
-  "commitMessagePrefix": "fix(deps):",
   "commitMessageAction": "update",
   "commitMessageTopic": "{{depName}}",
   "semanticCommitType": "fix",
