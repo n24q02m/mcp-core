@@ -1240,7 +1240,6 @@ def _render_tabbed_credential_form(
             f' role="tab" aria-selected="{aria_selected}" tabindex="{tabindex}"'
             f' aria-controls="panel-{tid}">{label}</button>'
         )
-        # ⚡ Bolt: Use list comprehension in str.join for faster HTML string building vs generator expression.
         panel_fields = "".join([_render_field(f, prefill.get(f.get("key", ""), "")) for f in tab.get("fields", [])])
         tab_panels.append(
             f'<div id="panel-{tid}" class="tab-panel{active_cls}" data-panel="{tid}"'
@@ -1255,7 +1254,6 @@ def _render_tabbed_credential_form(
     capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
     capabilities_html = ""
     if capability_info:
-        # ⚡ Bolt: Use list comprehension in str.join for faster HTML string building vs generator expression.
         items_html = "".join([_render_capability(c) for c in capability_info])
         capabilities_html = f"""
         <section class="capabilities-section" aria-labelledby="capabilities-title">
@@ -1492,7 +1490,6 @@ def _render_card_group_credential_form(
     capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
     capabilities_html = ""
     if capability_info:
-        # ⚡ Bolt: Use list comprehension in str.join for faster HTML string building vs generator expression.
         items_html = "".join([_render_capability(c) for c in capability_info])
         capabilities_html = f"""
         <section class="capabilities-section" aria-labelledby="capabilities-title">
@@ -1927,7 +1924,6 @@ def render_credential_form(
     capability_info: list[dict[str, Any]] = schema.get("capabilityInfo", [])
 
     prefill = prefill or {}
-    # ⚡ Bolt: Use list comprehension in str.join for faster HTML string building vs generator expression.
     fields_html = "".join([_render_field(f, prefill.get(f.get("key", ""), "")) for f in fields])
 
     # Optional workspace-username field (opt-in via include_username_field). It has
@@ -1949,7 +1945,6 @@ def render_credential_form(
 
     capabilities_html = ""
     if capability_info:
-        # ⚡ Bolt: Use list comprehension in str.join for faster HTML string building vs generator expression.
         items_html = "".join([_render_capability(c) for c in capability_info])
         capabilities_html = f"""
         <section class="capabilities-section" aria-labelledby="capabilities-title">
