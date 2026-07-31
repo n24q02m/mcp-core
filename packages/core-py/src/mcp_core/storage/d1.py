@@ -2,7 +2,11 @@
 
 Wire contract (matches src/worker.ts):
 POST {base}/query with JSON {"sql": str, "params": list} -> 200 {"results": [<row dicts>]}.
-POST {base}/batch with JSON array [{"sql": str, "params": list}, ...] -> 200 [{"results": [<row dicts>]}, ...].
+POST {base}/batch with JSON array [{"sql": str, "params": list}, ...] -> 200 {"results": [...]}
+(a dict envelope wrapping the per-statement results, NOT an array -- this was
+previously documented wrong here for a long time because executemany's batch
+path only checked the HTTP status code and never read the response body, so
+the shape mismatch never surfaced).
 Prepared statements only (sql + bound params); raw SQL text is never sent.
 Fail-loud: any non-200 raises (no silent empty results).
 """
@@ -58,6 +62,17 @@ class D1Backend:
             raise RuntimeError(f"D1Backend query failed: HTTP {status}")
         return json.loads(data.decode()).get("results", [])
 
+    def batch(self, queries: list[dict[str, Any]]) -> list:
+        # POST {base}/batch -> Response.json({ results: batchResults }), i.e. a
+        # dict envelope (NOT an array) even though it wraps multiple statements.
+        if not queries:
+            return []
+        body = json.dumps(queries).encode()
+        status, data = self._http.request("POST", f"{self.base_url}/batch", body, self._headers())
+        if status != 200:
+            raise RuntimeError(f"D1Backend batch failed: HTTP {status}")
+        return json.loads(data.decode()).get("results", [])
+
     def fetchall(self, sql: str, params: list[Any]) -> list[dict]:
         return self.execute(sql, params)
 
@@ -86,17 +101,15 @@ class D1Backend:
             else:
                 # ⚡ Bolt: Use the /batch endpoint for non-INSERT batched statements (or when SQL-rewriting fails)
                 # to avoid the N+1 query problem of making a separate HTTP request for each row in the batch.
-                batch_payload = [{"sql": sql, "params": row} for row in batch]
-                body = json.dumps(batch_payload).encode()
-                status, data = self._http.request("POST", f"{self.base_url}/batch", body, self._headers())
-                if status != 200:
-                    raise RuntimeError(f"D1Backend batch failed: HTTP {status}")
+                self.batch([{"sql": sql, "params": row} for row in batch])
 
     def executescript(self, sql: str) -> None:
-        # Migrations: split on ';' and run each non-empty statement.
-        for stmt in (s.strip() for s in sql.split(";")):
-            if stmt:
-                self.execute(stmt, [])
+        # Migrations: split on ';' and run in /batch chunks (one POST per
+        # chunk) instead of one request per statement.
+        stmts = [s.strip() for s in sql.split(";") if s.strip()]
+        for i in range(0, len(stmts), self.max_rows_per_insert):
+            chunk = stmts[i : i + self.max_rows_per_insert]
+            self.batch([{"sql": stmt, "params": []} for stmt in chunk])
 
 
 def d1_backend_from_env() -> D1Backend:
