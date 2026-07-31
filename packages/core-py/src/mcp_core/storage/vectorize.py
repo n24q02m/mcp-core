@@ -1,8 +1,11 @@
 """HTTP client for Cloudflare Vectorize v2 via the Worker outbound-handler.
 
-upsert: POST {base}/upsert (ndjson lines {id, values, metadata}) -> {"mutationId": ...}
-query:  POST {base}/query json {vector, topK, filter} -> {"matches": [{id, score, metadata}]}
-ready:  GET  {base} -> {"ready": bool}
+upsert:      POST {base}/upsert (ndjson lines {id, values, metadata}) -> {"mutationId": ...}
+query:       POST {base}/query json {vector, topK, filter} -> {"matches": [{id, score, metadata}]}
+deleteByIds: POST {base}/deleteByIds json {"ids": [...]} -> {"mutationId": ...}
+ready:       GET  {base} -> {"ready": bool}
+Every route returns the Vectorize binding's own result verbatim -- unlike the D1
+handler's /batch, none of these wrap it in an envelope.
 Upsert is eventual (~seconds); add_chunks() callers must wait_until_indexed()
 before asserting search results. Fail-loud on non-200.
 """
@@ -10,10 +13,16 @@ before asserting search results. Fail-loud on non-200.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
+# Vectorize returns at most this many matches once values/metadata are requested.
+_MAX_TOP_K = 50
 
 
 class _HttpxHttp:
@@ -28,6 +37,7 @@ class VectorizeBackend:
         self.idx = idx
         self._token = token
         self._http = http or _HttpxHttp()
+        self._warned_top_k_clamp = False
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token}"} if self._token else {}
@@ -39,9 +49,35 @@ class VectorizeBackend:
             raise RuntimeError(f"VectorizeBackend upsert failed: HTTP {status}")
         return json.loads(data.decode()).get("mutationId", "")
 
+    def delete_by_ids(self, ids: list[str]) -> str:
+        # POST {base}/deleteByIds -> Response.json(await env.VECTORIZE.deleteByIds(ids)),
+        # i.e. the binding's {"mutationId": ...} straight through.
+        if not ids:
+            return ""
+        body = json.dumps({"ids": ids}).encode()
+        status, data = self._http.request("POST", f"{self.base_url}/deleteByIds", body, self._headers())
+        if status != 200:
+            raise RuntimeError(f"VectorizeBackend delete_by_ids failed: HTTP {status}")
+        return json.loads(data.decode()).get("mutationId", "")
+
     def query(self, vector: list[float], top_k: int, metadata_filter: dict | None = None) -> list[dict]:
-        # Vectorize caps topK at 50 when returning values/metadata.
-        top_k = min(top_k, 50)
+        if top_k > _MAX_TOP_K:
+            # Say it once per instance, not once per call: the ceiling belongs to
+            # the index, so a search loop would repeat the same line forever. The
+            # caller asked for more results than it can possibly receive, and
+            # silently handing back a short list is indistinguishable from the
+            # index genuinely holding that few.
+            if not self._warned_top_k_clamp:
+                logger.warning(
+                    "VectorizeBackend[%s]: top_k=%d clamped to %d (Vectorize returns at most %d "
+                    "matches with values/metadata); further clamps on this instance are not logged",
+                    self.idx,
+                    top_k,
+                    _MAX_TOP_K,
+                    _MAX_TOP_K,
+                )
+                self._warned_top_k_clamp = True
+            top_k = _MAX_TOP_K
         body = json.dumps({"vector": vector, "topK": top_k, "filter": metadata_filter or {}}).encode()
         status, data = self._http.request("POST", f"{self.base_url}/query", body, self._headers())
         if status != 200:

@@ -1,4 +1,5 @@
 import json
+import logging
 import pytest
 from unittest.mock import patch, MagicMock
 from mcp_core.storage import VectorizeBackend, vectorize_backend_from_env
@@ -65,6 +66,74 @@ def test_vectorize_query_caps_topk_at_50():
 
     vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http())
     vb.query([0.1], top_k=100)
+
+
+def test_vectorize_query_warns_once_when_topk_is_clamped(caplog):
+    """A caller asking for 200 gets 50. Silently is how that becomes a bug report.
+
+    Once per instance, not once per call: the clamp is a property of the index,
+    so a search loop would otherwise emit the same line on every iteration.
+    """
+
+    class Http:
+        def request(self, method, url, data=None, headers=None):
+            return (200, json.dumps({"matches": []}).encode())
+
+    vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http())
+    with caplog.at_level(logging.WARNING, logger="mcp_core.storage.vectorize"):
+        vb.query([0.1], top_k=200)
+        vb.query([0.1], top_k=100)
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "200" in warnings[0].getMessage()
+    assert "50" in warnings[0].getMessage()
+
+
+def test_vectorize_query_stays_quiet_when_topk_fits(caplog):
+    class Http:
+        def request(self, method, url, data=None, headers=None):
+            return (200, json.dumps({"matches": []}).encode())
+
+    vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http())
+    with caplog.at_level(logging.WARNING, logger="mcp_core.storage.vectorize"):
+        vb.query([0.1], top_k=50)
+        vb.query([0.1], top_k=1)
+
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def test_vectorize_delete_by_ids_posts_id_list():
+    seen = {}
+
+    class Http:
+        def request(self, method, url, data=None, headers=None):
+            seen["url"] = url
+            seen["body"] = json.loads(data.decode())
+            return (200, json.dumps({"mutationId": "m9"}).encode())
+
+    vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http())
+    assert vb.delete_by_ids(["u1:m1", "u1:m2"]) == "m9"
+    assert seen["url"] == "http://vectorize.internal/deleteByIds"
+    assert seen["body"] == {"ids": ["u1:m1", "u1:m2"]}
+
+
+def test_vectorize_delete_by_ids_empty_makes_no_request():
+    class Http:
+        def request(self, *a, **k):
+            raise AssertionError("no request for an empty id list")
+
+    assert VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http()).delete_by_ids([]) == ""
+
+
+def test_vectorize_delete_by_ids_failure():
+    class Http:
+        def request(self, *a, **k):
+            return (500, b"boom")
+
+    vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http())
+    with pytest.raises(RuntimeError, match="VectorizeBackend delete_by_ids failed: HTTP 500"):
+        vb.delete_by_ids(["u1:m1"])
 
 
 def test_vectorize_query_failure():
