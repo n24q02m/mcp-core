@@ -200,9 +200,26 @@ class LifecycleLock:
     def __enter__(self) -> "LifecycleLock":
         # Open in read+write without truncation so concurrent openers never
         # race on truncate. We explicitly truncate *after* acquiring the lock.
+        #
+        # ``os.open`` with an explicit mode rather than ``open()`` + ``chmod``:
+        # the latter creates the file under the process umask first, so the
+        # token inside it is briefly readable by anyone on the box.
+        #
+        # Deliberately NOT ``O_APPEND``, unlike the ``"a+"`` this replaces.
+        # Under O_APPEND every write lands at end-of-file and the ``seek(0)``
+        # below is silently ignored, so re-acquiring an existing lock appended
+        # a second 512-byte record instead of overwriting the first. Since
+        # ``_parse_lock_text`` reads the leading four lines, that made a stale
+        # record shadow the live one -- a dead PID would be reported as the
+        # current lock holder. The mode string stays "r+"-like via fdopen.
         try:
-            self._fh = open(self._lock_file, "a+", encoding="utf-8")
+            fd = os.open(self._lock_file, os.O_RDWR | os.O_CREAT, 0o600)
         except OSError as e:
+            raise RuntimeError(f"Failed to open lock file: {e}") from e
+        try:
+            self._fh = os.fdopen(fd, "r+", encoding="utf-8")
+        except OSError as e:
+            os.close(fd)
             raise RuntimeError(f"Failed to open lock file: {e}") from e
         if sys.platform == "win32":
             import msvcrt
@@ -232,8 +249,6 @@ class LifecycleLock:
         payload = f"{os.getpid()}\n{self._port}\n{self._token or ''}\n{spawned_at}\n"
         self._fh.write(payload.ljust(512, " "))
         self._fh.flush()
-        if sys.platform != "win32":
-            os.chmod(self._lock_file, 0o600)
         return self
 
     def __exit__(

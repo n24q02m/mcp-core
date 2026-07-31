@@ -1,5 +1,6 @@
 """Tests for error paths in cross-process lifecycle lock."""
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -17,12 +18,31 @@ def lock_root(tmp_path: Path) -> Path:
 
 
 def test_open_fails(lock_root: Path) -> None:
-    """Test that RuntimeError is raised when open() fails."""
+    """Test that RuntimeError is raised when os.open() fails."""
     lock = LifecycleLock(name="test", port=9000, root=lock_root)
-    with patch("builtins.open", side_effect=OSError("Permission denied")):
+    with patch("os.open", side_effect=OSError("Permission denied")):
         with pytest.raises(RuntimeError, match="Failed to open lock file"):
             with lock:
                 pass
+
+
+def test_fdopen_failure_does_not_leak_the_descriptor(lock_root: Path) -> None:
+    """A failure between os.open and os.fdopen must still close the fd.
+
+    ``os.fdopen`` takes ownership of the descriptor only on success; if it
+    raises, nothing else will ever close it and the process leaks one per
+    attempt.
+    """
+    lock = LifecycleLock(name="test", port=9000, root=lock_root)
+    closed: list[int] = []
+    with (
+        patch("os.fdopen", side_effect=OSError("no memory")),
+        patch("os.close", side_effect=closed.append),
+    ):
+        with pytest.raises(RuntimeError, match="Failed to open lock file"):
+            with lock:
+                pass
+    assert len(closed) == 1
 
 
 def test_unlink_fails(lock_root: Path) -> None:
@@ -71,7 +91,10 @@ def test_windows_release_ignores_oserror(lock_root: Path) -> None:
             # Successfully "acquire"
             # We need to mock open to return a mock file handle that doesn't actually call msvcrt
             mock_fh = MagicMock()
-            with patch("builtins.open", return_value=mock_fh):
+            with (
+                patch("os.open", return_value=123),
+                patch("os.fdopen", return_value=mock_fh),
+            ):
                 lock.__enter__()
 
                 # Now set locking to fail for release
@@ -82,3 +105,45 @@ def test_windows_release_ignores_oserror(lock_root: Path) -> None:
 
                 assert lock._fh is None
                 mock_fh.close.assert_called_once()
+
+
+def test_acquiring_over_a_stale_record_overwrites_it(lock_root: Path) -> None:
+    """Re-acquiring must overwrite from offset 0, not append a second record.
+
+    The file was previously opened ``"a+"``, which sets O_APPEND, and under
+    O_APPEND every write goes to end-of-file regardless of the ``seek(0)``.
+    Acquiring a lock whose file survived an unclean exit therefore left the
+    stale record first in the file -- and ``_parse_lock_text`` reads the
+    leading four lines, so callers saw a dead PID as the current holder.
+    """
+    lock = LifecycleLock(name="test", port=9000, root=lock_root)
+    stale = "999999\n1234\nstale-token\n2020-01-01T00:00:00+00:00\n".ljust(512, " ")
+    lock.path.write_text(stale, encoding="utf-8")
+
+    with lock:
+        raw = lock.path.read_text(encoding="utf-8")
+
+    lines = raw.strip().split("\n")
+    assert lines[0].strip() == str(os.getpid())
+    assert lines[1].strip() == "9000"
+    assert "stale-token" not in raw
+    assert len(raw) == 512
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+def test_lock_file_is_owner_only_from_creation(lock_root: Path) -> None:
+    """The token lives in this file, so it must never exist world-readable.
+
+    Creating with ``open()`` and narrowing with ``chmod`` afterwards leaves a
+    window under the process umask; asserting the mode after the fact cannot
+    tell the two apart, so this also runs under a permissive umask to prove
+    the mode comes from the create call rather than from inherited defaults.
+    """
+    old_umask = os.umask(0o000)
+    try:
+        lock = LifecycleLock(name="test", port=9000, root=lock_root)
+        with lock:
+            mode = lock.path.stat().st_mode & 0o777
+    finally:
+        os.umask(old_umask)
+    assert mode == 0o600
