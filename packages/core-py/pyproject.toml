@@ -8,14 +8,14 @@ version = "1.22.0-beta.2"
 description = "Unified MCP Streamable HTTP 2025-11-25 transport, OAuth 2.1 AS, lifecycle, install"
 readme = "README.md"
 requires-python = "==3.13.*"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "n24q02m", email = "quangminh2422004@gmail.com" }]
 keywords = ["mcp", "model-context-protocol", "streamable-http", "oauth21", "transport"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
