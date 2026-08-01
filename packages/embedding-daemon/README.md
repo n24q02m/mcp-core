@@ -31,4 +31,4 @@ mcp-embedding-daemon --host 127.0.0.1 --port 9800
 
 ## License
 
-MIT
+Apache-2.0

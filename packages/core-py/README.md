@@ -20,4 +20,4 @@ pip install 'n24q02m-mcp-core[llm]'
 
 ## License
 
-MIT
+Apache-2.0
