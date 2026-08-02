@@ -21,9 +21,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "fastapi>=0.139.2",
+    "fastapi>=0.140.0",
     "uvicorn>=0.51.0",
-    "onnxruntime>=1.27.0",
+    "onnxruntime>=1.28.0",
     "numpy>=2.5.1",
     "httpx>=0.28.1",
     # Keep this a RANGE, never an exact pin: this package is published to PyPI,
@@ -44,7 +44,7 @@ dependencies = [
 # Re-add the dep (and gate `LlamaDiskCache` behind a JSON/msgpack alternative
 # or runtime opt-in) when the GGUF backend lands.
 gguf = []
-cuda = ["onnxruntime-gpu>=1.27.0"]
+cuda = ["onnxruntime-gpu>=1.28.0"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
