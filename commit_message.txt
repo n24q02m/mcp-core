@@ -1,6 +1,0 @@
-fix: add novalidate to relay login form
-
-💡 What: Added the `novalidate` attribute to the HTML `<form>` tag in `packages/core-ts/src/auth/relay-login.ts` (the Relay login component).
-🎯 Why: Native HTML validation tooltips cannot be styled consistently and introduce accessibility issues when combined with our custom client-side error states.
-📸 Before/After: Visual regression is unnoticeable. When forms are missing required parameters they now fall back cleanly to our custom accessible error states.
-♿ Accessibility: Ensures that screen reader users consistently rely on the explicit ARIA attributes (`aria-invalid`, `aria-errormessage`) rendered by the server rather than unpredictable native validation pop-ups.
