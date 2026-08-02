@@ -20,12 +20,62 @@ from typing import Any
 
 import httpx
 
-# SQLite bound-variable ceiling; D1 inherits it. Keep INSERT batches well under.
-_DEFAULT_MAX_ROWS_PER_INSERT = 100
+# Cloudflare D1 rejects any query carrying more than this many bound parameters
+# ("Maximum bound parameters per query: 100"), and the cap applies to each
+# statement inside a /batch too. It counts PARAMETERS, not rows: rows per
+# multi-row INSERT must therefore be DERIVED by dividing this by the column
+# count, never assumed. A wide table blows the cap long before the row count
+# looks large -- wet's 13-column doc_chunks INSERT is already over at 8 rows
+# (8 x 13 = 104), and a 100-row chunk of it sends 1300.
+# https://developers.cloudflare.com/d1/platform/limits/
+D1_MAX_BOUND_PARAMS = 100
+
+# Statements per executescript /batch POST. Unrelated to the parameter cap --
+# migration statements bind nothing -- this only keeps one request body from
+# growing without bound.
+_STATEMENTS_PER_SCRIPT_BATCH = 100
 
 # Matches the trailing VALUES (?,?,...) tuple of a single-row INSERT so it can
 # be expanded into a multi-row INSERT for chunked batches.
 _VALUES_TUPLE_RE = re.compile(r"VALUES\s*(\([^)]*\))\s*$", re.IGNORECASE)
+
+
+def _validate_row_width(rows: list[list[Any]]) -> int:
+    """Return the bound parameters per row, or raise saying why they cannot be sent.
+
+    Three deliberate rejections, all of which D1 would otherwise answer with a
+    bare ``HTTP 400`` that names neither the table nor the number that broke:
+
+    * **No bound values.** A row must bind at least one parameter -- there is
+      nothing to divide the cap by, and a multi-row INSERT of empty tuples is
+      not expressible. (``rows`` being empty at all is not an error;
+      :meth:`D1Backend.executemany` returns before reaching here.)
+    * **Ragged rows.** The multi-row INSERT repeats one ``?``-tuple, so a row of
+      a different width would misalign every value after it against the columns.
+    * **Wider than the cap.** Past ``D1_MAX_BOUND_PARAMS`` columns not even a
+      single row fits in one statement, so no chunk size can rescue it.
+    """
+    n_cols = len(rows[0])
+    if n_cols == 0:
+        raise ValueError(
+            "D1Backend.executemany got rows with no bound values; each row must "
+            "carry at least one parameter to bind to the VALUES (?) tuple."
+        )
+    ragged = next((i for i, row in enumerate(rows) if len(row) != n_cols), None)
+    if ragged is not None:
+        raise ValueError(
+            f"D1Backend.executemany got ragged rows: row 0 has {n_cols} values "
+            f"but row {ragged} has {len(rows[ragged])}. Every row must bind the "
+            "same columns, in the same order."
+        )
+    if n_cols > D1_MAX_BOUND_PARAMS:
+        raise ValueError(
+            f"D1Backend.executemany cannot send a row of {n_cols} columns: one "
+            f"row alone needs {n_cols} bound parameters and Cloudflare D1 caps a "
+            f"query at {D1_MAX_BOUND_PARAMS}. Narrow the table or split the "
+            "INSERT across several statements."
+        )
+    return n_cols
 
 
 class _HttpxHttp:
@@ -40,7 +90,12 @@ class D1Backend:
         base_url: str,
         token: str | None = None,
         http=None,
-        max_rows_per_insert: int = _DEFAULT_MAX_ROWS_PER_INSERT,
+        # An upper bound layered ON TOP of the parameter-derived chunk size, not
+        # a replacement for it: executemany takes the smaller of the two, so a
+        # caller can shrink chunks but can never push a statement past D1's cap.
+        # The default is the loosest value that can ever bind -- reachable only
+        # by a one-column table, where 100 rows is exactly 100 parameters.
+        max_rows_per_insert: int = D1_MAX_BOUND_PARAMS,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._token = token
@@ -83,11 +138,15 @@ class D1Backend:
     def executemany(self, sql: str, rows: list[list[Any]]) -> None:
         # D1 has no native executemany over HTTP; batch rows into multi-row
         # INSERTs (one POST per chunk) by expanding the VALUES (...) tuple.
+        # Chunk size comes from D1's bound-parameter cap divided by the row
+        # width, so a wide table simply yields fewer rows per statement.
         if not rows:
             return
+        n_cols = _validate_row_width(rows)
+        rows_per_stmt = min(self.max_rows_per_insert, D1_MAX_BOUND_PARAMS // n_cols)
         match = _VALUES_TUPLE_RE.search(sql)
-        for i in range(0, len(rows), self.max_rows_per_insert):
-            batch = rows[i : i + self.max_rows_per_insert]
+        for i in range(0, len(rows), rows_per_stmt):
+            batch = rows[i : i + rows_per_stmt]
             if match and len(batch) > 1:
                 tuple_sql = match.group(1)
                 # ⚡ Bolt: Use list multiplication instead of generator expression for faster string joining in hot path
@@ -107,8 +166,8 @@ class D1Backend:
         # Migrations: split on ';' and run in /batch chunks (one POST per
         # chunk) instead of one request per statement.
         stmts = [s.strip() for s in sql.split(";") if s.strip()]
-        for i in range(0, len(stmts), self.max_rows_per_insert):
-            chunk = stmts[i : i + self.max_rows_per_insert]
+        for i in range(0, len(stmts), _STATEMENTS_PER_SCRIPT_BATCH):
+            chunk = stmts[i : i + _STATEMENTS_PER_SCRIPT_BATCH]
             self.batch([{"sql": stmt, "params": []} for stmt in chunk])
 
 
