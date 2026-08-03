@@ -149,7 +149,7 @@ class D1Backend:
             batch = rows[i : i + rows_per_stmt]
             if match and len(batch) > 1:
                 tuple_sql = match.group(1)
-                # ⚡ Bolt: Use list multiplication instead of generator expression for faster string joining in hot path
+                # Use list multiplication instead of generator expression for faster string joining in hot path
                 values = ", ".join([tuple_sql] * len(batch))
                 batched_sql = sql[: match.start(1)] + values
                 flat = [v for row in batch for v in row]
@@ -158,7 +158,7 @@ class D1Backend:
                 # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
                 self.execute(batched_sql, flat)
             else:
-                # ⚡ Bolt: Use the /batch endpoint for non-INSERT batched statements (or when SQL-rewriting fails)
+                # Use the /batch endpoint for non-INSERT batched statements (or when SQL-rewriting fails)
                 # to avoid the N+1 query problem of making a separate HTTP request for each row in the batch.
                 self.batch([{"sql": sql, "params": row} for row in batch])
 

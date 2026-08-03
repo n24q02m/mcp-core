@@ -878,7 +878,7 @@ export async function createDelegatedOAuthApp(options: DelegatedOAuthAppOptions)
     if (!header) return {}
     const out: Record<string, string> = {}
 
-    // ⚡ Bolt: Use a single-pass loop instead of `split(';')` to avoid array
+    // Use a single-pass loop instead of `split(';')` to avoid array
     // allocations and intermediate string objects in this hot path.
     let pos = 0
     while (pos < header.length) {
