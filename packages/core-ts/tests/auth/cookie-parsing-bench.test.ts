@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 // Note: In `local-oauth-app.ts` and `delegated-oauth-app.ts`, `parseCookies` is a private
 // helper nested inside the application closure (`createLocalOAuthApp` / `createDelegatedOAuthApp`).
 // It's not exported or mockable without instantiating the entire OAuth server flow.
-// This test provides isolated verification of the ⚡ Bolt string-scanning logic,
+// This test provides isolated verification of the string-scanning logic,
 // proving functional parity between `split(';')` and `indexOf()` for identical inputs.
 // It acts as a safety harness for the optimization, independent of HTTP routes.
 

@@ -202,7 +202,7 @@ def create_local_oauth_app(
     def _prune_expired(store: dict[str, dict[str, Any]], ttl: float) -> None:
         """Remove entries older than *ttl* seconds."""
         now = time.monotonic()
-        # ⚡ Bolt: Avoid O(N) dict rebuild by iterating and deleting only expired items O(K).
+        # Avoid O(N) dict rebuild by iterating and deleting only expired items O(K).
         expired_keys = [k for k, v in store.items() if now - v["created_at"] > ttl]
         for k in expired_keys:
             del store[k]

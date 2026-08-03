@@ -83,3 +83,10 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+
+      - id: no-emoji-packages
+        name: No emoji in packages
+        entry: python scripts/no-emoji.py packages
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
