@@ -2,6 +2,47 @@
 
 <!-- version list -->
 
+## v1.22.0 (2026-08-03)
+
+### Bug Fixes
+
+- Add novalidate to relay login form
+  ([`287c3f0`](https://github.com/n24q02m/mcp-core/commit/287c3f015cde88d4299435fdf0704d067ca118c2))
+
+- Chunk D1 multi-row INSERTs by bound parameters, not by rows
+  ([#723](https://github.com/n24q02m/mcp-core/pull/723),
+  [`ffd285a`](https://github.com/n24q02m/mcp-core/commit/ffd285a5839028173f0e2fb524d291210eb4b3f3))
+
+- Move this repo to Apache-2.0, preserving the MIT terms it received
+  ([#721](https://github.com/n24q02m/mcp-core/pull/721),
+  [`de6b1f1`](https://github.com/n24q02m/mcp-core/commit/de6b1f1861e6c90d26107ef516385935d2bec444))
+
+- Say how the squash subject is chosen, so a retitled PR is not mistaken for a fixed one
+  ([`6e69cc5`](https://github.com/n24q02m/mcp-core/commit/6e69cc558984498cff32798544fb233b924525f8))
+
+- **deps**: Force semanticCommitType fix for every Renovate PR, not just prod deps
+  ([#727](https://github.com/n24q02m/mcp-core/pull/727),
+  [`7962d91`](https://github.com/n24q02m/mcp-core/commit/7962d911fe46f86af84a4ce16abedbbe79c6dd6a))
+
+- **deps**: Lock file maintenance ([#726](https://github.com/n24q02m/mcp-core/pull/726),
+  [`5dd605d`](https://github.com/n24q02m/mcp-core/commit/5dd605d4f5e12c9c4e9182533bb7fc9f3ee7406a))
+
+- **deps**: Lock file maintenance ([#725](https://github.com/n24q02m/mcp-core/pull/725),
+  [`5a1a124`](https://github.com/n24q02m/mcp-core/commit/5a1a1244bc2da65b2ed84bde13bdd664b8695f7a))
+
+- **deps**: Lock file maintenance ([#720](https://github.com/n24q02m/mcp-core/pull/720),
+  [`d1767ed`](https://github.com/n24q02m/mcp-core/commit/d1767edd7d04697d85735ce1f6ea75d97a9af098))
+
+- **deps**: Update patch dependencies ([#719](https://github.com/n24q02m/mcp-core/pull/719),
+  [`4cb0b09`](https://github.com/n24q02m/mcp-core/commit/4cb0b09d659325e533d648b1fc80c963f293867c))
+
+### Chores
+
+- **deps**: Update @types/better-sqlite3 to v9
+  ([#724](https://github.com/n24q02m/mcp-core/pull/724),
+  [`393b016`](https://github.com/n24q02m/mcp-core/commit/393b0169607fb584daf3eca7b900eba27752cffa))
+
+
 ## v1.22.0-beta.2 (2026-07-31)
 
 ### Bug Fixes
