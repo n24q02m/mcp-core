@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":semanticCommits"],
+  "extends": ["config:recommended", ":semanticCommits", ":semanticCommitTypeAll(fix)"],
   "schedule": ["before 5am"],
   "timezone": "Asia/Ho_Chi_Minh",
   "prConcurrentLimit": 5,
@@ -95,7 +95,8 @@
     }
   ],
   "description": [
-    "Do not set commitMessagePrefix here. semanticCommitType + semanticCommitScope already produce the exact same 'fix(deps):' string (CommitMessage.formatPrefix appends the colon), so it adds nothing -- but Renovate only computes the prefix, and only sets its internal toLowerCase flag, inside `if (semanticCommits === 'enabled' && !commitMessagePrefix)`. Setting it therefore silently disables the lowercasing that commitMessageLowerCase='auto' is supposed to do. That went unnoticed because our own commitMessageAction ('update') is already lowercase; the presets' are not -- lockFileMaintenance uses 'Lock file maintenance', pin/pinDigest use 'Pin', rollback 'Roll back', replacement 'Replace'. Each of those produced a title starting with a capital, which the CI job 'Validate PR title' rejects (subjectPattern ^(?![A-Z]).+$), so the bot PR was born red and could never automerge. Seen on #715."
+    "Do not set commitMessagePrefix here. semanticCommitType + semanticCommitScope already produce the exact same 'fix(deps):' string (CommitMessage.formatPrefix appends the colon), so it adds nothing -- but Renovate only computes the prefix, and only sets its internal toLowerCase flag, inside `if (semanticCommits === 'enabled' && !commitMessagePrefix)`. Setting it therefore silently disables the lowercasing that commitMessageLowerCase='auto' is supposed to do. That went unnoticed because our own commitMessageAction ('update') is already lowercase; the presets' are not -- lockFileMaintenance uses 'Lock file maintenance', pin/pinDigest use 'Pin', rollback 'Roll back', replacement 'Replace'. Each of those produced a title starting with a capital, which the CI job 'Validate PR title' rejects (subjectPattern ^(?![A-Z]).+$), so the bot PR was born red and could never automerge. Seen on #715.",
+    "The top-level semanticCommitType: 'fix' below does NOT reliably apply -- packageRules always win over top-level scalars for the fields they touch, and config:recommended extends :semanticPrefixFixDepsChoreOthers, whose packageRules are [{matchPackageNames: ['*'], semanticCommitType: 'chore'}, {matchDepTypes: ['dependencies','require'], semanticCommitType: 'fix'}, ...]. Renovate applies packageRules in array order and the last match wins per field (proved by reading the installed renovate package's resolveConfigPresets/applyPackageRules/mergeChildConfig directly, not assumed): our own extends and packageRules are merged in AFTER config:recommended's, but the wildcard chore rule matches every dep, and the dependencies/require rule only re-covers prod deps -- so any devDependency (e.g. @types/better-sqlite3) never gets re-matched back to fix and keeps 'chore', which the 'Validate PR title' job rejects (repo only allows fix/feat). Fixed by appending ':semanticCommitTypeAll(fix)' to extends: that preset's packageRule (matchFileNames: ['**/*'] -> semanticCommitType: 'fix') is merged in after config:recommended's, so it is the last match for every dependency regardless of depType, and wins. Seen on #724."
   ],
   "semanticCommits": "enabled",
   "commitMessageAction": "update",
