@@ -45,6 +45,8 @@ Pre-commit hooks are required and run on every commit. Do NOT skip them with `--
 - Include tests for new code (target coverage >= 95%)
 - Update `CLAUDE.md` or `README.md` if the change affects architecture or public API
 - CI must pass (lint + test on Linux/Windows/macOS, Semgrep SAST, dependency review)
+- The PR title uses the same `feat:`/`fix:` subset as commit messages, with a lowercase subject and no emoji or agent-name prefix
+- Squash merge takes its subject from the branch commit when the PR holds exactly one commit, and from the PR title only when it holds several (repo setting `squash_merge_commit_title=COMMIT_OR_PR_TITLE`). Retitling a single-commit PR therefore does not change what lands on `main` — pass the subject at merge time: `gh pr merge --squash --subject "fix: ..."`. A subject PSR cannot parse is a change PSR will not release
 
 ## Code of Conduct
 
