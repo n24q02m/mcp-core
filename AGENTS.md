@@ -9,6 +9,7 @@ This is a monorepo with 2 Python packages + 1 TypeScript package. When working o
 - Pre-commit hooks enforce: biome (TS), ruff (Python), gitleaks (secrets), conventional commits (feat/fix only)
 - Coverage target: >= 95%
 - Commit prefix: `feat:` or `fix:` only (PSR release commit `chore(release):` is a whitelisted exception)
+- PR title: same subset as the commit prefix — `feat:` or `fix:` (scope optional), lowercase subject, no agent name or emoji in front. `.github/workflows/pr-title.yml` reports it red otherwise, and the squash subject it produces is what PSR reads
 
 ## Package Boundaries
 
