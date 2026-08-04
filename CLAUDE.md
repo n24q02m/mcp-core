@@ -59,6 +59,16 @@ Parity nghĩa là **cùng hành vi**, không phải cùng cách nối dây. Ba c
 - Conventional Commits (feat: / fix: only). Tag format: `v{version}` (config: `semantic-release.toml`)
 - CD: `workflow_dispatch`, chọn beta/stable
 - Pipeline: PSR v10 -> npm publish (core-ts) + PyPI publish (core-py, embedding-daemon)
+- Gate trước khi dispatch: phát hành từ `main`, working tree sạch, các kiểm tra CI và E2E bắt buộc đã xanh, không còn PR actionable đang mở, và không có alert mở của Dependabot, code scanning hoặc secret scanning. Issue Dependency Dashboard thường trực là allowlist duy nhất. Không bypass gate hoặc bỏ qua backlog lỗi.
+- Stable còn cần beta cascade và Test B client matrix pass trên beta đã publish bằng tool call thật; T0 CI/E2E không thay thế được Test B.
+- Job release chạy PSR dry-run và kiểm tra version được tính có bị trùng trên npm cùng hai package PyPI hay không trước khi tạo tag/GitHub Release. Các job publish chỉ chạy khi PSR trả về `released=true`.
+- `beta`: PSR chạy prerelease với token `beta`, npm dùng dist-tag `beta`; không tạo issue bump cho downstream.
+- `stable`: PSR chạy stable release, npm dùng dist-tag `latest`. Chỉ sau khi release, npm publish và cả hai PyPI publish thành công thì CD mới tạo issue downstream.
+- Stable-only downstream fan-out trong `.github/workflows/cd.yml`:
+  - Issue bump pin npm cho `better-notion-mcp`, `better-email-mcp`, `better-godot-mcp`, `better-workspace-mcp` với package `@n24q02m/mcp-core`.
+  - Issue bump pin PyPI cho `better-telegram-mcp`, `wet-mcp`, `mnemo-mcp`, `better-code-review-graph`, `imagine-mcp` với package `n24q02m-mcp-core`.
+  - Issue tracking cho `qwen3-embed`, `web-core`, `claude-plugins` để kiểm tra reference tích hợp mcp-core hoặc marketplace.
+- Job downstream tìm issue hiện có trước khi tạo mới. Issue pin trực tiếp yêu cầu cập nhật dependency và lockfile; issue tracking có thể đóng kèm kết quả kiểm tra nếu repo không có reference cần đổi.
 - Tất cả packages share cùng version. PSR bumps `packages/core-py/pyproject.toml`, `packages/embedding-daemon/pyproject.toml` (version_toml). CD injects version vào `packages/core-ts/package.json` trước khi npm publish.
 - Publishing: PyPI trusted publishers (pending publisher đã config cho 2 packages) + npm trusted publisher (sau lần publish đầu với NPM OIDC).
 - Docker: không có image. mcp-core là library (core-py / core-ts / embedding-daemon) — consume qua PyPI/npm bởi downstream MCP servers, không ship CLI/daemon runnable riêng.

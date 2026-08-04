@@ -25,3 +25,16 @@ This is a monorepo with 2 Python packages + 1 TypeScript package. When working o
 - **Type checkers**: tsc (TS), ty (Python)
 - **Tests**: vitest (TS), pytest (Python)
 - **Release**: python-semantic-release v10 (PSR) bumps both Python pyproject.toml files via `version_toml` (core-py, embedding-daemon). CD injects version into `packages/core-ts/package.json` before npm publish.
+
+## Release Readiness and Cascade
+
+- Before dispatching CD, release from `main` with a clean working tree, required CI and E2E checks green, no actionable open PRs, and no open Dependabot, code-scanning, or secret-scanning alerts. The standing Dependency Dashboard issue is the only issue allowlist. Resolve backlog or failing checks before dispatch; do not bypass them.
+- A stable release also requires the beta cascade and Test B client matrix to pass against the published beta with real tool calls; T0 CI/E2E is not a substitute for Test B.
+- The release job dry-runs PSR and checks the computed version against npm and both PyPI package coordinates before creating a tag or GitHub Release. Publishing jobs run only when PSR reports `released=true`.
+- `beta` runs PSR as a prerelease with the `beta` token and publishes npm with the `beta` dist-tag. It does not create downstream bump issues.
+- `stable` runs PSR as a stable release and publishes npm with the `latest` dist-tag. Only after the release, npm publish, and both PyPI publishes succeed does CD create downstream issues.
+- Stable-only downstream fan-out is defined in `.github/workflows/cd.yml`:
+  - Direct npm pin issues for `better-notion-mcp`, `better-email-mcp`, `better-godot-mcp`, and `better-workspace-mcp` for `@n24q02m/mcp-core`.
+  - Direct PyPI pin issues for `better-telegram-mcp`, `wet-mcp`, `mnemo-mcp`, `better-code-review-graph`, and `imagine-mcp` for `n24q02m-mcp-core`.
+  - Tracking issues for `qwen3-embed`, `web-core`, and `claude-plugins` to check their mcp-core integration or marketplace references.
+- The downstream job searches existing issues before creating one. A direct pin issue asks for the dependency and lockfile update; a tracking issue may be closed with its verification result when no change is required.
