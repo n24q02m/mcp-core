@@ -284,7 +284,8 @@ jobs:
           repositories: >-
             better-notion-mcp,better-email-mcp,better-telegram-mcp,
             wet-mcp,mnemo-mcp,better-code-review-graph,better-godot-mcp,
-            imagine-mcp
+            imagine-mcp,better-workspace-mcp,qwen3-embed,web-core,
+            claude-plugins
 
       - name: Create issues in downstream repos
         env:
@@ -293,15 +294,25 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
-          TS_DOWNSTREAM="better-notion-mcp better-email-mcp better-godot-mcp"
+          TS_DOWNSTREAM="better-notion-mcp better-email-mcp better-godot-mcp better-workspace-mcp"
           PY_DOWNSTREAM="better-telegram-mcp wet-mcp mnemo-mcp better-code-review-graph imagine-mcp"
+          TRACKING_DOWNSTREAM="qwen3-embed web-core claude-plugins"
           CHANGELOG_URL="https://github.com/n24q02m/mcp-core/releases/tag/${TAG}"
 
           create_issue() {
             local repo="$1"
             local pkg_name="$2"
+            local mode="${3:-pin}"
             local title="chore: bump ${pkg_name} to ${VERSION}"
             local body
+            local action
+            local follow_up="Then open a PR titled fix: bump mcp-core to ${VERSION}."
+            if [ "$mode" = "tracking" ]; then
+              action="Review this release against the repo's mcp-core integration or marketplace references. If a reference is present, update it and regenerate any lockfile or artifact; if no reference is present, close this issue with the checked result."
+              follow_up="If a change is required, open a PR titled fix: bump mcp-core to ${VERSION}; otherwise close this issue with the verification result."
+            else
+              action="Bump the \`${pkg_name}\` pin in this repo and regenerate the lockfile."
+            fi
             body=$(cat <<EOF
           mcp-core released stable **${TAG}**.
 
@@ -309,14 +320,16 @@ jobs:
 
           ## Action required
 
-          Bump the \`${pkg_name}\` pin in this repo and regenerate lockfile:
+          ${action}
+
+          For a direct package pin:
 
           - TypeScript: update \`@n24q02m/mcp-core\` in \`package.json\` → \`bun install\`
           - Python: update \`n24q02m-mcp-core\` in \`pyproject.toml\` → \`uv lock\`
 
-          Then open a PR with title \`fix: bump mcp-core to ${VERSION}\`.
+          ${follow_up}
 
-          _Auto-created by mcp-core CD. See \`feedback_core_release_auto_issue.md\`._
+          _Auto-created by mcp-core CD._
           EOF
           )
 
@@ -334,4 +347,7 @@ jobs:
           done
           for repo in $PY_DOWNSTREAM; do
             create_issue "$repo" "n24q02m-mcp-core" || echo "::warning::Failed to create issue in $repo"
+          done
+          for repo in $TRACKING_DOWNSTREAM; do
+            create_issue "$repo" "mcp-core" tracking || echo "::warning::Failed to create tracking issue in $repo"
           done
