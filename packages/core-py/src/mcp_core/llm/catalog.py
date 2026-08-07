@@ -36,6 +36,18 @@ def _get_litellm() -> Any:
 # (gemini/openai/xai/anthropic/cohere/jina_ai/vertex_express), NOT all litellm
 # providers. Passthrough still works for ANY provider; this map only affects
 # listing/suggestions.
+#
+# It deliberately does NOT model the gateway path. When a call is routed through
+# the base configured in MCP_LLM_GATEWAY_BASE (see llm/dispatch.py), the
+# credential that matters is the gateway's, not the origin provider's — so a
+# model that is perfectly callable can still look "unconfigured" here, and a
+# provider absent from this table has no row at all. That drift is confined to
+# reporting: dispatch never consults this map (no runtime failure), the only
+# listing surface in this repo asks for configured_only=False, and
+# suggest_models() already falls back to the unfiltered pool when the filtered
+# one comes back empty, so error hints never go blank. Teaching it about the
+# gateway would mean deciding that "a gateway is configured" implies "every
+# provider is configured" — a real semantic choice, and no caller needs it yet.
 _PROVIDER_ENV_KEYS: dict[str, str] = {
     "GEMINI_API_KEY": "gemini",
     "GOOGLE_API_KEY": "gemini",
