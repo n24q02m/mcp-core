@@ -2,6 +2,75 @@
 
 <!-- version list -->
 
+## v1.23.0-beta.1 (2026-08-07)
+
+### Bug Fixes
+
+- Complete core release downstream fan-out ([#737](https://github.com/n24q02m/mcp-core/pull/737),
+  [`f6d00be`](https://github.com/n24q02m/mcp-core/commit/f6d00be97004f2e7c59d13aa1ec24c0dfec27322))
+
+- Document mcp-core release gates ([#738](https://github.com/n24q02m/mcp-core/pull/738),
+  [`ba0df4a`](https://github.com/n24q02m/mcp-core/commit/ba0df4a81c0d9710cad0231d88b02bd116af3333))
+
+- Document why the provider env-key table skips the gateway path
+  ([#745](https://github.com/n24q02m/mcp-core/pull/745),
+  [`0e79ae7`](https://github.com/n24q02m/mcp-core/commit/0e79ae738eb4581337d8d9ce8dc5212bbeea1cf9))
+
+- Enforce package no-emoji policy
+  ([`acae2e2`](https://github.com/n24q02m/mcp-core/commit/acae2e2973cdda9c4a6a53c1154c9be0500b23a9))
+
+- Lock file maintenance
+  ([`e7ba318`](https://github.com/n24q02m/mcp-core/commit/e7ba3188ed81823c5605bfcbb05c993496b576e7))
+
+- Lock file maintenance
+  ([`b19ca0d`](https://github.com/n24q02m/mcp-core/commit/b19ca0d4e81c4f373b6336c122192352263aa0de))
+
+- Lock relay URL sub-delimiter handling with shell-exposure tests
+  ([#743](https://github.com/n24q02m/mcp-core/pull/743),
+  [`41bdf40`](https://github.com/n24q02m/mcp-core/commit/41bdf407dfb71bddb17dfff3459bd17133a8925c))
+
+- Update MCP TypeScript SDK
+  ([`d9de21c`](https://github.com/n24q02m/mcp-core/commit/d9de21c3400a8f35891c472c35213a6f02f03df6))
+
+- **deps**: Lock file maintenance ([#749](https://github.com/n24q02m/mcp-core/pull/749),
+  [`a624844`](https://github.com/n24q02m/mcp-core/commit/a624844f53dda3bc24d0f4241fe9e35289ce47d2))
+
+- **deps**: Lock file maintenance ([#748](https://github.com/n24q02m/mcp-core/pull/748),
+  [`3802311`](https://github.com/n24q02m/mcp-core/commit/38023111e0ffede8fe8fa9d50b9dde331276ad6a))
+
+- **deps**: Lock file maintenance ([#746](https://github.com/n24q02m/mcp-core/pull/746),
+  [`277b334`](https://github.com/n24q02m/mcp-core/commit/277b334e0350fcfb9dc8fcefdd451f8bb8e88056))
+
+- **deps**: Lock file maintenance ([#741](https://github.com/n24q02m/mcp-core/pull/741),
+  [`5d81643`](https://github.com/n24q02m/mcp-core/commit/5d816436a5eaa01e28365e40de2e875c024f0baa))
+
+- **deps**: Lock file maintenance ([#740](https://github.com/n24q02m/mcp-core/pull/740),
+  [`22f22b8`](https://github.com/n24q02m/mcp-core/commit/22f22b8dd54572bf49cdd69f5bd312336f567c48))
+
+- **deps**: Lock file maintenance ([#739](https://github.com/n24q02m/mcp-core/pull/739),
+  [`ff706cf`](https://github.com/n24q02m/mcp-core/commit/ff706cfc503c6b657b8b2ede24c4845796e887d2))
+
+- **deps**: Lock file maintenance ([#736](https://github.com/n24q02m/mcp-core/pull/736),
+  [`e0d4e0e`](https://github.com/n24q02m/mcp-core/commit/e0d4e0ec661af3040dd747688b8958cf3b133ef9))
+
+- **deps**: Lock file maintenance ([#735](https://github.com/n24q02m/mcp-core/pull/735),
+  [`02a2a71`](https://github.com/n24q02m/mcp-core/commit/02a2a71a71373f1784587e6904af25e24e2c55ee))
+
+- **deps**: Update patch dependencies ([#747](https://github.com/n24q02m/mcp-core/pull/747),
+  [`47e4a76`](https://github.com/n24q02m/mcp-core/commit/47e4a7602983855a2c4e7251fecabd9f51204c20))
+
+- **deps**: Update patch dependencies ([#730](https://github.com/n24q02m/mcp-core/pull/730),
+  [`41d6d2b`](https://github.com/n24q02m/mcp-core/commit/41d6d2be565a32912f7a4b7b5c7a2cdb31d31c8a))
+
+### Features
+
+- Add bot PR governance to this repo ([#744](https://github.com/n24q02m/mcp-core/pull/744),
+  [`3952e8b`](https://github.com/n24q02m/mcp-core/commit/3952e8b476cb4fffa9a776de0f140dd928a51f1d))
+
+- Default LLM calls to the stack gateway base ([#745](https://github.com/n24q02m/mcp-core/pull/745),
+  [`0e79ae7`](https://github.com/n24q02m/mcp-core/commit/0e79ae738eb4581337d8d9ce8dc5212bbeea1cf9))
+
+
 ## v1.22.0 (2026-08-03)
 
 ### Bug Fixes
