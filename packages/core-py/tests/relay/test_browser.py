@@ -284,3 +284,86 @@ class TestOpenInPowerShell:
             _, kwargs = mock_sp.run.call_args
             # By not passing 'env', subprocess.run inherits the current environment
             assert "env" not in kwargs
+
+
+# RFC 3986 sub-delimiters that a pattern-matching scanner reads as "shell
+# metacharacters". The validator ACCEPTS them, on purpose, and these tests pin
+# that decision to the reason for it rather than to the characters themselves:
+# nothing on the path from this validator to the operating system goes through a
+# shell, so there is nothing for a metacharacter to be a metacharacter OF.
+#
+#   webbrowser.open()       -> subprocess.Popen(<list>) on Unix, os.startfile()
+#                              on Windows, or a script written to osascript's
+#                              STDIN on macOS (CPython 3.13 Lib/webbrowser.py).
+#                              None of those is a command line.
+#   _open_in_wsl()          -> subprocess.run(["wslview", url]) -- an argv list
+#                              with no shell=True, so ";" stays one character of
+#                              one argument.
+#   _open_in_powershell()   -> the URL is base64-encoded BEFORE it is embedded in
+#                              the PowerShell source, and the base64 alphabet
+#                              (A-Za-z0-9+/=) contains no ";", ",", "*" or quote
+#                              to break out of the string literal with.
+#
+# Rejecting them would also be wrong on the URL side: ",", ";" and "*" are
+# sub-delims RFC 3986 allows in a path or query, so a stricter class would start
+# refusing legitimate authorization URLs. The characters that ARE excluded from
+# the class -- "$", "(", ")", "|", backtick -- are excluded because they are not
+# URL characters, and test_rejects_malicious_urls above covers them.
+SUB_DELIM_URLS = [
+    "https://example.com/auth?a=1;b=2",
+    "https://example.com/auth?list=a,b,c",
+    "https://example.com/auth?glob=*",
+    "https://example.com/a;b,c*d",
+]
+
+
+class TestSubDelimitersNeverReachAShell:
+    def test_accepts_sub_delimiter_urls_and_forwards_them_verbatim(self):
+        for url in SUB_DELIM_URLS:
+            with patch("mcp_core.relay.browser._is_wsl", return_value=False):
+                with patch("mcp_core.relay.browser.webbrowser") as mock_wb:
+                    mock_wb.open.return_value = True
+                    assert try_open_browser(url) is True
+                    # webbrowser.open takes the URL as a Python string and hands it
+                    # to Popen/startfile as ONE argument -- no re-parsing, so no
+                    # need to strip anything out of it first.
+                    mock_wb.open.assert_called_once_with(url)
+
+    def test_wsl_fallback_passes_the_url_as_one_argv_element_without_a_shell(self):
+        from mcp_core.relay.browser import _open_in_wsl
+
+        for url in SUB_DELIM_URLS:
+            with patch("mcp_core.relay.browser._open_in_powershell", return_value=False):
+                with patch("mcp_core.relay.browser.subprocess") as mock_sp:
+                    mock_sp.SubprocessError = subprocess.SubprocessError
+                    mock_sp.run = MagicMock()
+
+                    assert _open_in_wsl(url) is True
+                    args, kwargs = mock_sp.run.call_args
+                    # One list element, delimiters intact: no word splitting, no
+                    # globbing, no command separator.
+                    assert args[0] == ["wslview", url]
+                    # Absent 'shell' means shell=False, subprocess.run's default.
+                    assert "shell" not in kwargs
+
+    def test_powershell_command_never_contains_the_raw_url(self):
+        from mcp_core.relay.browser import _open_in_powershell
+
+        for url in SUB_DELIM_URLS:
+            with patch("mcp_core.relay.browser.subprocess") as mock_sp:
+                mock_sp.SubprocessError = subprocess.SubprocessError
+
+                assert _open_in_powershell(url) is True
+                cmd_list = mock_sp.run.call_args[0][0]
+                encoded_command = cmd_list[cmd_list.index("-EncodedCommand") + 1]
+                decoded = base64.b64decode(encoded_command).decode("utf-16le")
+
+                # The URL's own characters do not appear in the PowerShell source
+                # at all; only its base64 form does.
+                assert url not in decoded
+                base64_url = base64.b64encode(url.encode("utf-8")).decode("ascii")
+                assert base64_url in decoded
+                # The base64 alphabet is why the single-quoted literal around it
+                # cannot be broken out of.
+                for char in (";", ",", "*", "'", '"'):
+                    assert char not in base64_url
