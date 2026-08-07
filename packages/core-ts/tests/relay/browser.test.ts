@@ -90,6 +90,97 @@ describe('tryOpenBrowser', () => {
     })
   })
 
+  /**
+   * RFC 3986 sub-delimiters that a pattern-matching scanner reads as "shell
+   * metacharacters". The validator ACCEPTS them, on purpose, and these tests pin
+   * that decision to the reason for it rather than to the characters themselves:
+   * nothing on the path from this validator to the operating system goes through
+   * a shell, so there is nothing for a metacharacter to be a metacharacter OF.
+   *
+   *   darwin / linux -> `execFile('open' | 'xdg-open', [url])`. `execFile` runs
+   *                     the binary directly (`shell: false` is its default), so
+   *                     the URL is ONE argv element; `;` never separates a
+   *                     command and `*` is never globbed.
+   *   win32 / WSL    -> `openInPowerShell` base64-encodes the URL BEFORE
+   *                     embedding it in the PowerShell source, and the base64
+   *                     alphabet (A-Za-z0-9+/=) contains no `;`, `,`, `*` or
+   *                     quote to break out of the string literal with.
+   *
+   * Rejecting them would also be wrong on the URL side: `,`, `;` and `*` are
+   * sub-delims RFC 3986 allows in a path or query, so a stricter class would
+   * start refusing legitimate authorization URLs. The characters that ARE
+   * excluded from the class -- `$`, `(`, `)`, `|`, backtick -- are excluded
+   * because they are not URL characters, and 'rejects non-http URLs' covers them.
+   */
+  describe('sub-delimiters never reach a shell', () => {
+    const SUB_DELIM_PATHS = ['auth?a=1;b=2', 'auth?list=a,b,c', 'auth?glob=*', 'a;b,c*d']
+
+    function mockExecFileOk(): void {
+      vi.mocked(execFile).mockImplementation((...args: any[]) => {
+        const _options = args[2]
+        const cb = args[3]
+        const callback = typeof _options === 'function' ? _options : cb
+        if (callback) {
+          callback(null)
+        }
+        return {} as any
+      })
+    }
+
+    it('passes them to `open` as one argv element on darwin', async () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' })
+      for (const path of SUB_DELIM_PATHS) {
+        vi.mocked(execFile).mockClear()
+        mockExecFileOk()
+
+        const url = `https://example.com/${path}&n=${Date.now()}${Math.random()}`
+        expect(await tryOpenBrowser(url)).toBe(true)
+        // Delimiters intact inside a single array element: no word splitting,
+        // no globbing, no command separator.
+        expect(execFile).toHaveBeenCalledWith('open', [url], expect.any(Function))
+      }
+    })
+
+    it('passes them to `xdg-open` as one argv element on linux', async () => {
+      Object.defineProperty(process, 'platform', { value: 'linux' })
+      vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'))
+      for (const path of SUB_DELIM_PATHS) {
+        vi.mocked(execFile).mockClear()
+        mockExecFileOk()
+
+        const url = `https://example.com/${path}&n=${Date.now()}${Math.random()}`
+        expect(await tryOpenBrowser(url)).toBe(true)
+        expect(execFile).toHaveBeenCalledWith('xdg-open', [url], expect.any(Function))
+      }
+    })
+
+    it('keeps the raw URL out of the PowerShell source on win32', async () => {
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      for (const path of SUB_DELIM_PATHS) {
+        vi.mocked(execFile).mockClear()
+        mockExecFileOk()
+
+        const url = `https://example.com/${path}&n=${Date.now()}${Math.random()}`
+        expect(await tryOpenBrowser(url)).toBe(true)
+
+        const lastCall = vi.mocked(execFile).mock.calls[vi.mocked(execFile).mock.calls.length - 1]
+        const args = lastCall[1] as string[]
+        const decoded = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le')
+        const base64Url = Buffer.from(url, 'utf8').toString('base64')
+
+        // The URL's own characters do not appear in the PowerShell source at
+        // all; only its base64 form does.
+        expect(decoded).not.toContain(url)
+        expect(decoded).toContain(base64Url)
+        // The base64 alphabet is why the single-quoted literal around it cannot
+        // be broken out of.
+        for (const char of [';', ',', '*', "'", '"']) {
+          expect(base64Url).not.toContain(char)
+        }
+      }
+    })
+  })
+
   describe('behavior', () => {
     it('deduplicates browser opens within the window', async () => {
       vi.mocked(execFile).mockClear()
