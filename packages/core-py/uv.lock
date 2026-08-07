@@ -977,11 +977,11 @@ dev = [
 requires-dist = [
     { name = "authlib", specifier = ">=1.7.2" },
     { name = "cryptography", specifier = ">=50.0.0" },
-    { name = "fastmcp", specifier = ">=3.4.4" },
-    { name = "filelock", specifier = ">=3.32.0" },
+    { name = "fastmcp", specifier = ">=3.4.5" },
+    { name = "filelock", specifier = ">=3.32.2" },
     { name = "httpcore", specifier = ">=1.0.9" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.93.0" },
+    { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.94.1" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "platformdirs", specifier = ">=4.11.0" },
     { name = "pydantic", specifier = ">=2.12.5,<3" },
@@ -996,9 +996,9 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
-    { name = "ruff", specifier = ">=0.16.0" },
+    { name = "ruff", specifier = ">=0.16.1" },
     { name = "telethon", specifier = ">=1.44.0" },
-    { name = "ty", specifier = ">=0.0.63" },
+    { name = "ty", specifier = ">=0.0.65" },
 ]
 
 [[package]]
