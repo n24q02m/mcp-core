@@ -1,9 +1,10 @@
 """Passthrough wrappers around litellm (spec D2).
 
 Each wrapper does exactly three things before delegating to litellm:
-(1) vet user-supplied api_base (SSRF, spec D4); (2) graceful capability check
-(spec D3); (3) call the matching litellm function. NO retry/fallback here —
-retry policy is server-owned.
+(1) resolve + vet the api_base (SSRF, spec D4) — the caller's value when given,
+otherwise the base configured for the stack in ``MCP_LLM_GATEWAY_BASE``;
+(2) graceful capability check (spec D3); (3) call the matching litellm function.
+NO retry/fallback here — retry policy is server-owned.
 
 litellm functions are looked up as module attributes at call time (via
 ``_get_litellm()``), never imported as names — keeps monkeypatching and
@@ -35,9 +36,21 @@ from mcp_core.llm.vertex_express import (
 _CHAT_MODES = ("chat", "responses", "completion")
 
 
+_GATEWAY_BASE_ENV = "MCP_LLM_GATEWAY_BASE"
+
+
 def _prep_api_base(api_base: str | None) -> str | None:
-    if api_base:
-        return vet_api_base(api_base)
+    """Resolve the effective api_base: the caller wins, else the stack gateway.
+
+    When ``MCP_LLM_GATEWAY_BASE`` is set, calls that pass no ``api_base`` are
+    routed to that OpenAI-compatible base instead of going straight to the
+    provider. A base read from the environment is vetted exactly like a
+    caller-supplied one (spec D4) — configuration is not a reason to skip SSRF
+    checks. Nothing configured and nothing passed => unchanged behaviour.
+    """
+    base = api_base or os.environ.get(_GATEWAY_BASE_ENV, "").strip()
+    if base:
+        return vet_api_base(base)
     return None
 
 
