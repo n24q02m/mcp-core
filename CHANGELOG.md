@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v1.23.1-beta.1 (2026-08-11)
+
+### Bug Fixes
+
+- Support JSON streamable HTTP responses ([#757](https://github.com/n24q02m/mcp-core/pull/757),
+  [`a66479c`](https://github.com/n24q02m/mcp-core/commit/a66479c6b99f0bb50635e397c363457aeba5db00))
+
+- **deps**: Lock file maintenance ([#756](https://github.com/n24q02m/mcp-core/pull/756),
+  [`ca93e6e`](https://github.com/n24q02m/mcp-core/commit/ca93e6e261e5b73755edfbd39dbd131c9f3393f4))
+
+- **deps**: Lock file maintenance ([#754](https://github.com/n24q02m/mcp-core/pull/754),
+  [`e7a37be`](https://github.com/n24q02m/mcp-core/commit/e7a37be647e87c9f442c7d67105922e559035ee9))
+
+- **deps**: Lock file maintenance ([#752](https://github.com/n24q02m/mcp-core/pull/752),
+  [`c39df85`](https://github.com/n24q02m/mcp-core/commit/c39df85d9e49e538450f5199d3f95e624e8a66ab))
+
+- **deps**: Update patch dependencies ([#751](https://github.com/n24q02m/mcp-core/pull/751),
+  [`cd62829`](https://github.com/n24q02m/mcp-core/commit/cd628291d359bce8bfca03f1706c9fd87cc6381b))
+
+
 ## v1.23.0 (2026-08-07)
 
 
