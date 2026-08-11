@@ -174,6 +174,71 @@ class TestBuildLocalApp:
         )
         assert response.status_code != 401
 
+    def test_json_response_mode_keeps_stateful_session(self, relay_schema: dict, tmp_path: Path) -> None:
+        """JSON mode must preserve a session across the initialize handshake.
+
+        Cloudflare Containers do not reliably keep the POST-owned SSE response
+        alive after the first response headers. JSON responses are the
+        request/response variant of the same stateful MCP transport and must
+        therefore keep ``notifications/initialized`` and the first tool
+        request on the session that initialize created.
+        """
+        mcp = FastMCP("test-json-response")
+
+        @mcp.tool()
+        def hello() -> str:
+            return "hello"
+
+        app, jwt_issuer = build_local_app(
+            mcp=mcp,
+            server_name="test-json-response",
+            relay_schema=relay_schema,
+            jwt_keys_dir=tmp_path / "jwt-keys",
+            json_response=True,
+        )
+        token = jwt_issuer.issue_access_token(sub="local-user")
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+        with TestClient(app, raise_server_exceptions=True) as client:
+            initialize = client.post(
+                "/mcp",
+                headers=headers,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "1"},
+                    },
+                },
+            )
+            assert initialize.status_code == 200
+            assert initialize.headers["content-type"].startswith("application/json")
+            session_id = initialize.headers.get("mcp-session-id")
+            assert session_id
+
+            session_headers = {**headers, "Mcp-Session-Id": session_id}
+            initialized = client.post(
+                "/mcp",
+                headers=session_headers,
+                json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+            )
+            assert initialized.status_code == 202
+
+            listed = client.post(
+                "/mcp",
+                headers=session_headers,
+                json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+            )
+            assert listed.status_code == 200
+            assert listed.json()["result"]["tools"][0]["name"] == "hello"
+
 
 # ---------------------------------------------------------------------------
 # BearerMCPApp
@@ -525,6 +590,7 @@ class TestRunLocalServer:
 
         def spy_build(*args, **kwargs):
             captured["custom_credential_form_html"] = kwargs.get("custom_credential_form_html")
+            captured["json_response"] = kwargs.get("json_response")
             return original_build(*args, **kwargs)
 
         with (
@@ -548,11 +614,13 @@ class TestRunLocalServer:
                     port=12345,
                     jwt_keys_dir=tmp_path / "jwt-keys",
                     custom_credential_form_html=custom_renderer,
+                    json_response=True,
                 )
             )
 
             mock_build.assert_called_once()
             assert captured["custom_credential_form_html"] is custom_renderer
+            assert captured["json_response"] is True
 
     def test_skips_browser_when_open_browser_false(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         """Verify webbrowser.open is NOT called when open_browser=False."""

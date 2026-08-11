@@ -187,6 +187,7 @@ def build_local_app(
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
     auth_disabled: bool = False,
+    json_response: bool = False,
     stable_sub_enabled: bool = False,
 ) -> tuple[Starlette, JWTIssuer]:
     """Construct a combined Starlette app with OAuth AS + MCP transport.
@@ -223,6 +224,11 @@ def build_local_app(
             before the MCP transport handles the request. Receives the decoded
             claims dict and a ``next`` coroutine. Consumers use this to wrap
             the request in a context var (e.g., for per-user token lookup).
+        json_response: Whether the Streamable HTTP transport should return one
+            JSON response per request instead of an SSE response stream. This
+            keeps stateful sessions reliable behind intermediaries that do not
+            preserve the POST-owned SSE stream. Defaults to ``False`` for
+            backwards compatibility.
 
     Returns:
         ``(app, jwt_issuer)`` tuple.
@@ -299,6 +305,7 @@ def build_local_app(
     # Create MCP ASGI handler via StreamableHTTPSessionManager
     session_manager = StreamableHTTPSessionManager(
         app=cast(Any, mcp)._mcp_server,
+        json_response=json_response,
     )
     mcp_asgi_handler = StreamableHTTPASGIApp(session_manager)
 
@@ -408,6 +415,7 @@ async def run_http_server(
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
     auth_disabled: bool = False,
+    json_response: bool = False,
     stable_sub_enabled: bool = False,
 ) -> None:
     """Start MCP server with local OAuth AS on 127.0.0.1.
@@ -460,6 +468,9 @@ async def run_http_server(
             expected keys.
         auth_scope: Optional middleware invoked after JWT verification. Passed
             through to ``build_local_app``. See ``BearerMCPApp`` for details.
+        json_response: Whether the Streamable HTTP transport should return one
+            JSON response per request instead of an SSE response stream. Passed
+            through to ``build_local_app``.
     """
     import os
     import re
@@ -534,6 +545,7 @@ async def run_http_server(
         delegated_oauth=delegated_oauth,
         auth_scope=auth_scope,
         auth_disabled=auth_disabled,
+        json_response=json_response,
         stable_sub_enabled=stable_sub_enabled,
     )
 
@@ -714,6 +726,7 @@ async def start_http_server_background(
     custom_credential_form_html: Callable[..., str] | None = None,
     delegated_oauth: dict[str, Any] | None = None,
     auth_scope: AuthScope | None = None,
+    json_response: bool = False,
     stable_sub_enabled: bool = False,
     startup_timeout: float = 5.0,
 ) -> HttpServerHandle:
@@ -772,6 +785,7 @@ async def start_http_server_background(
         custom_credential_form_html=custom_credential_form_html,
         delegated_oauth=delegated_oauth,
         auth_scope=auth_scope,
+        json_response=json_response,
         stable_sub_enabled=stable_sub_enabled,
     )
 
