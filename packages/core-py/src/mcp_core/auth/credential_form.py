@@ -1265,6 +1265,7 @@ def _render_tabbed_credential_form(
         </section>"""
 
     description_html = f'<p class="server-description" id="server-desc">{description}</p>' if description else ""
+    form_aria = ' aria-describedby="server-desc"' if description else ""
 
     script = _TABS_SCRIPT.replace("__SUBMIT_URL__", submit_url_escaped).replace("__INITIAL_TAB__", active_id)
 
@@ -1280,7 +1281,7 @@ def _render_tabbed_credential_form(
                 {tabs_html}
             </div>
 
-            <form id="credential-form" novalidate>
+            <form id="credential-form"{form_aria} novalidate>
                 {username_html}{panels_html}
 
                 <button type="submit" class="submit-btn" id="submit-btn">Connect</button>
