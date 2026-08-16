@@ -10,6 +10,7 @@ from mcp_core.crypto.ecdh import (
     import_public_key,
 )
 from mcp_core.crypto.kdf import derive_aes_key, derive_jwt_signing_seed
+from mcp_core.crypto.timing import timing_safe_equal
 
 __all__ = [
     "decrypt",
@@ -22,4 +23,5 @@ __all__ = [
     "generate_key_pair",
     "import_private_key",
     "import_public_key",
+    "timing_safe_equal",
 ]

@@ -11,6 +11,8 @@ from __future__ import annotations
 import secrets
 import threading
 from dataclasses import dataclass
+
+from mcp_core.crypto.timing import timing_safe_equal
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -79,7 +81,7 @@ def validate_session_token(token: str) -> bool:
         if _state.expires_at <= _now():
             _state = None
             return False
-        return secrets.compare_digest(_state.token, token)
+        return timing_safe_equal(_state.token.encode("ascii"), token.encode("ascii"))
 
 
 def get_active_session() -> Optional[ActiveFormSession]:

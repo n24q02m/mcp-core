@@ -26,6 +26,8 @@ import inspect
 import os
 import secrets
 import time
+
+from mcp_core.crypto.timing import timing_safe_equal
 from collections.abc import Awaitable, Callable, Iterable
 from html import escape as _escape
 from typing import Any, Union, cast
@@ -96,7 +98,7 @@ def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
     """Verify PKCE S256: base64url(sha256(code_verifier)) == code_challenge."""
     digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
     computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return secrets.compare_digest(computed, code_challenge)
+    return timing_safe_equal(computed.encode("ascii"), code_challenge.encode("ascii"))
 
 
 def create_local_oauth_app(
@@ -124,8 +126,7 @@ def create_local_oauth_app(
             the flow, ``{"type": "otp_required"|"password_required", ...}``
             to chain to another step, or ``{"type": "error", "text": "..."}``
             to reject the current input and allow retry. Callbacks that
-            compare secrets MUST use ``secrets.compare_digest`` or similar
-            timing-safe comparison to prevent timing attacks.
+            compare secrets MUST use a timing-safe comparison to prevent timing attacks.
         jwt_issuer: Optional pre-created JWTIssuer. If None, one is created
             automatically using ``server_name`` -- EdDSA derived from
             ``CREDENTIAL_SECRET`` in HTTP multi-user mode, else RS256 on disk.

@@ -22,6 +22,8 @@ import socket
 import threading
 import time
 import webbrowser
+
+from mcp_core.crypto.timing import timing_safe_equal
 from collections.abc import Callable
 from typing import Any
 
@@ -157,7 +159,7 @@ def _build_relay_app(
 ) -> Starlette:
     """Build a Starlette app exposing ``GET /setup`` and ``POST /setup/submit``.
 
-    The token is validated on both endpoints with ``secrets.compare_digest`` to
+    The token is validated on both endpoints with ``timing_safe_equal`` to
     avoid timing-based extraction. Successful POST invokes ``on_save``
     synchronously, then schedules a brief delayed shutdown signal so the HTTP
     response can flush before uvicorn closes the connection.
@@ -183,7 +185,7 @@ def _build_relay_app(
 
     async def setup_form(request: Request) -> HTMLResponse:
         token = request.query_params.get("token", "")
-        if not secrets.compare_digest(token, expected_token):
+        if not timing_safe_equal(token.encode("ascii"), expected_token.encode("ascii")):
             return HTMLResponse("invalid token", status_code=401, headers={"X-Frame-Options": "DENY"})
         return HTMLResponse(body_template, headers={"X-Frame-Options": "DENY"})
 
@@ -192,7 +194,7 @@ def _build_relay_app(
         if not auth.startswith("Bearer "):
             return JSONResponse({"error": "invalid token"}, status_code=401)
         provided = auth[len("Bearer ") :]
-        if not secrets.compare_digest(provided, expected_token):
+        if not timing_safe_equal(provided.encode("ascii"), expected_token.encode("ascii")):
             return JSONResponse({"error": "invalid token"}, status_code=401)
         try:
             creds = await request.json()
