@@ -35,3 +35,7 @@ Note on dates: three entries above carried impossible dates (`$(date +%Y-%m-%d)`
 ## 2026-08-02 - Accessible Custom Form Validation (novalidate)
 **Learning:** When building custom accessible HTML forms with client-side validation logic or custom error rendering, the native browser validation tooltips (triggered by attributes like `required` on `<input>`) can interfere. These native tooltips are often inconsistently announced by screen readers and cannot be styled to match the UI.
 **Action:** Always add the `novalidate` attribute to the `<form>` tag when implementing custom form validation or error states to ensure a consistent, accessible experience via our ARIA attributes (`aria-invalid`, `aria-errormessage`) instead of native bubbles.
+
+## 2024-05-17 - Add Title to Draggable Elements
+**Learning:** When using `cursor: grab` for draggable elements, providing native browser tooltips via the `title` attribute significantly improves discoverability for sighted users.
+**Action:** Always ensure a `title` attribute is present alongside any `aria-label` when implementing icon-only buttons or draggable elements in HTML templates.
