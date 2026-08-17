@@ -39,10 +39,9 @@
 - [Quick start (TypeScript)](#quick-start-typescript)
 - [CLI](#cli)
 - [Documentation](#documentation)
+- [Design Philosophy](#design-philosophy)
 - [Development](#development)
 - [License](#license)
-
-
 
 mcp-core is the shared foundation for the n24q02m MCP servers: a Streamable
 HTTP transport, an OAuth 2.1 Authorization Server, lifecycle management,
@@ -296,6 +295,19 @@ Full docs at **[mcp.n24q02m.com/servers/mcp-core/architecture/](https://mcp.n24q
 - [Shared services](https://mcp.n24q02m.com/servers/mcp-core/shared-services/) -- embedding daemon + ancillary docker-compose stack
 
 Source of truth lives in [`n24q02m/claude-plugins/plugins/mcp-core/`](https://github.com/n24q02m/claude-plugins/tree/main/plugins/mcp-core). Edit there; this repo's `docs/` directory is intentionally minimal post-migration.
+
+## Design Philosophy
+
+These are the shared principles that mcp-core encodes for the MCP servers built on top of it. The credential-handling ones (1, 6, 8) apply to every server that talks to an upstream account; better-godot-mcp is the exception -- it runs locally with no credentials, so it skips the relay and auth layers entirely.
+
+1. **Zero-Knowledge Relay** -- E2E encryption (ECDH P-256 + AES-256-GCM). The relay server never sees plaintext credentials, and URL-fragment secrets stay client-side per RFC 3986.
+2. **Composite Tool Pattern** -- One tool per domain with action dispatch: 4-17 tools per server instead of dozens of thin endpoints, saving LLM context tokens.
+3. **3-Tier Token Optimization** -- Compact descriptions (always loaded), help docs (on demand), and MCP resources (deep reference) keep the always-on tool schema small.
+4. **Tool Annotations** -- `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` metadata let the LLM understand tool behavior before calling.
+5. **Security Defense-in-Depth** -- SSRF prevention, path-traversal containment, prompt-injection (XPIA) boundary tags around untrusted content, and error sanitization.
+6. **Multi-User HTTP Mode** -- Stateless DCR (HMAC-SHA256), per-user session isolation keyed by JWT `sub`, AES-256-GCM credential encryption at rest, and OAuth 2.1 + PKCE S256.
+7. **Degraded Mode** -- Servers start even without credentials. Help and config tools work, while data tools return setup instructions instead of crashing.
+8. **Browser-Based Credential Setup** -- A browser form collects credentials, sends them through the protected setup flow, and stores them through mcp-core's encrypted credential backend; local and Cloudflare KV storage share the same contract.
 
 ## Development
 
