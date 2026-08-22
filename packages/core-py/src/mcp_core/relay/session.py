@@ -9,6 +9,7 @@ issuing a new token.
 from __future__ import annotations
 
 import secrets
+from mcp_core.crypto.timing import timing_safe_equal
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -79,7 +80,7 @@ def validate_session_token(token: str) -> bool:
         if _state.expires_at <= _now():
             _state = None
             return False
-        return secrets.compare_digest(_state.token, token)
+        return timing_safe_equal(_state.token, token)
 
 
 def get_active_session() -> Optional[ActiveFormSession]:
