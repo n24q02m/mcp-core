@@ -149,6 +149,7 @@ _MODEL_CHAIN_SCRIPT = """
                 var chip = document.createElement("span");
                 chip.className = "mc-chip";
                 chip.setAttribute("draggable", "true");
+                chip.setAttribute("title", "Drag to reorder");
                 chip.dataset.model = m;
                 var ord = document.createElement("span");
                 ord.className = "mc-order";
@@ -160,6 +161,7 @@ _MODEL_CHAIN_SCRIPT = """
                 var rm = document.createElement("button");
                 rm.type = "button";
                 rm.setAttribute("aria-label", "Remove " + m);
+                rm.setAttribute("title", "Remove " + m);
                 rm.textContent = "x";
                 rm.addEventListener("click", function () {
                     setChips(w, getChips(w).filter(function (x) { return x !== m; }));

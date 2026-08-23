@@ -54,12 +54,14 @@ repos:
     rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b # v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^packages/core-py/tests/auth/fixtures/base_form_baseline\.html$
         exclude_types: [image]
       - id: check-merge-conflict
       - id: check-json
       - id: check-yaml
       - id: check-toml
       - id: end-of-file-fixer
+        exclude: ^packages/core-py/tests/auth/fixtures/base_form_baseline\.html$
         exclude_types: [image]
 
   - repo: local

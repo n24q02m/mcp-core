@@ -93,6 +93,13 @@ def test_widget_filters_dropdown_as_you_type():
     assert 'addEventListener("input"' in _MODEL_CHAIN_SCRIPT
 
 
+def test_model_chain_chips_have_native_tooltips():
+    from mcp_core.auth.credential_form import _MODEL_CHAIN_SCRIPT
+
+    assert 'chip.setAttribute("title", "Drag to reorder")' in _MODEL_CHAIN_SCRIPT
+    assert 'rm.setAttribute("title", "Remove " + m)' in _MODEL_CHAIN_SCRIPT
+
+
 def test_model_chain_dropdown_includes_catalog_models(monkeypatch):
     """The model-chain dropdown is backed by catalog.list_models so a user can
     search the real provider/model space, not just the server's curated few."""
