@@ -38,6 +38,7 @@ import hashlib
 import inspect
 import os
 import secrets
+from mcp_core.crypto.timing import timing_safe_equal
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -132,7 +133,7 @@ def _s256_verify(code_verifier: str, code_challenge: str) -> bool:
     """Verify PKCE S256: base64url(sha256(code_verifier)) == code_challenge."""
     digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
     computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return secrets.compare_digest(computed, code_challenge)
+    return timing_safe_equal(computed, code_challenge)
 
 
 def _render_device_code_page(*, server_name: str, user_code: str, verification_url: str) -> str:
