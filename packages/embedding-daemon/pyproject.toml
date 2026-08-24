@@ -22,9 +22,9 @@ classifiers = [
 ]
 dependencies = [
     "fastapi>=0.141.1",
-    "uvicorn>=0.52.1",
+    "uvicorn>=0.52.3",
     "onnxruntime>=1.28.0",
-    "numpy>=2.5.1",
+    "numpy>=2.5.2",
     "httpx>=0.28.1",
     # Keep this a RANGE, never an exact pin: this package is published to PyPI,
     # so an `==` here would force every consumer onto that one pydantic build.
@@ -59,8 +59,8 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.1",
-    "ty>=0.0.65",
+    "ruff>=0.16.3",
+    "ty>=0.0.72",
 ]
 
 [tool.hatch.build.targets.wheel]
