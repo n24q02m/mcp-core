@@ -28,18 +28,20 @@ Telethon import gating
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from mcp_core.storage.backends import CredentialBackend
 from mcp_core.storage.per_plugin_store import PerPluginStore
 
-try:
+if TYPE_CHECKING:
     from telethon.sessions import StringSession as _StringSessionBase
+else:
+    try:
+        from telethon.sessions import StringSession as _StringSessionBase
+    except ImportError:  # pragma: no cover - telethon is a telegram-only dep
+        _StringSessionBase = object
 
-    _HAS_TELETHON = True
-except ImportError:  # pragma: no cover - telethon is a telegram-only dep
-    _StringSessionBase = object  # ty: ignore[invalid-assignment]
-    _HAS_TELETHON = False
+_HAS_TELETHON = _StringSessionBase is not object
 
 
 class StringSessionStore:
@@ -74,7 +76,7 @@ class StringSessionStore:
         self._store.clear()
 
 
-class SaveOnChangeStringSession(_StringSessionBase):  # type: ignore[valid-type,misc]
+class SaveOnChangeStringSession(_StringSessionBase):
     """Telethon StringSession that pushes its serialized string to a sink on save.
 
     Telethon calls ``save()`` whenever the session's auth state changes; setting
