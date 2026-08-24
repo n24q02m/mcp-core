@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v1.23.1-beta.3 (2026-08-24)
+
+### Bug Fixes
+
+- Add aria-describedby to tabbed credential form
+  ([#761](https://github.com/n24q02m/mcp-core/pull/761),
+  [`5b5cb18`](https://github.com/n24q02m/mcp-core/commit/5b5cb18f2255058e32924f295e1de82ac8621202))
+
+- Add model chain chip tooltips ([#768](https://github.com/n24q02m/mcp-core/pull/768),
+  [`1719cba`](https://github.com/n24q02m/mcp-core/commit/1719cba119aedcb3de62b2a9549d93fea320c612))
+
+- Cover tabbed form description links ([#761](https://github.com/n24q02m/mcp-core/pull/761),
+  [`5b5cb18`](https://github.com/n24q02m/mcp-core/commit/5b5cb18f2255058e32924f295e1de82ac8621202))
+
+- Pin setup-uv actions ([#769](https://github.com/n24q02m/mcp-core/pull/769),
+  [`67aaadb`](https://github.com/n24q02m/mcp-core/commit/67aaadbdea3145b44c677eecf5d9268139843c96))
+
+- Update minor dependencies ([#755](https://github.com/n24q02m/mcp-core/pull/755),
+  [`b80f1ad`](https://github.com/n24q02m/mcp-core/commit/b80f1ad158f4c66058caca6db99d225186dabf3f))
+
+- **relay**: Link tabbed form description for screen readers
+  ([#761](https://github.com/n24q02m/mcp-core/pull/761),
+  [`5b5cb18`](https://github.com/n24q02m/mcp-core/commit/5b5cb18f2255058e32924f295e1de82ac8621202))
+
+
 ## v1.23.1-beta.2 (2026-08-24)
 
 ### Bug Fixes
