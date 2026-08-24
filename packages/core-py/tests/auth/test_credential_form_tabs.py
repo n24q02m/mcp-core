@@ -53,6 +53,19 @@ def test_renders_tablist_with_one_button_per_tab():
     assert "Bot Mode" in html and "User Mode" in html
 
 
+def test_form_references_server_description_when_present():
+    html = _render()
+    assert 'id="server-desc"' in html
+    assert '<form id="credential-form" aria-describedby="server-desc" novalidate>' in html
+
+
+def test_form_omits_description_reference_when_absent():
+    schema = {**_TABS_SCHEMA, "description": ""}
+    html = render_credential_form(schema, submit_url="/authorize")
+    assert 'id="server-desc"' not in html
+    assert 'aria-describedby="server-desc"' not in html
+
+
 def test_first_tab_is_active_by_default():
     html = _render()
     assert 'id="tab-bot" class="tab active"' in html
