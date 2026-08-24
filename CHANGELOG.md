@@ -2,6 +2,36 @@
 
 <!-- version list -->
 
+## v1.23.1-beta.2 (2026-08-24)
+
+### Bug Fixes
+
+- Document MCP design philosophy ([#765](https://github.com/n24q02m/mcp-core/pull/765),
+  [`62b0be2`](https://github.com/n24q02m/mcp-core/commit/62b0be2d9dfa455c40c090f8ef5a7a1a954966fa))
+
+- Keep optional runtime dependencies compatible
+  ([#753](https://github.com/n24q02m/mcp-core/pull/753),
+  [`b1dc1cb`](https://github.com/n24q02m/mcp-core/commit/b1dc1cb53be647155f1227833276e8e445791a2d))
+
+- Mitigate length-leaking timing attacks in compare_digest
+  ([`fe88e56`](https://github.com/n24q02m/mcp-core/commit/fe88e5690b63b7bf52c1da855da160f81d6869f2))
+
+- Type optional string session base ([#760](https://github.com/n24q02m/mcp-core/pull/760),
+  [`c93ee05`](https://github.com/n24q02m/mcp-core/commit/c93ee05c6a4a4edd5fa1afecfed20a85fa1c953b))
+
+- **deps**: Lock file maintenance ([#760](https://github.com/n24q02m/mcp-core/pull/760),
+  [`c93ee05`](https://github.com/n24q02m/mcp-core/commit/c93ee05c6a4a4edd5fa1afecfed20a85fa1c953b))
+
+- **deps**: Lock file maintenance ([#759](https://github.com/n24q02m/mcp-core/pull/759),
+  [`aea3fe4`](https://github.com/n24q02m/mcp-core/commit/aea3fe44fa5d73a8be11c30063022fa7b9550d35))
+
+- **deps**: Update @types/node to ^26.2.0 ([#762](https://github.com/n24q02m/mcp-core/pull/762),
+  [`d606cac`](https://github.com/n24q02m/mcp-core/commit/d606cacb84e93c47ca166135f123b66e2c365ed1))
+
+- **deps**: Update patch dependencies ([#753](https://github.com/n24q02m/mcp-core/pull/753),
+  [`b1dc1cb`](https://github.com/n24q02m/mcp-core/commit/b1dc1cb53be647155f1227833276e8e445791a2d))
+
+
 ## v1.23.1-beta.1 (2026-08-11)
 
 ### Bug Fixes
