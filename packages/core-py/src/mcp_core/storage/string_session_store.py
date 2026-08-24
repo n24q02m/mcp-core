@@ -90,7 +90,10 @@ class SaveOnChangeStringSession(_StringSessionBase):
         session_str: Optional[str] = None,
         sink: Optional[Callable[[str], None]] = None,
     ) -> None:
-        super().__init__(session_str)
+        if session_str is None:
+            super().__init__()
+        else:
+            super().__init__(session_str)
         self._sink = sink
 
     def save(self) -> str:
