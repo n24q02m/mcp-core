@@ -45,6 +45,18 @@ describe('renderCredentialForm tabs', () => {
     expect(html).toContain('User Mode')
   })
 
+  it('references the server description when present', () => {
+    const html = render()
+    expect(html).toContain('id="server-desc"')
+    expect(html).toContain('<form id="credential-form" aria-describedby="server-desc" novalidate>')
+  })
+
+  it('omits the description reference when absent', () => {
+    const html = renderCredentialForm({ ...TABS_SCHEMA, description: '' }, { submitUrl: '/authorize' })
+    expect(html).not.toContain('id="server-desc"')
+    expect(html).not.toContain('aria-describedby="server-desc"')
+  })
+
   it('activates the first tab by default', () => {
     const html = render()
     expect(html).toContain('id="tab-bot" class="tab active"')

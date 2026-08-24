@@ -35,3 +35,7 @@ Note on dates: three entries above carried impossible dates (`$(date +%Y-%m-%d)`
 ## 2026-08-02 - Accessible Custom Form Validation (novalidate)
 **Learning:** When building custom accessible HTML forms with client-side validation logic or custom error rendering, the native browser validation tooltips (triggered by attributes like `required` on `<input>`) can interfere. These native tooltips are often inconsistently announced by screen readers and cannot be styled to match the UI.
 **Action:** Always add the `novalidate` attribute to the `<form>` tag when implementing custom form validation or error states to ensure a consistent, accessible experience via our ARIA attributes (`aria-invalid`, `aria-errormessage`) instead of native bubbles.
+## 2026-08-13 - Accessible Server Descriptions in Tabbed Forms
+
+**Learning:** When generating HTML forms from configuration schemas, it is an accessibility best practice to explicitly link the top-level form element to its descriptive text using `aria-describedby` if one exists. While the flat credential form already linked the description (e.g. `<p class="server-description" id="server-desc">`) to the `<form>` tag, the tabbed credential form was missing this explicit association, which could cause screen readers to miss important context.
+**Action:** Always link form elements to their descriptive text using `aria-describedby` pointing to the ID of the description paragraph, and maintain parity across form variations (flat, tabbed, card groups).

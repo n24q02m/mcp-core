@@ -1441,6 +1441,7 @@ function renderTabbedCredentialForm(schema: RelayConfigSchema, options: RenderOp
   const usernameHtml = options.includeUsernameField ? usernameFieldHtml() : ''
   const capabilitiesHtml = renderCapabilitiesSection(schema.capabilityInfo ?? [])
   const descriptionHtml = description ? `<p class="server-description" id="server-desc">${description}</p>` : ''
+  const formAria = description ? ' aria-describedby="server-desc"' : ''
 
   const script = TABS_SCRIPT.replaceAll('__SUBMIT_URL__', submitUrlEscaped).replaceAll('__INITIAL_TAB__', activeId)
 
@@ -1456,7 +1457,7 @@ function renderTabbedCredentialForm(schema: RelayConfigSchema, options: RenderOp
                 ${tabsHtml}
             </div>
 
-            <form id="credential-form" novalidate>
+            <form id="credential-form"${formAria} novalidate>
                 ${usernameHtml}${panelsHtml}
 
                 <button type="submit" class="submit-btn" id="submit-btn">Connect</button>
