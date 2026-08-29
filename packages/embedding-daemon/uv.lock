@@ -194,10 +194,10 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "numpy", specifier = ">=2.5.2" },
-    { name = "onnxruntime", specifier = ">=1.28.0" },
-    { name = "onnxruntime-gpu", marker = "extra == 'cuda'", specifier = ">=1.28.0" },
+    { name = "onnxruntime", specifier = ">=1.29.0" },
+    { name = "onnxruntime-gpu", marker = "extra == 'cuda'", specifier = ">=1.29.0" },
     { name = "pydantic", specifier = ">=2.12.5,<3" },
-    { name = "uvicorn", specifier = ">=0.52.3" },
+    { name = "uvicorn", specifier = ">=0.52.4" },
 ]
 provides-extras = ["gguf", "cuda"]
 
@@ -206,8 +206,8 @@ dev = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
-    { name = "ruff", specifier = ">=0.16.3" },
-    { name = "ty", specifier = ">=0.0.72" },
+    { name = "ruff", specifier = ">=0.16.4" },
+    { name = "ty", specifier = ">=0.0.73" },
 ]
 
 [[package]]
