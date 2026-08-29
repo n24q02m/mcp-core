@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v1.23.1 (2026-08-29)
+
+### Bug Fixes
+
+- Align Bun toolchain with lockfile v2 ([#774](https://github.com/n24q02m/mcp-core/pull/774),
+  [`b7138f5`](https://github.com/n24q02m/mcp-core/commit/b7138f5c933fc30ecadce51a65d07f61646a8499))
+
+- **deps**: Lock file maintenance ([#775](https://github.com/n24q02m/mcp-core/pull/775),
+  [`cdc6e08`](https://github.com/n24q02m/mcp-core/commit/cdc6e083ac2ad010454fa7c6d0afb59bc6c35c85))
+
+- **deps**: Lock file maintenance ([#773](https://github.com/n24q02m/mcp-core/pull/773),
+  [`c4e26dd`](https://github.com/n24q02m/mcp-core/commit/c4e26ddd898338c226fd6af5e02f57da57cf0a6b))
+
+- **deps**: Update node.js to >=24.19.0 ([#772](https://github.com/n24q02m/mcp-core/pull/772),
+  [`f8fec76`](https://github.com/n24q02m/mcp-core/commit/f8fec7608268e54739754291753220cfc6d392fa))
+
+- **deps**: Update patch dependencies ([#771](https://github.com/n24q02m/mcp-core/pull/771),
+  [`72f303a`](https://github.com/n24q02m/mcp-core/commit/72f303a31f80be6e5109f6248cbd61eac48c058e))
+
+### Chores
+
+- Bump better-semantic-release to v1.4.0 ([#770](https://github.com/n24q02m/mcp-core/pull/770),
+  [`46f0d7c`](https://github.com/n24q02m/mcp-core/commit/46f0d7ccc295f38dfd171324164a3c27cdb60a97))
+
+
 ## v1.23.1-beta.3 (2026-08-24)
 
 ### Bug Fixes
