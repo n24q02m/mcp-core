@@ -75,7 +75,7 @@ def _ts_config_base() -> Path | None:
     """
     if sys.platform == "darwin":
         return _home() / "Library" / "Preferences" / "mcp"
-    if os.name != "nt":
+    if sys.platform != "win32":
         return None
     appdata = os.environ.get("APPDATA")
     if not appdata:

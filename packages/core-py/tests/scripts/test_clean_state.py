@@ -787,7 +787,6 @@ def test_main_no_paths_found(mock_fs, monkeypatch, capsys):
 
 def test_ts_config_base_windows_env_paths_root(monkeypatch, tmp_path):
     monkeypatch.setattr("mcp_core.scripts.clean_state.sys.platform", "win32")
-    monkeypatch.setattr(os, "name", "nt")
     monkeypatch.setenv("APPDATA", str(tmp_path))
 
     assert _ts_config_base() == tmp_path / "mcp" / "Config"
