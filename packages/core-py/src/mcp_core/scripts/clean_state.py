@@ -67,12 +67,14 @@ def _python_config_base() -> Path:
 
 
 def _ts_config_base() -> Path | None:
-    """Where TS core-ts writes config.enc on Windows — Node electron convention.
+    """Where TS core-ts writes config.enc using the ``env-paths`` convention.
 
-    On Windows: ``%APPDATA%\\mcp\\Config``. On POSIX, TS uses the same
-    ``~/.config/mcp`` dir as Python so we return None to avoid duplicate
-    enumeration.
+    Windows: ``%APPDATA%\\mcp\\Config``. macOS:
+    ``~/Library/Preferences/mcp``. Linux matches the Python XDG config root,
+    so it needs no additional path.
     """
+    if sys.platform == "darwin":
+        return _home() / "Library" / "Preferences" / "mcp"
     if os.name != "nt":
         return None
     appdata = os.environ.get("APPDATA")
@@ -105,14 +107,17 @@ def _config_paths() -> list[Path]:
         seen.add(key)
         paths.append(p)
 
-    # Python core-py + TS core-ts config.enc — platform-specific.
+    # Python core-py + TS core-ts config and relay-session state.
     for base in (_python_config_base(), _ts_config_base(), _legacy_posix_base()):
         if base is None:
             continue
-        cfg = base / "config.enc"
-        if cfg.exists():
-            _add(cfg)
-
+        for name in ("config.enc", "config.enc.tmp"):
+            config = base / name
+            if config.exists():
+                _add(config)
+        if base.is_dir():
+            for session_state in sorted(base.glob("relay-session-*")):
+                _add(session_state)
     # Locks + tools cache still live under the legacy ~/.config/mcp/ tree.
     legacy = _legacy_posix_base()
     locks = legacy / "locks"
@@ -126,9 +131,19 @@ def _config_paths() -> list[Path]:
     return paths
 
 
-def _configured_path(env_var: str, default: Path) -> Path:
+def _configured_path(env_var: str) -> Path | None:
     configured = os.environ.get(env_var)
-    return Path(configured).expanduser() if configured else default
+    return Path(configured).expanduser() if configured else None
+
+
+def _database_parent(env_var: str) -> Path | None:
+    configured = os.environ.get(env_var)
+    if not configured or configured == ":memory:":
+        return None
+    database = Path(configured).expanduser()
+    if not database.is_absolute():
+        database = Path.cwd() / database
+    return database.parent
 
 
 def _plugin_store_base(server: str) -> Path | None:
@@ -138,14 +153,32 @@ def _plugin_store_base(server: str) -> Path | None:
     return _home() / f".{plugin}-mcp"
 
 
-def _server_data_root(server: str) -> Path | None:
+def _server_data_roots(server: str) -> list[Path]:
+    roots: list[Path] = []
     if server == "better-telegram-mcp":
-        return _configured_path("TELEGRAM_DATA_DIR", _home() / ".better-telegram-mcp")
-    if server == "mnemo-mcp":
-        return _configured_path("MNEMO_DATA_DIR", _home() / ".mnemo-mcp")
-    if server == "better-code-review-graph":
-        return _configured_path("CRG_DATA_DIR", _home() / ".crg")
-    return None
+        roots.append(_home() / ".better-telegram-mcp")
+        configured = _configured_path("TELEGRAM_DATA_DIR")
+        if configured is not None:
+            roots.append(configured)
+    elif server == "mnemo-mcp":
+        roots.append(_home() / ".mnemo-mcp")
+        configured = _configured_path("MNEMO_DATA_DIR")
+        if configured is not None:
+            roots.append(configured)
+        for env_var in ("DB_PATH", "MNEMO_DB_PATH"):
+            database_parent = _database_parent(env_var)
+            if database_parent is not None:
+                roots.append(database_parent)
+    elif server == "better-code-review-graph":
+        roots.append(_home() / ".crg")
+        configured = _configured_path("CRG_DATA_DIR")
+        if configured is not None:
+            roots.append(configured)
+    return list(dict.fromkeys(roots))
+
+
+def _credential_path_variants(path: Path) -> list[Path]:
+    return [candidate for candidate in (path, Path(f"{path}.tmp")) if candidate.exists()]
 
 
 def _token_directory_paths(directory: Path) -> list[Path]:
@@ -161,9 +194,7 @@ def _sub_credential_paths(base: Path) -> list[Path]:
 
     out: list[Path] = []
     for sub in sorted(path for path in subs.iterdir() if path.is_dir()):
-        config = sub / "config.json"
-        if config.exists():
-            out.append(config)
+        out.extend(_credential_path_variants(sub / "config.json"))
         out.extend(_token_directory_paths(sub / "tokens"))
     return out
 
@@ -172,7 +203,7 @@ def _per_plugin_store_paths(server: str) -> list[Path]:
     """Credential paths written by ``PerPluginStore``.
 
     Both core implementations derive the storage directory from the plugin
-    slug as ``~/.<plugin>-mcp``. Per-sub credential files are selected
+    slug as ``~/.<plugin>-mcp``. Root and per-sub credential files are selected
     individually because some servers keep application data beside them.
     """
     base = _plugin_store_base(server)
@@ -181,8 +212,8 @@ def _per_plugin_store_paths(server: str) -> list[Path]:
 
     out: list[Path] = []
     for path in (base / "config.json", base / ".secret"):
-        if path.exists():
-            out.append(path)
+        out.extend(_credential_path_variants(path))
+    out.extend(_token_directory_paths(base / "tokens"))
     out.extend(_sub_credential_paths(base))
     return out
 
@@ -190,33 +221,33 @@ def _per_plugin_store_paths(server: str) -> list[Path]:
 def _per_server_credential_paths(server: str) -> list[Path]:
     """Legacy and server-owned credential paths outside ``PerPluginStore``."""
     out: list[Path] = []
-    store_base = _plugin_store_base(server)
 
     if server == "better-email-mcp":
-        tokens = _home() / ".better-email-mcp" / "tokens.json"
-        if tokens.exists():
-            out.append(tokens)
+        out.extend(_credential_path_variants(_home() / ".better-email-mcp" / "tokens.json"))
     elif server == "better-telegram-mcp":
-        data_root = _server_data_root(server)
-        if data_root is not None and data_root.is_dir():
-            secret = data_root / ".secret"
-            if secret.exists():
-                out.append(secret)
-            out.extend(sorted(data_root.glob("*.session")))
-            out.extend(sorted(data_root.glob("*.session-journal")))
-    elif server == "wet-mcp" and store_base is not None:
-        out.extend(_token_directory_paths(store_base / "tokens"))
+        for data_root in _server_data_roots(server):
+            if not data_root.is_dir():
+                continue
+            out.extend(_credential_path_variants(data_root / ".secret"))
+            for pattern in (
+                "*.session",
+                "*.session-journal",
+                "*.session-wal",
+                "*.session-shm",
+            ):
+                out.extend(sorted(data_root.rglob(pattern)))
     elif server == "mnemo-mcp":
-        data_root = _server_data_root(server)
-        if data_root is not None:
+        for data_root in _server_data_roots(server):
+            out.extend(_credential_path_variants(data_root / "config.json"))
             out.extend(_token_directory_paths(data_root / "tokens"))
             out.extend(_sub_credential_paths(data_root))
     elif server == "better-code-review-graph":
-        data_root = _server_data_root(server)
-        if data_root is not None:
+        for data_root in _server_data_roots(server):
             out.extend(_sub_credential_paths(data_root))
-    elif server == "imagine-mcp" and store_base is not None:
-        out.extend(_token_directory_paths(store_base / "cache"))
+    elif server == "imagine-mcp":
+        store_base = _plugin_store_base(server)
+        if store_base is not None:
+            out.extend(_token_directory_paths(store_base / "cache"))
 
     return out
 
@@ -233,9 +264,7 @@ def _per_server_data_paths(server: str) -> list[Path]:
             if diskcache.exists():
                 out.append(diskcache)
 
-    data_root = _server_data_root(server)
-    if data_root is not None and data_root.exists():
-        out.append(data_root)
+    out.extend(root for root in _server_data_roots(server) if root.exists())
     return list(dict.fromkeys(out))
 
 

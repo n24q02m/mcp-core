@@ -8,6 +8,7 @@ import pytest
 from mcp_core.scripts.clean_state import (
     ALL_SERVERS,
     _enumerate,
+    _ts_config_base,
     kill_daemons,
     main,
     _parse_lock_pid,
@@ -54,6 +55,14 @@ def test_all_servers_matches_canonical_mcp_server_scope():
     }
 
 
+def test_ts_config_base_uses_macos_env_paths_root(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setattr("mcp_core.scripts.clean_state._home", lambda: home)
+    monkeypatch.setattr("mcp_core.scripts.clean_state.sys.platform", "darwin")
+
+    assert _ts_config_base() == home / "Library" / "Preferences" / "mcp"
+
+
 @pytest.mark.parametrize(
     ("alias", "server", "store_dir"),
     [
@@ -97,67 +106,101 @@ def test_main_removes_email_legacy_tokens_file(mock_fs):
     assert not token_file.exists()
 
 
-def test_main_removes_telegram_sessions_but_keeps_app_data(mock_fs, monkeypatch):
-    data_dir = mock_fs["home"] / "telegram-data"
-    data_dir.mkdir()
-    session = data_dir / "default.session"
-    journal = data_dir / "default.session-journal"
-    secret = data_dir / ".secret"
-    app_data = data_dir / "messages.db"
-    session.write_text("synthetic-session")
-    journal.write_text("synthetic-journal")
-    secret.write_bytes(b"synthetic-machine-key")
-    app_data.write_text("synthetic-app-data")
-    monkeypatch.setenv("TELEGRAM_DATA_DIR", str(data_dir))
+def test_main_removes_telegram_credentials_from_store_and_both_data_roots(mock_fs, monkeypatch):
+    default_data_dir = mock_fs["home"] / ".better-telegram-mcp"
+    configured_data_dir = mock_fs["home"] / "telegram-data"
+    store_dir = mock_fs["home"] / ".telegram-mcp"
+    credential_paths = [
+        store_dir / "tokens" / "app-identity.json",
+        store_dir / "tokens" / "app-identity.json.tmp",
+        default_data_dir / ".secret",
+        default_data_dir / "stale.session",
+        configured_data_dir / ".secret",
+        configured_data_dir / "user_sessions" / "current.session",
+        configured_data_dir / "user_sessions" / "current.session-journal",
+        configured_data_dir / "user_sessions" / "current.session-wal",
+        configured_data_dir / "user_sessions" / "current.session-shm",
+    ]
+    app_data_paths = [
+        default_data_dir / "messages.db",
+        configured_data_dir / "messages.db",
+        configured_data_dir / "downloads" / "keep.bin",
+    ]
+    for path in credential_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-credential")
+    for path in app_data_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-app-data")
+    monkeypatch.setenv("TELEGRAM_DATA_DIR", str(configured_data_dir))
 
     assert main(["--server", "telegram", "--yes"]) == 0
-    assert not session.exists()
-    assert not journal.exists()
-    assert not secret.exists()
-    assert app_data.read_text() == "synthetic-app-data"
+    assert all(not path.exists() for path in credential_paths)
+    assert all(path.read_text() == "synthetic-app-data" for path in app_data_paths)
 
 
-def test_main_removes_mnemo_raw_credentials_but_keeps_app_data(mock_fs, monkeypatch):
-    data_dir = mock_fs["home"] / "mnemo-data"
-    sub_dir = data_dir / "subs" / "user-a"
-    token_dir = sub_dir / "tokens"
-    root_tokens = data_dir / "tokens"
-    token_dir.mkdir(parents=True)
-    root_tokens.mkdir()
-    config = sub_dir / "config.json"
-    sub_token = token_dir / "provider.json"
-    root_token = root_tokens / "provider.json"
-    app_data = sub_dir / "memory.db"
-    config.write_text("{}")
-    sub_token.write_text("{}")
-    root_token.write_text("{}")
-    app_data.write_text("synthetic-app-data")
-    monkeypatch.setenv("MNEMO_DATA_DIR", str(data_dir))
+def test_main_removes_mnemo_credentials_from_every_source_root(mock_fs, monkeypatch):
+    default_data_dir = mock_fs["home"] / ".mnemo-mcp"
+    configured_data_dir = mock_fs["home"] / "mnemo-data"
+    db_data_dir = mock_fs["home"] / "mnemo-db-root"
+    legacy_db_data_dir = mock_fs["home"] / "mnemo-legacy-db-root"
+    data_roots = [
+        default_data_dir,
+        configured_data_dir,
+        db_data_dir,
+        legacy_db_data_dir,
+    ]
+    credential_paths = []
+    app_data_paths = []
+    for index, data_root in enumerate(data_roots):
+        credential_paths.extend(
+            [
+                data_root / "tokens" / "provider.json",
+                data_root / "subs" / f"user-{index}" / "config.json",
+                data_root / "subs" / f"user-{index}" / "tokens" / "provider.json",
+            ]
+        )
+        app_data_paths.extend(
+            [
+                data_root / "memories.db",
+                data_root / "subs" / f"user-{index}" / "passport.db",
+            ]
+        )
+    for path in credential_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-credential")
+    for path in app_data_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-app-data")
+    monkeypatch.setenv("MNEMO_DATA_DIR", str(configured_data_dir))
+    monkeypatch.setenv("DB_PATH", str(db_data_dir / "mnemo.db"))
+    monkeypatch.setenv("MNEMO_DB_PATH", str(legacy_db_data_dir / "mnemo.db"))
 
     assert main(["--server", "mnemo", "--yes"]) == 0
-    assert not config.exists()
-    assert not sub_token.exists()
-    assert not root_token.exists()
-    assert app_data.read_text() == "synthetic-app-data"
+    assert all(not path.exists() for path in credential_paths)
+    assert all(path.read_text() == "synthetic-app-data" for path in app_data_paths)
 
 
-def test_main_removes_crg_raw_credentials_but_keeps_graph_data(mock_fs, monkeypatch):
-    data_dir = mock_fs["home"] / "crg-data"
-    sub_dir = data_dir / "subs" / "user-a"
-    token_dir = sub_dir / "tokens"
-    token_dir.mkdir(parents=True)
-    config = sub_dir / "config.json"
-    token = token_dir / "provider.json"
-    graph = sub_dir / "graph.db"
-    config.write_text("{}")
-    token.write_text("{}")
-    graph.write_text("synthetic-graph-data")
-    monkeypatch.setenv("CRG_DATA_DIR", str(data_dir))
+def test_main_removes_crg_credentials_from_default_and_override_roots(mock_fs, monkeypatch):
+    default_data_dir = mock_fs["home"] / ".crg"
+    configured_data_dir = mock_fs["home"] / "crg-data"
+    credential_paths = []
+    graph_paths = []
+    for index, data_root in enumerate((default_data_dir, configured_data_dir)):
+        sub_dir = data_root / "subs" / f"user-{index}"
+        credential_paths.extend([sub_dir / "config.json", sub_dir / "tokens" / "provider.json"])
+        graph_paths.append(sub_dir / "graph.db")
+    for path in credential_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-credential")
+    for path in graph_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-graph-data")
+    monkeypatch.setenv("CRG_DATA_DIR", str(configured_data_dir))
 
     assert main(["--server", "crg", "--yes"]) == 0
-    assert not config.exists()
-    assert not token.exists()
-    assert graph.read_text() == "synthetic-graph-data"
+    assert all(not path.exists() for path in credential_paths)
+    assert all(path.read_text() == "synthetic-graph-data" for path in graph_paths)
 
 
 def test_main_default_wipes_workspace_credentials_but_keeps_data(mock_fs):
@@ -266,6 +309,34 @@ def test_enumerate_basic(mock_fs):
     assert "data" not in path_names
 
 
+def test_main_removes_relay_state_and_atomic_config_temps_but_keeps_identity(mock_fs, monkeypatch):
+    ts_config = mock_fs["home"] / "ts-config"
+    ts_config.mkdir()
+    monkeypatch.setattr("mcp_core.scripts.clean_state._ts_config_base", lambda: ts_config)
+    credential_paths = [
+        mock_fs["config"] / "config.enc.tmp",
+        mock_fs["config"] / "relay-session-wet",
+        mock_fs["config"] / "relay-session-wet.tmp",
+        ts_config / "config.enc.tmp",
+        ts_config / "relay-session-email.lock",
+        ts_config / "relay-session-email.lock.tmp",
+        mock_fs["legacy"] / "relay-session-crg.lock",
+    ]
+    identity_paths = [
+        mock_fs["home"] / ".mcp-relay" / "jwt-keys" / "signing.pem",
+        mock_fs["home"] / ".mcp-core" / "jwt-keys" / "signing.pem",
+    ]
+    for path in credential_paths:
+        path.write_text("synthetic-setup-state")
+    for path in identity_paths:
+        path.parent.mkdir(parents=True)
+        path.write_text("synthetic-system-identity")
+
+    assert main(["--server", "godot", "--yes"]) == 0
+    assert all(not path.exists() for path in credential_paths)
+    assert all(path.read_text() == "synthetic-system-identity" for path in identity_paths)
+
+
 def test_enumerate_with_data(mock_fs):
     server_dir = mock_fs["home"] / ".wet-mcp"
     server_dir.mkdir()
@@ -292,6 +363,28 @@ def test_enumerate_wipes_per_plugin_store_config_and_secret(mock_fs):
     path_names = [p.name for p in paths]
     assert "config.json" in path_names
     assert ".secret" in path_names
+
+
+def test_enumerate_per_plugin_store_root_tokens_and_atomic_temps(mock_fs):
+    server_dir = mock_fs["home"] / ".wet-mcp"
+    sub_dir = server_dir / "subs" / "user-a"
+    credential_paths = [
+        server_dir / "config.json.tmp",
+        server_dir / ".secret.tmp",
+        server_dir / "tokens" / "app-identity.json",
+        server_dir / "tokens" / "app-identity.json.tmp",
+        sub_dir / "config.json.tmp",
+        sub_dir / "tokens" / "provider.json.tmp",
+    ]
+    app_temp = sub_dir / "index-build.tmp"
+    for path in credential_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-credential")
+    app_temp.write_text("synthetic-app-data")
+
+    paths = _enumerate(["wet-mcp"], keep_data=True)
+    assert all(path in paths for path in credential_paths)
+    assert app_temp not in paths
 
 
 def test_enumerate_selects_per_plugin_store_credentials_not_app_data(mock_fs):
