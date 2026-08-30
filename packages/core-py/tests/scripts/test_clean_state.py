@@ -348,6 +348,132 @@ def test_enumerate_with_data(mock_fs):
     assert "data" in path_names
 
 
+def test_no_keep_data_never_enumerates_protected_directory_roots(mock_fs, tmp_path, monkeypatch):
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.chdir(checkout)
+    protected_roots = {
+        Path(checkout.anchor),
+        mock_fs["home"],
+        mock_fs["home"].parent,
+        checkout,
+        checkout.parent,
+    }
+
+    for protected_root in protected_roots:
+        with monkeypatch.context() as scoped:
+            scoped.setenv("DB_PATH", str(protected_root / "mnemo.db"))
+            scoped.setenv("MNEMO_DATA_DIR", str(protected_root))
+            scoped.delenv("MNEMO_DB_PATH", raising=False)
+            paths = _enumerate(["mnemo-mcp"], keep_data=False)
+        assert protected_root not in paths
+
+
+def test_no_keep_data_relative_mnemo_db_removes_only_owned_files(mock_fs, tmp_path, monkeypatch):
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.chdir(checkout)
+    monkeypatch.setenv("DB_PATH", "mnemo.db")
+    monkeypatch.delenv("MNEMO_DB_PATH", raising=False)
+    monkeypatch.delenv("MNEMO_DATA_DIR", raising=False)
+
+    owned_paths = [
+        checkout / "mnemo.db",
+        checkout / "mnemo.db-wal",
+        checkout / "mnemo.db-shm",
+        checkout / "mnemo.db-journal",
+    ]
+    sibling_paths = [
+        checkout / "sync_folder_ids.json",
+        checkout / "passport-user.mnemo",
+        checkout / "tokens" / "provider.json",
+        checkout / "pyproject.toml",
+        checkout / "src" / "app.py",
+    ]
+    for path in owned_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-owned-state")
+    for path in sibling_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-checkout-data")
+
+    assert main(["--server", "mnemo", "--no-keep-data", "--yes"]) == 0
+    assert checkout.is_dir()
+    assert all(not path.exists() for path in owned_paths)
+    assert all(path.read_text() == "synthetic-checkout-data" for path in sibling_paths)
+
+
+def test_protected_override_roots_are_not_scanned(mock_fs, tmp_path, monkeypatch):
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.chdir(checkout)
+    protected_paths = [
+        checkout / ".secret",
+        checkout / "user_sessions" / "unrelated.session",
+        checkout / "messages.db",
+        checkout / "downloads" / "media.bin",
+        checkout / "config.json",
+        checkout / "config.json.tmp",
+        checkout / "tokens" / "provider.json",
+        checkout / "subs" / "user-a" / "config.json",
+        checkout / "subs" / "user-a" / "tokens" / "provider.json",
+        checkout / "sync_folder_ids.json",
+        checkout / "passport-user.mnemo",
+        checkout / "subs" / "user-a" / "graph.db",
+    ]
+    for path in protected_paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-unrelated-state")
+    monkeypatch.setenv("TELEGRAM_DATA_DIR", str(checkout))
+    monkeypatch.setenv("MNEMO_DATA_DIR", str(checkout))
+    monkeypatch.setenv("DB_PATH", str(checkout / "mnemo.db"))
+    monkeypatch.delenv("MNEMO_DB_PATH", raising=False)
+    monkeypatch.setenv("CRG_DATA_DIR", str(checkout))
+
+    for server in ("better-telegram-mcp", "mnemo-mcp", "better-code-review-graph"):
+        paths = _enumerate([server], keep_data=False)
+        assert all(path not in paths for path in protected_paths)
+
+
+def test_no_keep_data_removes_only_owned_telegram_and_crg_data(mock_fs):
+    telegram_root = mock_fs["home"] / ".better-telegram-mcp"
+    telegram_owned = [
+        telegram_root / "messages.db",
+        telegram_root / "messages.db-wal",
+        telegram_root / "messages.db-shm",
+        telegram_root / "messages.db-journal",
+        telegram_root / "downloads" / "media.bin",
+    ]
+    telegram_sibling = telegram_root / "operator-notes.txt"
+    for path in telegram_owned:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-app-data")
+    telegram_sibling.write_text("retain")
+
+    assert main(["--server", "telegram", "--no-keep-data", "--yes"]) == 0
+    assert all(not path.exists() for path in telegram_owned)
+    assert telegram_sibling.read_text() == "retain"
+
+    crg_root = mock_fs["home"] / ".crg"
+    graph_root = crg_root / "subs" / "user-a"
+    crg_owned = [
+        graph_root / "graph.db",
+        graph_root / "graph.db-wal",
+        graph_root / "graph.db-shm",
+        graph_root / "graph.db-journal",
+    ]
+    crg_sibling = crg_root / "operator-notes.txt"
+    for path in crg_owned:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic-graph-data")
+    crg_sibling.parent.mkdir(parents=True, exist_ok=True)
+    crg_sibling.write_text("retain")
+
+    assert main(["--server", "crg", "--no-keep-data", "--yes"]) == 0
+    assert all(not path.exists() for path in crg_owned)
+    assert crg_sibling.read_text() == "retain"
+
+
 def test_enumerate_wipes_per_plugin_store_config_and_secret(mock_fs):
     """PerPluginStore (mcp_core.storage.per_plugin_store) writes config.json +
     a machine-bound .secret key at ~/.<server>/ for single-user mode. Clean
