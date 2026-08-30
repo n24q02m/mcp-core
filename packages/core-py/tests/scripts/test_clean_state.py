@@ -54,6 +54,109 @@ def test_all_servers_matches_canonical_mcp_server_scope():
     }
 
 
+@pytest.mark.parametrize(
+    ("alias", "server", "store_dir"),
+    [
+        ("notion", "better-notion-mcp", ".better-notion-mcp"),
+        ("email", "better-email-mcp", ".better-email-mcp"),
+        ("telegram", "better-telegram-mcp", ".telegram-mcp"),
+        ("godot", "better-godot-mcp", None),
+        ("workspace", "better-workspace-mcp", ".better-workspace-mcp"),
+        ("wet", "wet-mcp", ".wet-mcp"),
+        ("mnemo", "mnemo-mcp", ".mnemo-mcp"),
+        ("crg", "better-code-review-graph", ".better-code-review-graph-mcp"),
+        ("imagine", "imagine-mcp", ".imagine-mcp"),
+    ],
+)
+def test_main_accepts_documented_alias_and_full_name(mock_fs, alias, server, store_dir):
+    if store_dir is None:
+        decoy_dir = mock_fs["home"] / ".better-godot-mcp"
+        decoy_dir.mkdir()
+        decoy = decoy_dir / "config.json"
+        decoy.write_text("{}")
+        for server_arg in (alias, server):
+            assert main(["--server", server_arg, "--yes"]) == 0
+            assert decoy.exists()
+        return
+
+    server_dir = mock_fs["home"] / store_dir
+    server_dir.mkdir()
+    config = server_dir / "config.json"
+    for server_arg in (alias, server):
+        config.write_text("{}")
+        assert main(["--server", server_arg, "--yes"]) == 0
+        assert not config.exists()
+
+
+def test_main_removes_email_legacy_tokens_file(mock_fs):
+    token_file = mock_fs["home"] / ".better-email-mcp" / "tokens.json"
+    token_file.parent.mkdir()
+    token_file.write_text("{}")
+
+    assert main(["--server", "email", "--yes"]) == 0
+    assert not token_file.exists()
+
+
+def test_main_removes_telegram_sessions_but_keeps_app_data(mock_fs, monkeypatch):
+    data_dir = mock_fs["home"] / "telegram-data"
+    data_dir.mkdir()
+    session = data_dir / "default.session"
+    journal = data_dir / "default.session-journal"
+    app_data = data_dir / "messages.db"
+    session.write_text("synthetic-session")
+    journal.write_text("synthetic-journal")
+    app_data.write_text("synthetic-app-data")
+    monkeypatch.setenv("TELEGRAM_DATA_DIR", str(data_dir))
+
+    assert main(["--server", "telegram", "--yes"]) == 0
+    assert not session.exists()
+    assert not journal.exists()
+    assert app_data.read_text() == "synthetic-app-data"
+
+
+def test_main_removes_mnemo_raw_credentials_but_keeps_app_data(mock_fs, monkeypatch):
+    data_dir = mock_fs["home"] / "mnemo-data"
+    sub_dir = data_dir / "subs" / "user-a"
+    token_dir = sub_dir / "tokens"
+    root_tokens = data_dir / "tokens"
+    token_dir.mkdir(parents=True)
+    root_tokens.mkdir()
+    config = sub_dir / "config.json"
+    sub_token = token_dir / "provider.json"
+    root_token = root_tokens / "provider.json"
+    app_data = sub_dir / "memory.db"
+    config.write_text("{}")
+    sub_token.write_text("{}")
+    root_token.write_text("{}")
+    app_data.write_text("synthetic-app-data")
+    monkeypatch.setenv("MNEMO_DATA_DIR", str(data_dir))
+
+    assert main(["--server", "mnemo", "--yes"]) == 0
+    assert not config.exists()
+    assert not sub_token.exists()
+    assert not root_token.exists()
+    assert app_data.read_text() == "synthetic-app-data"
+
+
+def test_main_removes_crg_raw_credentials_but_keeps_graph_data(mock_fs, monkeypatch):
+    data_dir = mock_fs["home"] / "crg-data"
+    sub_dir = data_dir / "subs" / "user-a"
+    token_dir = sub_dir / "tokens"
+    token_dir.mkdir(parents=True)
+    config = sub_dir / "config.json"
+    token = token_dir / "provider.json"
+    graph = sub_dir / "graph.db"
+    config.write_text("{}")
+    token.write_text("{}")
+    graph.write_text("synthetic-graph-data")
+    monkeypatch.setenv("CRG_DATA_DIR", str(data_dir))
+
+    assert main(["--server", "crg", "--yes"]) == 0
+    assert not config.exists()
+    assert not token.exists()
+    assert graph.read_text() == "synthetic-graph-data"
+
+
 def test_main_default_wipes_workspace_credentials_but_keeps_data(mock_fs):
     server_dir = mock_fs["home"] / ".better-workspace-mcp"
     sub_dir = server_dir / "subs" / "user-a"
@@ -78,7 +181,8 @@ def test_main_default_wipes_workspace_credentials_but_keeps_data(mock_fs):
     assert exit_code == 0
     assert not config.exists()
     assert not secret.exists()
-    assert not (server_dir / "subs").exists()
+    assert not sub_config.exists()
+    assert not token.exists()
     assert sentinel.read_text() == "synthetic-app-data"
 
 
@@ -87,7 +191,9 @@ def test_help_reports_all_nine_servers(capsys):
         main(["--help"])
 
     assert exc_info.value.code == 0
-    assert "Default: all 9." in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "Default: all 9." in captured.out
+    assert "full server name or alias" in captured.out
 
 
 def test_parse_lock_pid(tmp_path):
@@ -185,21 +291,25 @@ def test_enumerate_wipes_per_plugin_store_config_and_secret(mock_fs):
     assert ".secret" in path_names
 
 
-def test_enumerate_wipes_per_plugin_store_subs_tree(mock_fs):
-    """Multi-user mode writes ~/.<server>/subs/<sub>/config.json and
-    subs/<sub>/tokens/<provider>.json (per storage/backends.py _key_to_path).
-    The whole subs/ tree must be enumerated for wiping."""
+def test_enumerate_selects_per_plugin_store_credentials_not_app_data(mock_fs):
+    """Per-sub credentials can share a directory with server application data."""
     server_dir = mock_fs["home"] / ".wet-mcp"
     sub_dir = server_dir / "subs" / "user-a"
     sub_dir.mkdir(parents=True)
-    (sub_dir / "config.json").write_text("{}")
+    config = sub_dir / "config.json"
+    config.write_text("{}")
     tokens_dir = sub_dir / "tokens"
     tokens_dir.mkdir()
-    (tokens_dir / "google_drive.json").write_text("{}")
+    token = tokens_dir / "google_drive.json"
+    token.write_text("{}")
+    app_data = sub_dir / "state.db"
+    app_data.write_text("synthetic-app-data")
 
     paths = _enumerate(["wet-mcp"], keep_data=True)
-    path_names = [p.name for p in paths]
-    assert "subs" in path_names
+    assert config in paths
+    assert token in paths
+    assert app_data not in paths
+    assert sub_dir not in paths
 
 
 def test_enumerate_per_plugin_store_missing_files_no_error(mock_fs):

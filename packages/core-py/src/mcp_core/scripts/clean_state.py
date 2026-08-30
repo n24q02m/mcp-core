@@ -1,7 +1,7 @@
 """mcp-clean-state CLI — D14.
 
-Removes MCP server credentials (legacy config.enc + PerPluginStore config.json /
-.secret / subs tree), locks, tools cache, and per-server token caches. By
+Removes MCP server credentials (legacy config.enc plus PerPluginStore root and
+per-sub credential files), locks, tools cache, and per-server token caches. By
 default preserves app data (SQLite, diskcache, SearXNG state).
 
 The ``--kill-daemons`` flag terminates any alive legacy bridge daemons before
@@ -26,17 +26,31 @@ from pathlib import Path
 
 from platformdirs import user_config_dir
 
-ALL_SERVERS = [
-    "wet-mcp",
-    "mnemo-mcp",
-    "better-code-review-graph",
-    "imagine-mcp",
-    "better-notion-mcp",
-    "better-email-mcp",
-    "better-telegram-mcp",
-    "better-godot-mcp",
-    "better-workspace-mcp",
-]
+SERVER_ALIASES = {
+    "notion": "better-notion-mcp",
+    "email": "better-email-mcp",
+    "telegram": "better-telegram-mcp",
+    "godot": "better-godot-mcp",
+    "workspace": "better-workspace-mcp",
+    "wet": "wet-mcp",
+    "mnemo": "mnemo-mcp",
+    "crg": "better-code-review-graph",
+    "imagine": "imagine-mcp",
+}
+
+SERVER_STORE_PLUGINS = {
+    "better-notion-mcp": "better-notion",
+    "better-email-mcp": "better-email",
+    "better-telegram-mcp": "telegram",
+    "better-godot-mcp": None,
+    "better-workspace-mcp": "better-workspace",
+    "wet-mcp": "wet",
+    "mnemo-mcp": "mnemo",
+    "better-code-review-graph": "better-code-review-graph",
+    "imagine-mcp": "imagine",
+}
+
+ALL_SERVERS = list(SERVER_STORE_PLUGINS)
 
 
 def _home() -> Path:
@@ -112,77 +126,124 @@ def _config_paths() -> list[Path]:
     return paths
 
 
-def _per_plugin_store_paths(server: str) -> list[Path]:
-    """Credential paths written by ``mcp_core.storage.per_plugin_store.PerPluginStore``
-    via its ``LocalFsBackend`` (see ``storage/backends.py::_key_to_path`` for the
-    authoritative on-disk layout), under ``~/.<server>/``:
+def _configured_path(env_var: str, default: Path) -> Path:
+    configured = os.environ.get(env_var)
+    return Path(configured).expanduser() if configured else default
 
-    - ``config.json`` — single-user (stdio / HTTP single-user) credential blob.
-    - ``.secret`` — machine-bound AES-GCM key for the single-user mode above.
-    - ``subs/<sub>/config.json`` and ``subs/<sub>/tokens/<provider>.json`` —
-      HTTP multi-user mode, one directory per OAuth ``sub``. The whole ``subs``
-      tree is enumerated so nested per-sub token files are covered too.
 
-    None of these were covered by the legacy ``config.enc`` wipe, so every
-    "clean state" E2E run since the PerPluginStore migration reused whatever
-    credentials were already on disk.
-    """
-    base = _home() / f".{server}"
-    if not base.exists():
+def _plugin_store_base(server: str) -> Path | None:
+    plugin = SERVER_STORE_PLUGINS.get(server)
+    if plugin is None:
+        return None
+    return _home() / f".{plugin}-mcp"
+
+
+def _server_data_root(server: str) -> Path | None:
+    if server == "better-telegram-mcp":
+        return _configured_path("TELEGRAM_DATA_DIR", _home() / ".better-telegram-mcp")
+    if server == "mnemo-mcp":
+        return _configured_path("MNEMO_DATA_DIR", _home() / ".mnemo-mcp")
+    if server == "better-code-review-graph":
+        return _configured_path("CRG_DATA_DIR", _home() / ".crg")
+    return None
+
+
+def _token_directory_paths(directory: Path) -> list[Path]:
+    if not directory.is_dir():
         return []
-    out: list[Path] = []
-    cfg = base / "config.json"
-    if cfg.exists():
-        out.append(cfg)
-    secret = base / ".secret"
-    if secret.exists():
-        out.append(secret)
+    return sorted(directory.iterdir())
+
+
+def _sub_credential_paths(base: Path) -> list[Path]:
     subs = base / "subs"
-    if subs.exists():
-        out.append(subs)
+    if not subs.is_dir():
+        return []
+
+    out: list[Path] = []
+    for sub in sorted(path for path in subs.iterdir() if path.is_dir()):
+        config = sub / "config.json"
+        if config.exists():
+            out.append(config)
+        out.extend(_token_directory_paths(sub / "tokens"))
     return out
 
 
-def _per_server_token_paths(server: str) -> list[Path]:
-    base = _home() / f".{server}"
-    if not base.exists():
+def _per_plugin_store_paths(server: str) -> list[Path]:
+    """Credential paths written by ``PerPluginStore``.
+
+    Both core implementations derive the storage directory from the plugin
+    slug as ``~/.<plugin>-mcp``. Per-sub credential files are selected
+    individually because some servers keep application data beside them.
+    """
+    base = _plugin_store_base(server)
+    if base is None or not base.exists():
         return []
+
     out: list[Path] = []
-    tokens = base / "tokens"
-    if tokens.exists():
-        out.extend(tokens.glob("*"))
-    sessions = base / "sessions"
-    if sessions.exists():
-        out.extend(sessions.glob("*.session"))
-    cache = base / "cache"
-    if cache.exists() and server == "imagine-mcp":
-        out.extend(cache.glob("*"))
+    for path in (base / "config.json", base / ".secret"):
+        if path.exists():
+            out.append(path)
+    out.extend(_sub_credential_paths(base))
+    return out
+
+
+def _per_server_credential_paths(server: str) -> list[Path]:
+    """Legacy and server-owned credential paths outside ``PerPluginStore``."""
+    out: list[Path] = []
+    store_base = _plugin_store_base(server)
+
+    if server == "better-email-mcp":
+        tokens = _home() / ".better-email-mcp" / "tokens.json"
+        if tokens.exists():
+            out.append(tokens)
+    elif server == "better-telegram-mcp":
+        data_root = _server_data_root(server)
+        if data_root is not None and data_root.is_dir():
+            out.extend(sorted(data_root.glob("*.session")))
+            out.extend(sorted(data_root.glob("*.session-journal")))
+    elif server == "wet-mcp" and store_base is not None:
+        out.extend(_token_directory_paths(store_base / "tokens"))
+    elif server == "mnemo-mcp":
+        data_root = _server_data_root(server)
+        if data_root is not None:
+            out.extend(_token_directory_paths(data_root / "tokens"))
+            out.extend(_sub_credential_paths(data_root))
+    elif server == "better-code-review-graph":
+        data_root = _server_data_root(server)
+        if data_root is not None:
+            out.extend(_sub_credential_paths(data_root))
+    elif server == "imagine-mcp" and store_base is not None:
+        out.extend(_token_directory_paths(store_base / "cache"))
+
     return out
 
 
 def _per_server_data_paths(server: str) -> list[Path]:
-    base = _home() / f".{server}"
-    if not base.exists():
-        return []
     out: list[Path] = []
-    data = base / "data"
-    if data.exists():
-        out.append(data)
-    if server == "imagine-mcp":
-        diskcache = base / "diskcache"
-        if diskcache.exists():
-            out.append(diskcache)
-    return out
+    store_base = _plugin_store_base(server)
+    if store_base is not None:
+        data = store_base / "data"
+        if data.exists():
+            out.append(data)
+        if server == "imagine-mcp":
+            diskcache = store_base / "diskcache"
+            if diskcache.exists():
+                out.append(diskcache)
+
+    data_root = _server_data_root(server)
+    if data_root is not None and data_root.exists():
+        out.append(data_root)
+    return list(dict.fromkeys(out))
 
 
 def _enumerate(servers: list[str], keep_data: bool) -> list[Path]:
     paths = list(_config_paths())
-    for srv in servers:
-        paths.extend(_per_plugin_store_paths(srv))
-        paths.extend(_per_server_token_paths(srv))
+    for server in servers:
+        paths.extend(_per_plugin_store_paths(server))
+        paths.extend(_per_server_credential_paths(server))
         if not keep_data:
-            paths.extend(_per_server_data_paths(srv))
-    return paths
+            paths.extend(_per_server_data_paths(server))
+    return list(dict.fromkeys(paths))
 
 
 def _confirm(assume_yes: bool) -> bool:
@@ -366,7 +427,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Preserve app data (SQLite, diskcache, SearXNG, GDrive cached docs). Default: ON.",
     )
     parser.add_argument("--no-keep-data", dest="keep_data", action="store_false", help="Wipe app data dirs too.")
-    parser.add_argument("--server", default=None, help="Limit to one server name. Default: all 9.")
+    parser.add_argument(
+        "--server",
+        default=None,
+        help="Limit to one full server name or alias. Default: all 9.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="List paths that would be removed.")
     parser.add_argument("--verbose", action="store_true", help="Print each removed path.")
     parser.add_argument(
@@ -391,10 +456,15 @@ def main(argv: list[str] | None = None) -> int:
         kill_daemons(verbose=args.verbose)
         return 0
 
-    servers = [args.server] if args.server else list(ALL_SERVERS)
-    if args.server and args.server not in ALL_SERVERS:
-        print(f"unknown server: {args.server}; allowed: {ALL_SERVERS}", file=sys.stderr)
-        return 2
+    if args.server:
+        server = SERVER_ALIASES.get(args.server, args.server)
+        if server not in SERVER_STORE_PLUGINS:
+            allowed = [*SERVER_ALIASES, *ALL_SERVERS]
+            print(f"unknown server: {args.server}; allowed: {allowed}", file=sys.stderr)
+            return 2
+        servers = [server]
+    else:
+        servers = list(ALL_SERVERS)
 
     paths = _enumerate(servers, args.keep_data)
 
