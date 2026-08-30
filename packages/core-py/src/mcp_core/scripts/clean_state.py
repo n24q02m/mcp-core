@@ -35,6 +35,7 @@ ALL_SERVERS = [
     "better-email-mcp",
     "better-telegram-mcp",
     "better-godot-mcp",
+    "better-workspace-mcp",
 ]
 
 
@@ -365,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Preserve app data (SQLite, diskcache, SearXNG, GDrive cached docs). Default: ON.",
     )
     parser.add_argument("--no-keep-data", dest="keep_data", action="store_false", help="Wipe app data dirs too.")
-    parser.add_argument("--server", default=None, help="Limit to one server name. Default: all 8.")
+    parser.add_argument("--server", default=None, help="Limit to one server name. Default: all 9.")
     parser.add_argument("--dry-run", action="store_true", help="List paths that would be removed.")
     parser.add_argument("--verbose", action="store_true", help="Print each removed path.")
     parser.add_argument(

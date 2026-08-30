@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_core.scripts.clean_state import (
+    ALL_SERVERS,
     _enumerate,
     kill_daemons,
     main,
@@ -36,6 +37,57 @@ def mock_fs(tmp_path, monkeypatch):
         "config": config_dir,
         "legacy": legacy_dir,
     }
+
+
+def test_all_servers_matches_canonical_mcp_server_scope():
+    assert len(ALL_SERVERS) == 9
+    assert set(ALL_SERVERS) == {
+        "better-notion-mcp",
+        "better-email-mcp",
+        "better-telegram-mcp",
+        "better-godot-mcp",
+        "better-workspace-mcp",
+        "wet-mcp",
+        "mnemo-mcp",
+        "better-code-review-graph",
+        "imagine-mcp",
+    }
+
+
+def test_main_default_wipes_workspace_credentials_but_keeps_data(mock_fs):
+    server_dir = mock_fs["home"] / ".better-workspace-mcp"
+    sub_dir = server_dir / "subs" / "user-a"
+    token_dir = sub_dir / "tokens"
+    data_dir = server_dir / "data"
+    token_dir.mkdir(parents=True)
+    data_dir.mkdir(parents=True)
+
+    config = server_dir / "config.json"
+    secret = server_dir / ".secret"
+    sub_config = sub_dir / "config.json"
+    token = token_dir / "google.json"
+    sentinel = data_dir / "keep.db"
+    config.write_text("{}")
+    secret.write_bytes(b"synthetic-key")
+    sub_config.write_text("{}")
+    token.write_text("{}")
+    sentinel.write_text("synthetic-app-data")
+
+    exit_code = main(["--yes"])
+
+    assert exit_code == 0
+    assert not config.exists()
+    assert not secret.exists()
+    assert not (server_dir / "subs").exists()
+    assert sentinel.read_text() == "synthetic-app-data"
+
+
+def test_help_reports_all_nine_servers(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--help"])
+
+    assert exc_info.value.code == 0
+    assert "Default: all 9." in capsys.readouterr().out
 
 
 def test_parse_lock_pid(tmp_path):
