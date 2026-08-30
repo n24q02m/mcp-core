@@ -40,6 +40,7 @@ describe('runHttpServer — JWT rejection', () => {
     const handle = await runHttpServer(makeMcpServer, {
       serverName,
       relaySchema: SCHEMA,
+      jwtIssuer: issuer,
       port: 0
     })
 
@@ -78,6 +79,7 @@ describe('runHttpServer — JWT rejection', () => {
     const handle = await runHttpServer(makeMcpServer, {
       serverName,
       relaySchema: SCHEMA,
+      jwtIssuer: serverIssuer,
       port: 0
     })
 
@@ -101,8 +103,12 @@ describe('runHttpServer — JWT rejection', () => {
 
   it('rejects a malformed token with 401 and invalid_token error', async () => {
     const serverName = `test-malformed-${Date.now()}`
+    const issuer = new JWTIssuer(serverName, tempDir)
+    await issuer.init()
+
     const handle = await runHttpServer(makeMcpServer, {
       serverName,
+      jwtIssuer: issuer,
       relaySchema: SCHEMA,
       port: 0
     })
