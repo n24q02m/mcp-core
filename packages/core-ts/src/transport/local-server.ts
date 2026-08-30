@@ -67,6 +67,8 @@ export interface RunHttpServerOptions {
   serverName: string
   /** If undefined, server has NO auth (e.g., godot). */
   relaySchema?: RelayConfigSchema
+  /** Optional pre-created issuer, primarily for isolated tests and custom key storage. */
+  jwtIssuer?: JWTIssuer
   /**
    * Mutually exclusive with `relaySchema`. When set, the OAuth app is the
    * delegated provider (upstream redirect or device_code) instead of the local
@@ -211,7 +213,8 @@ export async function runHttpServer(
       flow: options.delegatedOAuth.flow,
       upstream: options.delegatedOAuth.upstream,
       onTokenReceived: options.delegatedOAuth.onTokenReceived,
-      sessionKv: options.delegatedOAuth.sessionKv
+      sessionKv: options.delegatedOAuth.sessionKv,
+      jwtIssuer: options.jwtIssuer
     })
     jwtIssuer = oauthApp.jwtIssuer
   } else if (options.relaySchema) {
@@ -221,7 +224,8 @@ export async function runHttpServer(
       onCredentialsSaved: options.onCredentialsSaved,
       onStepSubmitted: options.onStepSubmitted,
       customCredentialFormHtml: options.customCredentialFormHtml,
-      stableSubEnabled: options.stableSubEnabled
+      stableSubEnabled: options.stableSubEnabled,
+      jwtIssuer: options.jwtIssuer
     })
     jwtIssuer = oauthApp.jwtIssuer
   }

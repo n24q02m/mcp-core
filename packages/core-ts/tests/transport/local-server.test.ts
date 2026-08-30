@@ -18,8 +18,9 @@ vi.mock('../../src/relay/browser.js', () => ({
 }))
 
 import type { RelayConfigSchema } from '../../src/auth/credential-form.js'
+import { JWTIssuer } from '../../src/oauth/jwt-issuer.js'
 import { tryOpenBrowser } from '../../src/relay/browser.js'
-import { type HttpServerHandle, runHttpServer } from '../../src/transport/local-server.js'
+import { type HttpServerHandle, type RunHttpServerOptions, runHttpServer } from '../../src/transport/local-server.js'
 
 const SCHEMA: RelayConfigSchema = {
   server: 'test-server',
@@ -33,26 +34,25 @@ function makeMcpServer(): McpServer {
 }
 
 let tempKeysDir: string
-let originalKeysEnv: string | undefined
+
+async function runTestHttpServer(options: RunHttpServerOptions): Promise<HttpServerHandle> {
+  const jwtIssuer =
+    options.relaySchema || options.delegatedOAuth ? new JWTIssuer(options.serverName, tempKeysDir) : undefined
+  if (jwtIssuer) await jwtIssuer.init()
+  return runHttpServer(makeMcpServer, { ...options, jwtIssuer })
+}
 
 beforeEach(() => {
   tempKeysDir = mkdtempSync(join(tmpdir(), 'mcp-core-local-server-'))
-  // JWTIssuer default keys directory is derived at import time via env-paths.
-  // We don't override it here -- createLocalOAuthApp creates its own JWTIssuer
-  // using defaults. Tests that care about isolated keys should inject their
-  // own JWTIssuer via createLocalOAuthApp directly (covered in OAuth tests).
-  originalKeysEnv = process.env.MCP_CORE_KEYS_DIR
 })
 
 afterEach(() => {
   rmSync(tempKeysDir, { recursive: true, force: true })
-  if (originalKeysEnv === undefined) delete process.env.MCP_CORE_KEYS_DIR
-  else process.env.MCP_CORE_KEYS_DIR = originalKeysEnv
 })
 
 describe('runHttpServer with relaySchema (OAuth enabled)', () => {
   it('serves /authorize form and requires Bearer on /mcp', async () => {
-    const handle: HttpServerHandle = await runHttpServer(makeMcpServer, {
+    const handle: HttpServerHandle = await runTestHttpServer({
       serverName: `test-oauth-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -93,7 +93,7 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
   // Parity with core-py test_local_server.py::test_threads_stable_sub_enabled_to_form.
   it('threads stableSubEnabled through to the credential form', async () => {
     async function authorizeHtml(stableSubEnabled: boolean): Promise<string> {
-      const handle = await runHttpServer(makeMcpServer, {
+      const handle = await runTestHttpServer({
         serverName: `test-stable-sub-${stableSubEnabled}-${Date.now()}`,
         relaySchema: SCHEMA,
         port: 0,
@@ -119,7 +119,7 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
   })
 
   it('returns 401 with invalid_token for malformed Bearer', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-invalid-token-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -144,7 +144,7 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
 
   it('invokes setupCompleteHook with a markComplete function', async () => {
     let receivedMark: ((key?: string) => void) | null = null
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-hook-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -177,7 +177,7 @@ describe('runHttpServer with relaySchema (OAuth enabled)', () => {
     // in /setup-status so the browser poll stops spinning.
     let receivedComplete: ((key?: string) => void) | null = null
     let receivedFailed: ((key?: string, error?: string) => void) | null = null
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-hook-2arg-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -216,7 +216,7 @@ describe('runHttpServer — RFC 9728 resource_metadata in 401 challenge (#260)',
 
   it('uses PUBLIC_URL when set (missing token)', async () => {
     process.env.PUBLIC_URL = 'https://wet-mcp.n24q02m.com'
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-rm-publicurl-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -238,7 +238,7 @@ describe('runHttpServer — RFC 9728 resource_metadata in 401 challenge (#260)',
 
   it('uses PUBLIC_URL when set (invalid token)', async () => {
     process.env.PUBLIC_URL = 'https://wet-mcp.n24q02m.com'
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-rm-publicurl-invalid-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -261,7 +261,7 @@ describe('runHttpServer — RFC 9728 resource_metadata in 401 challenge (#260)',
 
   it('normalizes a trailing slash on PUBLIC_URL', async () => {
     process.env.PUBLIC_URL = 'https://wet-mcp.n24q02m.com/'
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-rm-trailing-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -282,7 +282,7 @@ describe('runHttpServer — RFC 9728 resource_metadata in 401 challenge (#260)',
 
   it('derives from request Host when PUBLIC_URL is unset', async () => {
     delete process.env.PUBLIC_URL
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-rm-host-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -304,7 +304,7 @@ describe('runHttpServer — RFC 9728 resource_metadata in 401 challenge (#260)',
 
   it('uses X-Forwarded-Proto for the scheme when PUBLIC_URL is unset', async () => {
     delete process.env.PUBLIC_URL
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-rm-xfp-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -327,7 +327,7 @@ describe('runHttpServer — RFC 9728 resource_metadata in 401 challenge (#260)',
 
 describe('runHttpServer — root bootstrap UX', () => {
   it('GET / redirects to /authorize with valid PKCE params', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-root-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -348,7 +348,7 @@ describe('runHttpServer — root bootstrap UX', () => {
   })
 
   it('GET / followed produces credential form', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-root-follow-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -364,7 +364,7 @@ describe('runHttpServer — root bootstrap UX', () => {
   })
 
   it('GET /callback-done returns terminal success page', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-callback-done-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -382,7 +382,7 @@ describe('runHttpServer — root bootstrap UX', () => {
 
 describe('runHttpServer without relaySchema (godot-style)', () => {
   it('serves /mcp without auth and returns 404 for /authorize', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-no-auth-${Date.now()}`,
       port: 0
     })
@@ -406,7 +406,7 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
 
   it('does not invoke setupCompleteHook when relaySchema absent', async () => {
     let called = false
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-no-hook-${Date.now()}`,
       port: 0,
       setupCompleteHook: () => {
@@ -429,7 +429,7 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
     //  - V3 (current): per-session map keyed by Mcp-Session-Id, sessionId
     //    minted on initialize, reused on subsequent POSTs. Mirrors Python
     //    StreamableHTTPSessionManager + the SDK's stateful-mode example.
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-sequential-${Date.now()}`,
       port: 0
     })
@@ -626,7 +626,7 @@ describe('runHttpServer without relaySchema (godot-style)', () => {
 describe('runHttpServer — delegated mode', () => {
   it('serves /authorize via delegated redirect flow when delegatedOAuth set', async () => {
     const tokens: Array<Record<string, unknown>> = []
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: 'test-notion',
       delegatedOAuth: {
         flow: 'redirect',
@@ -652,7 +652,7 @@ describe('runHttpServer — delegated mode', () => {
 
   it('rejects when both relaySchema and delegatedOAuth are set', async () => {
     await expect(
-      runHttpServer(makeMcpServer, {
+      runTestHttpServer({
         serverName: 'test-conflict',
         relaySchema: SCHEMA,
         delegatedOAuth: {
@@ -698,7 +698,7 @@ describe('runHttpServer — openBrowser option', () => {
   }
 
   it('never opens a browser when openBrowser is false, even with no stored config', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-openbrowser-off-${Date.now()}`,
       delegatedOAuth,
       port: 0,
@@ -712,7 +712,7 @@ describe('runHttpServer — openBrowser option', () => {
   })
 
   it('still opens a browser when openBrowser is omitted (default unchanged)', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-openbrowser-default-${Date.now()}`,
       delegatedOAuth,
       port: 0
@@ -726,7 +726,7 @@ describe('runHttpServer — openBrowser option', () => {
   })
 
   it('opens a browser when openBrowser is explicitly true', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-openbrowser-on-${Date.now()}`,
       delegatedOAuth,
       port: 0,
@@ -743,7 +743,7 @@ describe('runHttpServer — openBrowser option', () => {
 describe('runHttpServer — authScope middleware', () => {
   it('invokes authScope middleware with JWT claims on authenticated /mcp request', async () => {
     const seen: Array<unknown> = []
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-scope-${Date.now()}`,
       relaySchema: SCHEMA,
       authScope: async (claims, next) => {
@@ -768,7 +768,7 @@ describe('runHttpServer — authScope middleware', () => {
 
 describe('runHttpServer lifecycle', () => {
   it('port 0 auto-assigns a non-zero port', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-autoport-${Date.now()}`,
       port: 0
     })
@@ -781,7 +781,7 @@ describe('runHttpServer lifecycle', () => {
   })
 
   it('/health responds with ok status regardless of auth config', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-health-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0
@@ -800,7 +800,7 @@ describe('runHttpServer lifecycle', () => {
     const customRenderer = (_schema: RelayConfigSchema, opts: { submitUrl: string }): string =>
       `<!DOCTYPE html><html><body><h1>Custom Forwarded</h1><a href="${opts.submitUrl}">x</a></body></html>`
 
-    const handle: HttpServerHandle = await runHttpServer(makeMcpServer, {
+    const handle: HttpServerHandle = await runTestHttpServer({
       serverName: `test-custom-form-${Date.now()}`,
       relaySchema: SCHEMA,
       port: 0,
@@ -826,7 +826,7 @@ describe('runHttpServer lifecycle', () => {
   })
 
   it('close() cleanly shuts down the HTTP server', async () => {
-    const handle = await runHttpServer(makeMcpServer, {
+    const handle = await runTestHttpServer({
       serverName: `test-close-${Date.now()}`,
       port: 0
     })
