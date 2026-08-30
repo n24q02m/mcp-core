@@ -1,7 +1,7 @@
 import os
 import shutil
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -785,15 +785,12 @@ def test_main_no_paths_found(mock_fs, monkeypatch, capsys):
     assert "Nothing to clean." in capsys.readouterr().out
 
 
-def test_ts_config_base_nt_mock(monkeypatch, tmp_path):
+def test_ts_config_base_windows_env_paths_root(monkeypatch, tmp_path):
+    monkeypatch.setattr("mcp_core.scripts.clean_state.sys.platform", "win32")
     monkeypatch.setattr(os, "name", "nt")
-    monkeypatch.setattr(os.environ, "get", lambda k, d=None: str(tmp_path) if k == "APPDATA" else d)
+    monkeypatch.setenv("APPDATA", str(tmp_path))
 
-    with patch("mcp_core.scripts.clean_state.Path") as mock_path:
-        from mcp_core.scripts.clean_state import _ts_config_base
-
-        _ts_config_base()
-        mock_path.assert_called()
+    assert _ts_config_base() == tmp_path / "mcp" / "Config"
 
 
 def test_home_and_python_config_base():
