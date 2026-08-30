@@ -102,15 +102,18 @@ def test_main_removes_telegram_sessions_but_keeps_app_data(mock_fs, monkeypatch)
     data_dir.mkdir()
     session = data_dir / "default.session"
     journal = data_dir / "default.session-journal"
+    secret = data_dir / ".secret"
     app_data = data_dir / "messages.db"
     session.write_text("synthetic-session")
     journal.write_text("synthetic-journal")
+    secret.write_bytes(b"synthetic-machine-key")
     app_data.write_text("synthetic-app-data")
     monkeypatch.setenv("TELEGRAM_DATA_DIR", str(data_dir))
 
     assert main(["--server", "telegram", "--yes"]) == 0
     assert not session.exists()
     assert not journal.exists()
+    assert not secret.exists()
     assert app_data.read_text() == "synthetic-app-data"
 
 

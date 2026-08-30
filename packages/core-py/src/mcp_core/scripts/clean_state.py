@@ -199,6 +199,9 @@ def _per_server_credential_paths(server: str) -> list[Path]:
     elif server == "better-telegram-mcp":
         data_root = _server_data_root(server)
         if data_root is not None and data_root.is_dir():
+            secret = data_root / ".secret"
+            if secret.exists():
+                out.append(secret)
             out.extend(sorted(data_root.glob("*.session")))
             out.extend(sorted(data_root.glob("*.session-journal")))
     elif server == "wet-mcp" and store_base is not None:
