@@ -4,6 +4,9 @@
   "workspaces": [
     "packages/core-ts"
   ],
+  "trustedDependencies": [
+    "better-sqlite3"
+  ],
   "packageManager": "bun@1.4.0",
   "engines": {
     "node": ">=24.19.0"
