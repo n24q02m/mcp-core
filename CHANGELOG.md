@@ -2,6 +2,58 @@
 
 <!-- version list -->
 
+## v1.23.2-beta.1 (2026-08-31)
+
+### Bug Fixes
+
+- Align ty lower bound with lock ([#782](https://github.com/n24q02m/mcp-core/pull/782),
+  [`0c1b7ec`](https://github.com/n24q02m/mcp-core/commit/0c1b7ecbfdf69dcae661e635877ae5361e518844))
+
+- Bound clean-state data deletion ([#784](https://github.com/n24q02m/mcp-core/pull/784),
+  [`7ab9f44`](https://github.com/n24q02m/mcp-core/commit/7ab9f44d4d8bdd726dd7ab399af0e747c39006e6))
+
+- Clear all source-backed credential state ([#781](https://github.com/n24q02m/mcp-core/pull/781),
+  [`f2d5be6`](https://github.com/n24q02m/mcp-core/commit/f2d5be6b4a538a5adc93761a2ed8f3de737af94a))
+
+- Clear Telegram data-root secret ([#780](https://github.com/n24q02m/mcp-core/pull/780),
+  [`3b74f20`](https://github.com/n24q02m/mcp-core/commit/3b74f207ff0ba5ff6b151fe0bb58aff53e74c4e6))
+
+- Declare better-sqlite3 as trusted dependency
+  ([#786](https://github.com/n24q02m/mcp-core/pull/786),
+  [`7f9bba6`](https://github.com/n24q02m/mcp-core/commit/7f9bba6695eab01fb413b6f9daf1f904fd76ed98))
+
+- Include workspace in clean-state scope ([#778](https://github.com/n24q02m/mcp-core/pull/778),
+  [`d8c31bf`](https://github.com/n24q02m/mcp-core/commit/d8c31bf7b00ee4f0f19098a8c0dd0a59adde203f))
+
+- Isolate clean-state platform detection ([#781](https://github.com/n24q02m/mcp-core/pull/781),
+  [`f2d5be6`](https://github.com/n24q02m/mcp-core/commit/f2d5be6b4a538a5adc93761a2ed8f3de737af94a))
+
+- Load static model catalog without importing litellm
+  ([#786](https://github.com/n24q02m/mcp-core/pull/786),
+  [`7f9bba6`](https://github.com/n24q02m/mcp-core/commit/7f9bba6695eab01fb413b6f9daf1f904fd76ed98))
+
+- Resolve clean-state aliases and storage paths
+  ([#779](https://github.com/n24q02m/mcp-core/pull/779),
+  [`bf895a2`](https://github.com/n24q02m/mcp-core/commit/bf895a280d1d75698d1533b9db0068ec399d8f9d))
+
+- Simulate Windows clean-state paths in tests ([#781](https://github.com/n24q02m/mcp-core/pull/781),
+  [`f2d5be6`](https://github.com/n24q02m/mcp-core/commit/f2d5be6b4a538a5adc93761a2ed8f3de737af94a))
+
+- **deps**: Lock file maintenance ([#783](https://github.com/n24q02m/mcp-core/pull/783),
+  [`c5051f6`](https://github.com/n24q02m/mcp-core/commit/c5051f688b5d9ebb3b7583db82cefd5e94b3fb88))
+
+- **deps**: Lock file maintenance ([#777](https://github.com/n24q02m/mcp-core/pull/777),
+  [`e504f3b`](https://github.com/n24q02m/mcp-core/commit/e504f3b79483e832886634d9fecf63bc517eb925))
+
+- **deps**: Update patch dependencies ([#782](https://github.com/n24q02m/mcp-core/pull/782),
+  [`0c1b7ec`](https://github.com/n24q02m/mcp-core/commit/0c1b7ecbfdf69dcae661e635877ae5361e518844))
+
+### Testing
+
+- Isolate local HTTP JWT keys ([#785](https://github.com/n24q02m/mcp-core/pull/785),
+  [`e49d8c2`](https://github.com/n24q02m/mcp-core/commit/e49d8c20cf776ccaa8e043bb8569355b452cef06))
+
+
 ## v1.23.1 (2026-08-29)
 
 ### Bug Fixes
