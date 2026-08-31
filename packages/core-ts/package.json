@@ -86,6 +86,9 @@
     "env-paths": "^4.0.0",
     "jose": "^6.2.10"
   },
+  "trustedDependencies": [
+    "better-sqlite3"
+  ],
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
     "@types/better-sqlite3": "^9.6.0",
