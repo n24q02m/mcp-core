@@ -1043,10 +1043,10 @@ requires-dist = [
     { name = "authlib", specifier = ">=1.7.2" },
     { name = "cryptography", specifier = ">=50.0.0" },
     { name = "fastmcp", specifier = ">=3.4.7" },
-    { name = "filelock", specifier = ">=3.32.3" },
+    { name = "filelock", specifier = ">=3.32.4" },
     { name = "httpcore", specifier = ">=1.0.9" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.97.0" },
+    { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.98.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "platformdirs", specifier = ">=4.11.3" },
     { name = "pydantic", specifier = ">=2.12.5,<3" },
@@ -1064,7 +1064,7 @@ dev = [
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "ruff", specifier = ">=0.16.4" },
     { name = "telethon", specifier = ">=1.44.0" },
-    { name = "ty", specifier = ">=0.0.73" },
+    { name = "ty", specifier = ">=0.0.74" },
 ]
 
 [[package]]
