@@ -7,8 +7,10 @@ absent. Every check here must therefore be graceful-on-missing: unknown model
 """
 
 from __future__ import annotations
-
+import importlib.util
+import json
 import os
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -19,6 +21,7 @@ class ModelCapabilityError(ValueError):
 
 
 def _get_litellm() -> Any:
+    os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
     try:
         import litellm
     except ImportError as e:  # pragma: no cover - exercised in no-extra CI leg
@@ -29,6 +32,39 @@ def _get_litellm() -> Any:
     litellm.suppress_debug_info = True
     litellm.turn_off_message_logging = True
     return litellm
+
+
+_MODEL_COST_MAP: dict[str, Any] | None = None
+
+
+def _get_model_cost_map() -> dict[str, Any]:
+    global _MODEL_COST_MAP
+    if _MODEL_COST_MAP is not None:
+        return _MODEL_COST_MAP
+
+    # Fast path: load static bundled JSON directly without importing litellm
+    try:
+        spec = importlib.util.find_spec("litellm")
+        if spec and spec.origin:
+            litellm_dir = Path(spec.origin).parent
+            for filename in (
+                "model_prices_and_context_window_backup.json",
+                "cost.json",
+                "model_prices_and_context_window.json",
+            ):
+                candidate = litellm_dir / filename
+                if candidate.is_file():
+                    _MODEL_COST_MAP = json.loads(candidate.read_text(encoding="utf-8"))
+                    return _MODEL_COST_MAP
+    except Exception:
+        pass
+
+    try:
+        cost = _get_litellm().model_cost
+        _MODEL_COST_MAP = cost if isinstance(cost, dict) else {}
+    except RuntimeError:
+        _MODEL_COST_MAP = {}
+    return _MODEL_COST_MAP
 
 
 # Env-key -> litellm provider prefix (for configured_only filtering).
@@ -62,7 +98,7 @@ _PROVIDER_ENV_KEYS: dict[str, str] = {
 
 
 def _registry_entry(model: str) -> dict | None:
-    cost = _get_litellm().model_cost
+    cost = _get_model_cost_map()
     entry = cost.get(model)
     if entry is not None:
         return entry
@@ -133,7 +169,7 @@ def list_models(
     """List registry models, filtered by mode + configured provider keys."""
     configured = _configured_providers() if configured_only else None
     out: list[dict] = []
-    for key, entry in _get_litellm().model_cost.items():
+    for key, entry in _get_model_cost_map().items():
         if not isinstance(entry, dict):
             continue
         mode = entry.get("mode")
