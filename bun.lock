@@ -17,13 +17,16 @@
       "devDependencies": {
         "@biomejs/biome": "^2.5.10",
         "@types/better-sqlite3": "^9.6.0",
-        "@types/node": "^26.2.0",
+        "@types/node": "^26.3.0",
         "@vitest/coverage-v8": "^4.1.11",
         "typescript": "^7.0.2",
         "vitest": "^4.1.11",
       },
     },
   },
+  "trustedDependencies": [
+    "better-sqlite3",
+  ],
   "packages": {
     "@babel/helper-string-parser": ["@babel/helper-string-parser@7.29.7", "", {}, "sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw=="],
 
