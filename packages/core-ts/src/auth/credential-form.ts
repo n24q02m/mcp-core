@@ -1229,6 +1229,9 @@ const CARD_GROUP_SCRIPT = `    <script>
                 var codeEl = document.createElement("strong");
                 codeEl.style.fontSize = "1.2em";
                 codeEl.style.letterSpacing = "0.1em";
+                codeEl.style.userSelect = "all";
+                codeEl.style.cursor = "copy";
+                codeEl.title = "Click to select";
                 codeEl.textContent = nextStep.user_code;
                 statusBox.appendChild(codeEl);
                 statusBox.appendChild(document.createElement("br"));
@@ -1899,7 +1902,8 @@ export function renderCredentialForm(schema: RelayConfigSchema, options: RenderO
                                     var codeLabel = document.createTextNode("Enter code: ");
                                     statusBox.appendChild(codeLabel);
                                     var codeEl = document.createElement("strong");
-                                    codeEl.style.cssText = "font-size:1.2em;letter-spacing:0.1em";
+                                    codeEl.style.cssText = "font-size:1.2em;letter-spacing:0.1em;user-select:all;cursor:copy";
+                                    codeEl.title = "Click to select";
                                     codeEl.textContent = ns.user_code;
                                     statusBox.appendChild(codeEl);
                                     statusBox.appendChild(document.createElement("br"));

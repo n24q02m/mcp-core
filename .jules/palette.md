@@ -39,3 +39,6 @@ Note on dates: three entries above carried impossible dates (`$(date +%Y-%m-%d)`
 
 **Learning:** When generating HTML forms from configuration schemas, it is an accessibility best practice to explicitly link the top-level form element to its descriptive text using `aria-describedby` if one exists. While the flat credential form already linked the description (e.g. `<p class="server-description" id="server-desc">`) to the `<form>` tag, the tabbed credential form was missing this explicit association, which could cause screen readers to miss important context.
 **Action:** Always link form elements to their descriptive text using `aria-describedby` pointing to the ID of the description paragraph, and maintain parity across form variations (flat, tabbed, card groups).
+## 2026-10-24 - Instantly selectable device codes
+**Learning:** Users often struggle to precisely select short alphanumeric codes (like OAuth device codes) rendered as plain text, leading to partial copies and failed auth flows.
+**Action:** Always apply `user-select: all;` and `cursor: copy;` to short, non-editable codes that users are expected to copy. This allows one-click selection of the entire string, significantly reducing friction in cross-device or out-of-band auth flows.
