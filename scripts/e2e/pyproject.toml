@@ -8,8 +8,8 @@ dependencies = [
     # botocore[crt] required so boto3 can use the ``aws login`` credential
     # provider on hosts authenticated via SSO/identity center. Without crt
     # SSM client raises MissingDependencyException at first call.
-    "boto3>=1.43.78",
-    "botocore[crt]>=1.43.78",
+    "boto3>=1.43.80",
+    "botocore[crt]>=1.43.80",
     "pyyaml>=6.0.3",
     "jinja2>=3.1.6",
     # Capped at the major: this driver drives the SDK's transport internals
@@ -18,7 +18,7 @@ dependencies = [
     # E2E job dies on an ImportError with nothing in the diff to explain it --
     # exactly what happened on 2026-07-31. The other pins here ride on stable
     # public surface and need no ceiling.
-    "mcp>=2.0.0,<3",
+    "mcp>=2.1.1,<3",
     # Imported directly by client_runner. It is the transport's HTTP layer and
     # a different package from httpx, which the rest of the driver still uses.
     "httpx2>=2.12.0,<3",
