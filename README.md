@@ -94,7 +94,8 @@ These modules ship in **both** languages with a matching public API
   browser-rendered credential form), `render_credential_form`, the optional
   shared-password gate at `/login` (`MCP_RELAY_PASSWORD`, empty disables it),
   and `create_delegated_oauth_app` for upstream-redirect / device-code
-  multi-user flows.
+  multi-user flows. `MCP_JWT_SIGNING_SECRET` domain-separates JWT signing from
+  credential encryption; existing deployments fall back to `CREDENTIAL_SECRET`.
 - **`oauth/`** — OAuth 2.1 primitives consumed by `auth/`: `JWTIssuer`
   (RS256), `SqliteUserStore` for multi-user mode, and `OAuthProvider`, the
   legacy `mcp-relay-core` PKCE-over-relay provider retained for migration.

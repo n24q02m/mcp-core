@@ -89,6 +89,33 @@ class TestBuildLocalApp:
         assert isinstance(app, Starlette)
         assert jwt_issuer is not None
 
+    def test_jwt_signing_secret_rotates_without_vault_secret(
+        self, monkeypatch, mcp: FastMCP, relay_schema: dict, tmp_path: Path
+    ) -> None:
+        import jwt
+
+        monkeypatch.setenv("CREDENTIAL_SECRET", "unchanged-vault-secret")
+        monkeypatch.setenv("MCP_JWT_SIGNING_SECRET", "jwt-signing-secret-a")
+        _old_app, old_issuer = build_local_app(
+            mcp=mcp,
+            server_name="test-local-server",
+            relay_schema=relay_schema,
+            jwt_keys_dir=tmp_path / "old-keys",
+        )
+        old_token = old_issuer.issue_access_token(sub="existing-sub")
+
+        monkeypatch.setenv("MCP_JWT_SIGNING_SECRET", "jwt-signing-secret-b")
+        _new_app, new_issuer = build_local_app(
+            mcp=mcp,
+            server_name="test-local-server",
+            relay_schema=relay_schema,
+            jwt_keys_dir=tmp_path / "new-keys",
+        )
+
+        assert old_issuer._kid != new_issuer._kid
+        with pytest.raises(jwt.InvalidSignatureError):
+            new_issuer.verify_access_token(old_token)
+
     def test_has_oauth_routes(self, mcp: FastMCP, relay_schema: dict, tmp_path: Path) -> None:
         app, _ = build_local_app(
             mcp=mcp,

@@ -1,17 +1,15 @@
-"""Factory-fallback parity with core-ts: when no ``JWTIssuer`` is injected,
-``create_local_oauth_app`` / ``create_delegated_oauth_app`` must construct one
-in EdDSA mode if ``CREDENTIAL_SECRET`` is set (HTTP multi-user), so the derived
-stable signing key is used even when the consumer relies on the factory's own
-fallback issuer. Without the env var the fallback keeps the RS256-on-disk local
-path unchanged (covered by the issuer's own ``TestLocalRsaModeUnchanged``).
+"""OAuth-app fallback issuer secret selection.
 
-EdDSA mode derives the key from ``CREDENTIAL_SECRET`` and never touches disk, so
-these tests write no PEM files. ``server_name="wet-mcp"`` + the canonical secret
-reproduce the cross-language thumbprint kid from ``crypto-vectors.json``.
+``MCP_JWT_SIGNING_SECRET`` takes precedence so operators can revoke OAuth
+tokens without rotating ``CREDENTIAL_SECRET`` (which also encrypts per-sub
+vaults and derives stable subjects). Existing deployments retain the
+``CREDENTIAL_SECRET`` fallback and cross-language signing-key parity.
 """
 
 from __future__ import annotations
 
+import jwt
+import pytest
 from mcp_core.auth.delegated_oauth_app import UpstreamOAuthConfig, create_delegated_oauth_app
 from mcp_core.auth.local_oauth_app import create_local_oauth_app
 
@@ -20,6 +18,7 @@ _PARITY_KID = "r71l8IICMLZykZU5"
 
 
 def test_local_factory_fallback_derives_eddsa_from_credential_secret(monkeypatch):
+    monkeypatch.delenv("MCP_JWT_SIGNING_SECRET", raising=False)
     monkeypatch.setenv("CREDENTIAL_SECRET", _SECRET)
     _app, issuer = create_local_oauth_app(server_name="wet-mcp", relay_schema={"fields": []})
     assert issuer.alg == "EdDSA"
@@ -27,6 +26,7 @@ def test_local_factory_fallback_derives_eddsa_from_credential_secret(monkeypatch
 
 
 def test_delegated_factory_fallback_derives_eddsa_from_credential_secret(monkeypatch):
+    monkeypatch.delenv("MCP_JWT_SIGNING_SECRET", raising=False)
     monkeypatch.setenv("CREDENTIAL_SECRET", _SECRET)
     cfg = UpstreamOAuthConfig(
         token_url="https://example.test/token",
@@ -42,3 +42,28 @@ def test_delegated_factory_fallback_derives_eddsa_from_credential_secret(monkeyp
     )
     assert issuer.alg == "EdDSA"
     assert issuer._kid == _PARITY_KID
+
+
+def test_factories_prefer_domain_separated_jwt_signing_secret(monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_SECRET", _SECRET)
+    monkeypatch.setenv("MCP_JWT_SIGNING_SECRET", "jwt-signing-secret-a")
+    _local_app, old_issuer = create_local_oauth_app(server_name="wet-mcp", relay_schema={"fields": []})
+    old_token = old_issuer.issue_access_token(sub="existing-sub")
+
+    monkeypatch.setenv("MCP_JWT_SIGNING_SECRET", "jwt-signing-secret-b")
+    cfg = UpstreamOAuthConfig(
+        token_url="https://example.test/token",
+        client_id="upstream-client",
+        scopes=["read"],
+        authorize_url="https://example.test/authorize",
+    )
+    _delegated_app, new_issuer = create_delegated_oauth_app(
+        server_name="wet-mcp",
+        flow="redirect",
+        upstream=cfg,
+        on_token_received=lambda tokens: None,
+    )
+
+    assert old_issuer._kid != new_issuer._kid
+    with pytest.raises(jwt.InvalidSignatureError):
+        new_issuer.verify_access_token(old_token)

@@ -250,18 +250,18 @@ def build_local_app(
 
     # Build JWT issuer with optional custom keys directory.
     #
-    # When CREDENTIAL_SECRET is set (HTTP multi-user mode) the issuer derives a
-    # stable EdDSA signing key from it (no disk, no volume), so OAuth tokens
-    # survive container recreation. When it is unset (local single-user) the
-    # issuer keeps the RSA-2048-on-disk path.
+    # MCP_JWT_SIGNING_SECRET domain-separates OAuth signing from credential
+    # encryption and stable-sub derivation. Rotating it invalidates outstanding
+    # JWTs without orphaning per-sub vault records. CREDENTIAL_SECRET remains
+    # the compatibility fallback; unset keeps the RSA-on-disk local path.
     import os
 
     jwt_issuer_kwargs: dict[str, Any] = {"server_name": server_name}
     if jwt_keys_dir is not None:
         jwt_issuer_kwargs["keys_dir"] = jwt_keys_dir
-    credential_secret = os.environ.get("CREDENTIAL_SECRET")
-    if credential_secret:
-        jwt_issuer_kwargs["credential_secret"] = credential_secret
+    jwt_signing_secret = os.environ.get("MCP_JWT_SIGNING_SECRET") or os.environ.get("CREDENTIAL_SECRET")
+    if jwt_signing_secret:
+        jwt_issuer_kwargs["credential_secret"] = jwt_signing_secret
     jwt_issuer = JWTIssuer(**jwt_issuer_kwargs)
 
     if delegated_oauth is not None:
