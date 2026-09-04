@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v1.24.0-beta.1 (2026-09-04)
+
+### Bug Fixes
+
+- Separate JWT signing secret from vault key ([#791](https://github.com/n24q02m/mcp-core/pull/791),
+  [`2078e83`](https://github.com/n24q02m/mcp-core/commit/2078e83bb3f4212137c498b9add8f8ee173f9900))
+
+- **deps**: Update @types/node to ^26.3.0 ([#788](https://github.com/n24q02m/mcp-core/pull/788),
+  [`088631b`](https://github.com/n24q02m/mcp-core/commit/088631bfc6d50486a4fa5526d1ac7a8e9c6f4be4))
+
+- **deps**: Update patch dependencies ([#787](https://github.com/n24q02m/mcp-core/pull/787),
+  [`0dfca26`](https://github.com/n24q02m/mcp-core/commit/0dfca268d864543e500e39ba2b849221091e12bf))
+
+### Features
+
+- Instantly selectable device codes in OAuth flow
+  ([#790](https://github.com/n24q02m/mcp-core/pull/790),
+  [`de2034c`](https://github.com/n24q02m/mcp-core/commit/de2034c519a0c37af2c3e3b6243d77d1f560d871))
+
+
 ## v1.23.2 (2026-08-31)
 
 
