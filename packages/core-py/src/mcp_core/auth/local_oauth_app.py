@@ -149,10 +149,10 @@ def create_local_oauth_app(
         transport layer to verify Bearer tokens on ``/mcp`` requests.
     """
     if jwt_issuer is None:
-        # Mirror core-ts: in HTTP multi-user mode the fallback issuer derives a
-        # stable EdDSA key from CREDENTIAL_SECRET (survives container
-        # recreation); unset -> RS256-on-disk local path.
-        jwt_issuer = JWTIssuer(server_name=server_name, credential_secret=os.environ.get("CREDENTIAL_SECRET"))
+        # A dedicated signing secret can rotate OAuth JWTs without rotating the
+        # credential-vault/stable-sub secret. Fall back for existing deployments.
+        signing_secret = os.environ.get("MCP_JWT_SIGNING_SECRET") or os.environ.get("CREDENTIAL_SECRET")
+        jwt_issuer = JWTIssuer(server_name=server_name, credential_secret=signing_secret)
 
     # In-memory stores keyed by nonce / auth_code.
     # Each entry includes a ``created_at`` timestamp for TTL expiry.

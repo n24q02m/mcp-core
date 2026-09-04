@@ -260,8 +260,8 @@ function getBaseUrl(req: IncomingMessage): string {
  * device code flow).
  */
 export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promise<LocalOAuthAppResult> {
-  const jwtIssuer =
-    options.jwtIssuer ?? new JWTIssuer(options.serverName, undefined, process.env.CREDENTIAL_SECRET ?? null)
+  const signingSecret = process.env.MCP_JWT_SIGNING_SECRET ?? process.env.CREDENTIAL_SECRET ?? null
+  const jwtIssuer = options.jwtIssuer ?? new JWTIssuer(options.serverName, undefined, signingSecret)
   await jwtIssuer.init()
 
   // In-memory stores keyed by nonce / auth_code. Each entry has a ``createdAt``
