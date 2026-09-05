@@ -22,7 +22,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "fastmcp>=3.4.7",
+    # Transport adapters use the MCP SDK 1.x FastMCP/Streamable HTTP API.
+    # FastMCP 4 resolves MCP SDK 2, which removes those imported modules.
+    "fastmcp>=3.4.7,<4",
+    "mcp>=1.29.1,<2",
     "httpx>=0.28.1",
     "httpcore>=1.0.9",
     "cryptography>=50.0.1",
