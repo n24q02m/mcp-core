@@ -50,8 +50,9 @@ def get_mode(server_name: str) -> ServerMode:
         return "local"
 
     # Has keys other than _mode (or _mode with different value) -> configured
-    non_mode_keys = [k for k in config if k != _MODE_KEY]
-    if non_mode_keys:
+    # Optimization: Use O(1) length and presence check instead of O(N) list comprehension
+    # to avoid unnecessary memory allocation and iteration over the entire config dictionary.
+    if len(config) > (1 if _MODE_KEY in config else 0):
         return "configured"
 
     return None
