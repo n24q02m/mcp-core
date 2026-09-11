@@ -2,6 +2,57 @@
 
 <!-- version list -->
 
+## v1.24.0 (2026-09-11)
+
+### Bug Fixes
+
+- Preserve core compatibility
+  ([`c9ecfc0`](https://github.com/n24q02m/mcp-core/commit/c9ecfc03480929758afb41e48a12282420227dc8))
+
+- **deps**: Lock file maintenance ([#808](https://github.com/n24q02m/mcp-core/pull/808),
+  [`ee26bef`](https://github.com/n24q02m/mcp-core/commit/ee26befdf4bd306fb059fe2eee08676bf59f16b1))
+
+- **deps**: Lock file maintenance ([#801](https://github.com/n24q02m/mcp-core/pull/801),
+  [`022af68`](https://github.com/n24q02m/mcp-core/commit/022af6873701375bc970ff6c4f3c8cb0a6fe3f3b))
+
+- **deps**: Update @types/node to ^26.4.0 ([#793](https://github.com/n24q02m/mcp-core/pull/793),
+  [`d9f8a49`](https://github.com/n24q02m/mcp-core/commit/d9f8a499808f388cf7d9c5f5ba573d57e349b2f8))
+
+- **deps**: Update dawidd6/action-send-mail action to v19
+  ([#804](https://github.com/n24q02m/mcp-core/pull/804),
+  [`36db79e`](https://github.com/n24q02m/mcp-core/commit/36db79ed27627250b8b0bf3d085f593ad63991de))
+
+- **deps**: Update dawidd6/action-send-mail action to v20
+  ([#806](https://github.com/n24q02m/mcp-core/pull/806),
+  [`eafd8a3`](https://github.com/n24q02m/mcp-core/commit/eafd8a305512acac5acdd760efc94cc124040866))
+
+- **deps**: Update minor dependencies
+  ([`b15421a`](https://github.com/n24q02m/mcp-core/commit/b15421a1d980849409af548448ae3b8260966d3d))
+
+- **deps**: Update node.js to >=24.20.0 ([#794](https://github.com/n24q02m/mcp-core/pull/794),
+  [`91d01d0`](https://github.com/n24q02m/mcp-core/commit/91d01d030b5550ef0d07d603b303ea9db60d0d82))
+
+- **deps**: Update patch dependencies ([#805](https://github.com/n24q02m/mcp-core/pull/805),
+  [`b11797f`](https://github.com/n24q02m/mcp-core/commit/b11797fa84a3a6765f6320fc2f4a3e0ff78acf39))
+
+- **deps**: Update patch dependencies
+  ([`aae642f`](https://github.com/n24q02m/mcp-core/commit/aae642f171cbae454dccea03ff4a1b91fe9a7fcf))
+
+- **deps**: Update vitest monorepo to v5 ([#795](https://github.com/n24q02m/mcp-core/pull/795),
+  [`f5f0da2`](https://github.com/n24q02m/mcp-core/commit/f5f0da241d5659da5305db79d444271675775ca5))
+
+### Chores
+
+- Pin BSR action to v1.6.0 stable (69319fae) - R05 fleet pin refresh
+  ([#809](https://github.com/n24q02m/mcp-core/pull/809),
+  [`d1f7670`](https://github.com/n24q02m/mcp-core/commit/d1f76707d9e19e8d68e5fb5b3fd65484c189501b))
+
+### Continuous Integration
+
+- Wire unified merge=release ladder (push staging=beta, main=stable)
+  ([`a04ad36`](https://github.com/n24q02m/mcp-core/commit/a04ad3630ee665e5b46c1fd90aa1c840803406b0))
+
+
 ## v1.24.0-beta.1 (2026-09-04)
 
 ### Bug Fixes
