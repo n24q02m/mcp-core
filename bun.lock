@@ -12,7 +12,7 @@
         "@modelcontextprotocol/sdk": "^1.30.0",
         "better-sqlite3": "^13.0.3",
         "env-paths": "^4.0.0",
-        "jose": "^6.2.10",
+        "jose": "^6.2.12",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.12",
