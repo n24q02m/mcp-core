@@ -22,7 +22,7 @@
  */
 
 import { createHash, createPrivateKey } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import * as jose from 'jose'
@@ -88,6 +88,9 @@ export class JWTIssuer {
 
   private async loadOrGenerateRsaKeys(): Promise<void> {
     mkdirSync(this.keysDir, { recursive: true, mode: 0o700 })
+    if (process.platform !== 'win32') {
+      chmodSync(this.keysDir, 0o700)
+    }
 
     if (existsSync(this.privateKeyPath) && existsSync(this.publicKeyPath)) {
       const privatePem = readFileSync(this.privateKeyPath, 'utf-8')

@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import envPaths from 'env-paths'
 import {
@@ -152,6 +152,9 @@ async function saveStore(store: ConfigStore): Promise<void> {
   const dir = dirname(configPath)
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true, mode: 0o700 })
+    if (process.platform !== 'win32') {
+      await chmod(dir, 0o700)
+    }
   }
 
   let salt = cachedSalt

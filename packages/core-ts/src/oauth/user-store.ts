@@ -4,7 +4,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
+import { chmodSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import Database from 'better-sqlite3'
 
@@ -30,6 +30,9 @@ export class SqliteUserStore implements IUserCredentialStore {
     // 0o700 = owner read+write+exec only; group/other denied. This is the
     // secure default for a credential store directory.
     mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 })
+    if (process.platform !== 'win32') {
+      chmodSync(dirname(dbPath), 0o700)
+    }
 
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
