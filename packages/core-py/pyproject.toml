@@ -39,10 +39,13 @@ dependencies = [
     # Must stay a range: this is a published library, so an exact `==` pin here
     # propagates to every consumer's resolve.
     "pydantic>=2.12.5,<3",
-    # pydantic-settings 2.15 warns when MCP SDK Settings resolves its lifespan
-    # forward reference. Keep the transitive runtime warning-free until upstream
-    # rebuilds that model; this bound also protects downstream MCP servers.
-    "pydantic-settings>=2.14.2,<2.15",
+    # pydantic-settings 2.15 emits a usage warning when the MCP SDK Settings
+    # (BaseSettings, Generic) resolves its lifespan forward reference at
+    # instantiation — warning only, no API break, and the SDK itself pins no
+    # upper bound. Accepted as benign; mcp-core uses no pydantic-settings
+    # surface directly, so the bound stays wide (<3, matching pydantic above
+    # and litellm's own <3.0) to let downstream servers resolve 2.15+.
+    "pydantic-settings>=2.14.2,<3",
     "loguru>=0.7.3",
     "platformdirs>=4.11.7",
     "tomli-w>=1.2.0",
