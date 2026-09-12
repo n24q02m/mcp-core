@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v1.24.1 (2026-09-12)
+
+### Bug Fixes
+
+- **deps**: Relax pydantic-settings bound to <3
+  ([#811](https://github.com/n24q02m/mcp-core/pull/811),
+  [`07d5710`](https://github.com/n24q02m/mcp-core/commit/07d5710aaf3f32274aa129870876af251a18fd73))
+
+### Chores
+
+- Pin BSR action to v1.6.1 stable (6e688489) ([#810](https://github.com/n24q02m/mcp-core/pull/810),
+  [`7f17480`](https://github.com/n24q02m/mcp-core/commit/7f17480f913170d036e5c1617935b922a58a389f))
+
+- **release**: Fix stale two-branch comment (single-main lane)
+  ([`615c9dd`](https://github.com/n24q02m/mcp-core/commit/615c9dd24a0a97b258b0cd9cbb2b523d164cf293))
+
+- **release**: Single-main release lane (staging branch retired)
+  ([`c495ac7`](https://github.com/n24q02m/mcp-core/commit/c495ac750d787485356492ed0ceeeb8b07ae60fa))
+
+- **rulesets**: Align IaC with repo-bootstrap template
+  ([`832ce75`](https://github.com/n24q02m/mcp-core/commit/832ce75baa7c6862b55d13d204862a822883c1fa))
+
+
 ## v1.24.0 (2026-09-11)
 
 ### Bug Fixes
