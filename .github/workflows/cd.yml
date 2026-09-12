@@ -359,3 +359,32 @@ jobs:
           for repo in $TRACKING_DOWNSTREAM; do
             create_issue "$repo" "mcp-core" tracking || echo "::warning::Failed to create tracking issue in $repo"
           done
+
+          # Close-loop: any still-open "bump <pkg> to X" tracker with X != VERSION is stale
+          # the moment this release ships (versions are monotonic), so close it as superseded.
+          # Without this, the tracker queue regenerates on every release wave.
+          sweep_superseded() {
+            local repo="$1"
+            local pkg_name="$2"
+            local numbers
+            numbers=$(gh issue list -R "n24q02m/${repo}" --search "in:title \"bump ${pkg_name} to \" is:open" --json number,title \
+              | jq -r --arg skip "chore: bump ${pkg_name} to ${VERSION}" '.[] | select(.title != $skip) | .number' 2>/dev/null || true)
+            if [ -n "$numbers" ]; then
+              for n in $numbers; do
+                gh issue close -R "n24q02m/${repo}" "$n" --reason "not planned" \
+                  --comment "Superseded by mcp-core ${TAG} (${VERSION}) — auto-closed by the mcp-core CD close-loop. If the pin bump for the older version never landed, fold it into the bump to ${VERSION}." \
+                  || echo "::warning::Failed to close superseded issue #${n} in ${repo}"
+              done
+              echo "Closed superseded trackers in ${repo}: $(echo "$numbers" | tr '\n' ' ')"
+            fi
+          }
+
+          for repo in $TS_DOWNSTREAM; do
+            sweep_superseded "$repo" "@n24q02m/mcp-core" || true
+          done
+          for repo in $PY_DOWNSTREAM; do
+            sweep_superseded "$repo" "n24q02m-mcp-core" || true
+          done
+          for repo in $TRACKING_DOWNSTREAM; do
+            sweep_superseded "$repo" "mcp-core" || true
+          done
