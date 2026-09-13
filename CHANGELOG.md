@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.24.4 (2026-09-13)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#819](https://github.com/n24q02m/mcp-core/pull/819),
+  [`8de0666`](https://github.com/n24q02m/mcp-core/commit/8de06660bc069a1afaeaa73a9979e2c56bc8769d))
+
+- **deps**: Update patch dependencies ([#818](https://github.com/n24q02m/mcp-core/pull/818),
+  [`a85bb4b`](https://github.com/n24q02m/mcp-core/commit/a85bb4bfe3926ff06df4645e862708ff95daef81))
+
+### Documentation
+
+- Add status and tech badge rows, link license section
+  ([#817](https://github.com/n24q02m/mcp-core/pull/817),
+  [`5dc44f3`](https://github.com/n24q02m/mcp-core/commit/5dc44f346d3901c8b11481189b9e4cfa145708c0))
+
+
 ## v1.24.3 (2026-09-13)
 
 ### Bug Fixes
