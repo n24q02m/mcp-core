@@ -194,7 +194,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "numpy", specifier = ">=2.5.2" },
+    { name = "numpy", specifier = ">=2.5.3" },
     { name = "onnxruntime", specifier = ">=1.29.0" },
     { name = "onnxruntime-gpu", marker = "extra == 'cuda'", specifier = ">=1.29.0" },
     { name = "pydantic", specifier = ">=2.12.5,<3" },
