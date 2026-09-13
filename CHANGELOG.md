@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.24.3 (2026-09-13)
+
+### Bug Fixes
+
+- Close superseded downstream bump trackers in CD
+  ([#812](https://github.com/n24q02m/mcp-core/pull/812),
+  [`74c3593`](https://github.com/n24q02m/mcp-core/commit/74c3593f7234214c3ec2fd2030a93789340f877d))
+
+
 ## v1.24.2 (2026-09-12)
 
 ### Bug Fixes
