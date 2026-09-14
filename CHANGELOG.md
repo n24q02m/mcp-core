@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.24.8 (2026-09-14)
+
+### Bug Fixes
+
+- **deps**: Update @types/node to ^26.5.0 ([#823](https://github.com/n24q02m/mcp-core/pull/823),
+  [`32add26`](https://github.com/n24q02m/mcp-core/commit/32add2639a617b0a94aa23bbc99116f2f756e9a3))
+
+- **deps**: Update patch dependencies ([#822](https://github.com/n24q02m/mcp-core/pull/822),
+  [`deffa4b`](https://github.com/n24q02m/mcp-core/commit/deffa4bcfeefc4d91a324f5ddc20b6c88fe5a07d))
+
+
 ## v1.24.7 (2026-09-14)
 
 ### Bug Fixes
