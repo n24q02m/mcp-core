@@ -2,6 +2,40 @@
 
 <!-- version list -->
 
+## v1.24.5 (2026-09-13)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#820](https://github.com/n24q02m/mcp-core/pull/820),
+  [`dc81ed7`](https://github.com/n24q02m/mcp-core/commit/dc81ed7eb273ac86ca4f3f03e591b3f74d0eb3d8))
+
+
+## v1.24.4 (2026-09-13)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#819](https://github.com/n24q02m/mcp-core/pull/819),
+  [`8de0666`](https://github.com/n24q02m/mcp-core/commit/8de06660bc069a1afaeaa73a9979e2c56bc8769d))
+
+- **deps**: Update patch dependencies ([#818](https://github.com/n24q02m/mcp-core/pull/818),
+  [`a85bb4b`](https://github.com/n24q02m/mcp-core/commit/a85bb4bfe3926ff06df4645e862708ff95daef81))
+
+### Documentation
+
+- Add status and tech badge rows, link license section
+  ([#817](https://github.com/n24q02m/mcp-core/pull/817),
+  [`5dc44f3`](https://github.com/n24q02m/mcp-core/commit/5dc44f346d3901c8b11481189b9e4cfa145708c0))
+
+
+## v1.24.3 (2026-09-13)
+
+### Bug Fixes
+
+- Close superseded downstream bump trackers in CD
+  ([#812](https://github.com/n24q02m/mcp-core/pull/812),
+  [`74c3593`](https://github.com/n24q02m/mcp-core/commit/74c3593f7234214c3ec2fd2030a93789340f877d))
+
+
 ## v1.24.2 (2026-09-12)
 
 ### Bug Fixes
