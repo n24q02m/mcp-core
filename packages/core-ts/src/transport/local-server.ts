@@ -490,6 +490,9 @@ export async function runHttpServer(
   const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
   const lockDirPath = path.join(os.homedir(), '.config', 'mcp', 'locks')
   fs.mkdirSync(lockDirPath, { recursive: true, mode: 0o700 })
+  if (process.platform !== 'win32') {
+    fs.chmodSync(lockDirPath, 0o700)
+  }
   const lockFile = writeLockFile(options.serverName, actualPort, proxyToken, lockDirPath)
 
   // Refresh the lock timestamp hourly so the 24h TTL sweep does not kill

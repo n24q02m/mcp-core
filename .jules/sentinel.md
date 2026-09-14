@@ -1,3 +1,8 @@
+## 2026-07-26 - [TOCTOU on Sensitive Directory Creation in Node.js]
+**Vulnerability:** Node.js `fs.mkdirSync` with a restrictive mode (like `0o700`) is subject to the system `umask`. If `umask` is overly permissive, the directory might briefly exist with broader permissions before being corrected, or if it already exists, its permissions are not tightened, leaving a TOCTOU race condition window.
+**Learning:** Always pair `mkdirSync(..., { mode: 0o700 })` with an explicit `chmodSync(..., 0o700)` (or `chmod` for async) when creating directories that store sensitive information, to override `umask` and fix existing directories.
+**Prevention:** Audit all `mkdirSync` / `mkdir` calls in Node.js creating sensitive directories and follow up with a `chmodSync` / `chmod` on non-Windows platforms.
+
 ## 2026-06-18 - [Timing Attack in hmac.compare_digest]
 **Vulnerability:** `hmac.compare_digest` returning early leaks the length of the secret when lengths differ, which reduces the secret entropy.
 **Learning:** In Python, `hmac.compare_digest` and `secrets.compare_digest` return false instantly on unequal lengths. This makes the secret length vulnerable to a timing attack.
