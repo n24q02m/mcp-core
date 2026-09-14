@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v1.24.6 (2026-09-14)
+
+### Bug Fixes
+
+- Resolve toctou race conditions on sensitive directory creation in core-ts
+  ([#816](https://github.com/n24q02m/mcp-core/pull/816),
+  [`98a0ed9`](https://github.com/n24q02m/mcp-core/commit/98a0ed9e926fb50431ac010e8874697d277edf41))
+
+- Resolve TOCTOU race on sensitive directory creation in core-ts
+  ([#816](https://github.com/n24q02m/mcp-core/pull/816),
+  [`98a0ed9`](https://github.com/n24q02m/mcp-core/commit/98a0ed9e926fb50431ac010e8874697d277edf41))
+
+- Restore bun.lock to v2 from origin/main, drop incidental downgrade
+  ([#816](https://github.com/n24q02m/mcp-core/pull/816),
+  [`98a0ed9`](https://github.com/n24q02m/mcp-core/commit/98a0ed9e926fb50431ac010e8874697d277edf41))
+
+
 ## v1.24.5 (2026-09-13)
 
 ### Bug Fixes
