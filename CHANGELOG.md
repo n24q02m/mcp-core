@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.24.7 (2026-09-14)
+
+### Bug Fixes
+
+- **deps**: Update dawidd6/action-send-mail action to v21
+  ([#814](https://github.com/n24q02m/mcp-core/pull/814),
+  [`0b5a8a9`](https://github.com/n24q02m/mcp-core/commit/0b5a8a98fea5f91fa2cbc5f355a7da65927cbd56))
+
+
 ## v1.24.6 (2026-09-14)
 
 ### Bug Fixes
