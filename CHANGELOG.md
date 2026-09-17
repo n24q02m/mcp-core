@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.24.12 (2026-09-17)
+
+### Bug Fixes
+
+- **deps**: Update node.js to >=24.21.0 ([#824](https://github.com/n24q02m/mcp-core/pull/824),
+  [`27e1732`](https://github.com/n24q02m/mcp-core/commit/27e17323bafddc5c6d1df6a5b20e7a599ccda39d))
+
+
 ## v1.24.11 (2026-09-17)
 
 ### Bug Fixes
