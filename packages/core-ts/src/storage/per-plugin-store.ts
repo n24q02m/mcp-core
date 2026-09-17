@@ -16,7 +16,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto'
-import { mkdir, readFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { atomicWriteFile } from './atomic-write.js'
 import { backendFromEnv, type CredentialBackend } from './backends.js'
@@ -48,7 +48,16 @@ async function loadOrGenMachineKey(pluginName: string): Promise<Buffer> {
     return await readFile(secretPath)
   } catch {
     const key = randomBytes(32)
-    await mkdir(join(getHomeDir(), `.${pluginName}-mcp`), { recursive: true, mode: 0o700 })
+    const dir = join(getHomeDir(), `.${pluginName}-mcp`)
+
+    // Explicitly chmod(0o700) after mkdir to guarantee the credential store directory
+    // is restricted to owner-only access, mitigating a TOCTOU race condition
+    // against permissive system default umasks or existing overly-permissive directories.
+    await mkdir(dir, { recursive: true, mode: 0o700 })
+    if (process.platform !== 'win32') {
+      await chmod(dir, 0o700)
+    }
+
     await atomicWriteFile(secretPath, key)
     return key
   }
