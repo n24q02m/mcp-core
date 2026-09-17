@@ -3,7 +3,11 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, ready_for_review]
+    # `edited` is required by the pr-title job below: a title fix must re-run
+    # the check that flagged it. Every heavy job opts out via
+    # `github.event.action != 'edited'` so a description change does not
+    # re-run the matrix.
+    types: [opened, edited, synchronize, reopened, ready_for_review]
   pull_request_target:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
@@ -11,21 +15,156 @@ on:
     branches: [main]
   issues:
     types: [opened, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  # PR title validation lives in pr-title.yml -- it needs the `edited` trigger,
-  # which would re-run this whole matrix on every description change.
+  # ============================================================================
+  # Bot PR Governance (merged from bot-governance.yml)
+  # ============================================================================
+  governance:
+    name: Bot PR Rate Limit & Duplicate Check
+    # Internal PRs only. This repo is public, so `pull_request` gives a fork a
+    # read-only GITHUB_TOKEN that the `permissions:` block above cannot raise --
+    # `gh pr close` would then fail under `set -e` and abort the job. Closing an
+    # outside contributor's PR because someone else spent the rate limit is the
+    # wrong outcome anyway; the bots this governs push their branches to this
+    # repo, so fork PRs are never in scope. Comparing full_name rather than
+    # head.repo.fork keeps this correct if this repository is ever itself a
+    # fork, where head.repo.fork would be true for internal branches too.
+    if: github.event_name == 'pull_request' && github.event.action == 'opened' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect and govern bot PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.head_ref }}
+          ACTOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+
+          # Detect if this is a bot-created PR by branch name pattern.
+          # Two signals:
+          #   1. Explicit bot-tool prefixes (Bolt, Palette, Jules, fix/web-scraper)
+          #   2. Any branch ending with a long numeric task/trace ID (-[0-9]{14,})
+          IS_BOT_PR=false
+          if echo "$BRANCH" | grep -qE \
+              '^(bolt[-/]|palette-ux-|fix/web-scraper-|jules[-/])'; then
+            IS_BOT_PR=true
+          elif echo "$BRANCH" | grep -qE -- \
+              '-[0-9]{14,}$'; then
+            IS_BOT_PR=true
+          fi
+
+          if [ "$IS_BOT_PR" = "false" ]; then
+            echo "Not a bot PR ($BRANCH), skipping governance checks."
+            exit 0
+          fi
+
+          echo "Bot PR detected on branch: $BRANCH"
+          gh pr edit "$PR_NUMBER" --add-label "bot-generated" --repo "$REPO" || true
+
+          # --- Rate limit: max 5 bot PRs/actor/day ---
+          SINCE=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || \
+                  date -u -v-24H +%Y-%m-%dT%H:%M:%SZ)
+          COUNT=$(gh pr list --repo "$REPO" --state open \
+                   --json createdAt,headRefName,author \
+                   --jq "[.[] |
+                          select(.author.login == \"$ACTOR\") |
+                          select(.createdAt > \"$SINCE\") |
+                          select(.headRefName | test(
+                            \"^(bolt[-/]|palette-ux-|fix/web-scraper-|jules[-/])\" +
+                            \"|-[0-9]{14,}$\"
+                          ))] | length" 2>/dev/null || echo 0)
+
+          echo "Bot PRs by $ACTOR in last 24h: $COUNT"
+
+          if [ "${COUNT:-0}" -gt 5 ]; then
+            gh pr close "$PR_NUMBER" --repo "$REPO" \
+              --comment "**Bot rate limit exceeded**: $COUNT PRs created in the last 24 hours (limit: 5/day). This PR has been automatically closed to reduce PR backlog and CI resource waste. Please consolidate related fixes."
+            echo "PR #$PR_NUMBER closed: rate limit exceeded ($COUNT/5 today)"
+            exit 0
+          fi
+
+          # --- Duplicate detection by title keyword ---
+          KEYWORD=$(echo "$PR_TITLE" | sed 's/[^a-zA-Z0-9 _-]//g' | \
+                    tr '[:upper:]' '[:lower:]' | cut -c1-50 | xargs)
+          if [ -z "$KEYWORD" ]; then
+            echo "No keyword extracted, skipping duplicate check."
+            exit 0
+          fi
+
+          DUPES=$(gh pr list --repo "$REPO" --state open --search "$KEYWORD" \
+                   --json number \
+                   --jq "[.[] | select(.number != $PR_NUMBER)] | length" \
+                   2>/dev/null || echo 0)
+
+          echo "Similar open PRs for '$KEYWORD': $DUPES"
+          if [ "${DUPES:-0}" -ge 1 ]; then
+            gh pr edit "$PR_NUMBER" --repo "$REPO" \
+              --add-label "possible-duplicate" || true
+            gh pr comment "$PR_NUMBER" --repo "$REPO" \
+              --body "**Possible duplicate**: found ${DUPES} open PR(s) with similar title ('${KEYWORD}'). Check before merging: \`gh pr list --search '${KEYWORD}' --state open\`"
+          fi
+
+  # ============================================================================
+  # PR Title Lint (merged from pr-title.yml)
+  # ============================================================================
+  # Squash-merge uses the PR title as the commit subject and bypasses the local
+  # enforce-commit pre-commit commit-msg hook (bot PRs never run local git
+  # hooks). Without a server-side check, a bot title like
+  # "Sentinel: [HIGH] Fix ..." squash-merges with a non-conventional subject ->
+  # PSR's commit parser silently ignores it -> no version bump, even for a
+  # security fix. This job only surfaces a red check; it does not block merge
+  # (no required-status-check rule), so the person merging still must retype
+  # the squash-commit subject to start with fix:/feat: when this is red.
+  #
+  # It needs the `edited` trigger: without it the check was unclearable --
+  # fixing the title, which is exactly what the red check asks for, produced
+  # no new run, so the check kept reporting the old title forever (seen on
+  # #715). The heavy jobs above opt out of `edited` so this trigger does not
+  # re-run the matrix on every description change.
+  pr-title:
+    name: Validate PR title (Conventional Commits subset)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Repo rule: only feat: and fix: (feedback_commit_prefix.md). This is
+          # narrower than PSR's own default allowed_tags (which also treats
+          # perf: as patch-worthy) -- we enforce the project convention here,
+          # not just what PSR itself would accept.
+          types: |
+            fix
+            feat
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject must not start with an uppercase character.
+
 
   # ============================================================================
   # Lint & Test TypeScript (core-ts)
   # ============================================================================
   lint-and-test-ts:
     name: Lint & Test (TypeScript, ${{ matrix.os }})
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: (github.event_name == 'pull_request' && github.event.action != 'edited') || github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -72,7 +211,7 @@ jobs:
   # ============================================================================
   lint-and-test-py:
     name: Lint & Test (Python, ${{ matrix.package }}, ${{ matrix.os }})
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: (github.event_name == 'pull_request' && github.event.action != 'edited') || github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -119,7 +258,7 @@ jobs:
   # ============================================================================
   core-py-no-extra:
     name: Lint & Test (Python, core-py, no-extra)
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: (github.event_name == 'pull_request' && github.event.action != 'edited') || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
@@ -144,7 +283,7 @@ jobs:
   # ============================================================================
   build:
     name: Build
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: (github.event_name == 'pull_request' && github.event.action != 'edited') || github.event_name == 'push'
     needs: [lint-and-test-ts, lint-and-test-py]
     runs-on: ubuntu-latest
     steps:
@@ -173,7 +312,7 @@ jobs:
   # ============================================================================
   semgrep:
     name: Semgrep SAST
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: (github.event_name == 'pull_request' && github.event.action != 'edited') || github.event_name == 'push'
     runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep@sha256:98c2572fced2474539fd27cab3207ebd8e95e4e7aab4c3b381fdc5e2641d9941
@@ -198,7 +337,7 @@ jobs:
   # ============================================================================
   dependency-review:
     name: Dependency Review
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.action != 'edited'
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
@@ -220,7 +359,7 @@ jobs:
   # ============================================================================
   multi-daemon-invariant:
     name: Multi-daemon Invariant
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: (github.event_name == 'pull_request' && github.event.action != 'edited') || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Harden Runner
@@ -285,3 +424,55 @@ jobs:
 
             ---
             ${{ github.event.issue.body || github.event.pull_request.body || 'No description provided.' }}
+
+  # ============================================================================
+  # E2E T0 (merged from e2e-t0.yml)
+  # ============================================================================
+  # T0 E2E configs run automatically on PR + main push.
+  #
+  # T2 (interaction + non-interaction with real creds) is local-manual only via
+  # `make e2e-full` -- never in CI per spec section "Tier 0 vs Tier 2".
+  e2e-t0:
+    name: E2E T0
+    # Original trigger set: pull_request (default types = opened, synchronize,
+    # reopened), push to main, workflow_dispatch.
+    if: >-
+      (github.event_name == 'pull_request'
+        && github.event.action != 'edited'
+        && github.event.action != 'ready_for_review')
+      || github.event_name == 'push'
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [mcp-core-ci]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Install workspace dependencies (TS)
+        run: bun install --frozen-lockfile
+
+      - name: Install core-py dev deps
+        run: cd packages/core-py && uv sync --group dev
+
+      - name: Install driver dependencies
+        run: |
+          cd scripts/e2e
+          uv sync
+
+      - name: Run T0 config ${{ matrix.config }}
+        run: |
+          cd scripts/e2e
+          PYTHONPATH=.. uv run python -m e2e.driver ${{ matrix.config }}
