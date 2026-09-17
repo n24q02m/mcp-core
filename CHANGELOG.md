@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.24.13 (2026-09-17)
+
+### Bug Fixes
+
+- Resolve toctou issue in per-plugin-store directory creation
+  ([#829](https://github.com/n24q02m/mcp-core/pull/829),
+  [`8dcc4de`](https://github.com/n24q02m/mcp-core/commit/8dcc4deee10536b49f5ef77a291c8429a0f9ee8b))
+
+- Toctou vulnerability in per-plugin-store directory creation
+  ([#829](https://github.com/n24q02m/mcp-core/pull/829),
+  [`8dcc4de`](https://github.com/n24q02m/mcp-core/commit/8dcc4deee10536b49f5ef77a291c8429a0f9ee8b))
+
+
 ## v1.24.12 (2026-09-17)
 
 ### Bug Fixes
