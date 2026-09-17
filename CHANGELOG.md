@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.24.11 (2026-09-17)
+
+### Bug Fixes
+
+- **deps**: Update dawidd6/action-send-mail action to v22
+  ([#827](https://github.com/n24q02m/mcp-core/pull/827),
+  [`f0aaebe`](https://github.com/n24q02m/mcp-core/commit/f0aaebec5b2dbbb1825a306b4929edbf479603dd))
+
+### Continuous Integration
+
+- Consolidate workflows into ci.yml + cd.yml, drop opencode
+  ([`24c3700`](https://github.com/n24q02m/mcp-core/commit/24c37001e60912b2d2fe9861e51ce6049a6bef78))
+
+### Documentation
+
+- **agents**: Pr-title job now lives in ci.yml (workflow consolidation)
+  ([`596ea49`](https://github.com/n24q02m/mcp-core/commit/596ea49a937522cc60be9c34d911b6d42f17bc4d))
+
+
 ## v1.24.10 (2026-09-15)
 
 ### Bug Fixes
