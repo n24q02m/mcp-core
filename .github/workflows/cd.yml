@@ -388,3 +388,40 @@ jobs:
           for repo in $TRACKING_DOWNSTREAM; do
             sweep_superseded "$repo" "mcp-core" || true
           done
+
+  # ============================================================================
+  # Sync to Plugin Marketplace
+  # ============================================================================
+  # Stable only: claude-plugins mirrors this repo's marketplace listing
+  # (plugins/mcp-core), same as the other MCP plugins -- betas are not
+  # published there. The dispatch lands on claude-plugins' plugin-sync
+  # handler, which copies .claude-plugin/plugin.json, skills/, hooks/,
+  # commands/ and gemini-extension.json when present (currently none exist
+  # in this repo, so the sync is a no-op until plugin files are added).
+  sync-marketplace:
+    name: Sync to Marketplace
+    needs: [release, publish-npm, publish-pypi]
+    if: needs.release.outputs.released == 'true' && needs.release.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_KEY }}
+          repositories: claude-plugins
+
+      - name: Dispatch plugin sync
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api repos/n24q02m/claude-plugins/dispatches \
+            -f event_type=plugin-sync \
+            -f 'client_payload[repo]=mcp-core' \
+            -f 'client_payload[tag]=${{ needs.release.outputs.tag }}'
