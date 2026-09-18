@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v1.24.14 (2026-09-18)
+
+### Bug Fixes
+
+- Enforce owner-only credential dir via chmod after mkdir
+  ([#830](https://github.com/n24q02m/mcp-core/pull/830),
+  [`fbabf9c`](https://github.com/n24q02m/mcp-core/commit/fbabf9c90bade491f448ba8d05bcfaf3890528a9))
+
+### Continuous Integration
+
+- Add marketplace sync job — release now auto-bumps claude-plugins manifest (same pattern as
+  wet/mnemo/agent-chat)
+  ([`8e8144f`](https://github.com/n24q02m/mcp-core/commit/8e8144f1d212f2e5408b7b3a6797a91f12c1f842))
+
+
 ## v1.24.13 (2026-09-17)
 
 ### Bug Fixes
