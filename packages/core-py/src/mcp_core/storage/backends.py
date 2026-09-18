@@ -100,7 +100,13 @@ def _atomic_write_bytes(path: Path, blob: bytes) -> None:
     a temp file in the same directory keeps the old blob intact until the
     new one is fully on disk.
     """
+    # mode=0o700 closes the TOCTOU window where a freshly-created credential
+    # dir would briefly be group/world-readable under a permissive umask; the
+    # chmod still runs to fix an already-existing over-permissive dir (mkdir
+    # is a no-op there) — same mitigation as per-plugin-store.ts (#829).
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name != "nt":
+        path.parent.chmod(0o700)
     tmp = path.with_name(path.name + ".tmp")
     try:
         # Explicit mode at creation, not chmod afterwards: the temp file holds

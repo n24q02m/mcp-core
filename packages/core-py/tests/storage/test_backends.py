@@ -1,5 +1,7 @@
 """Credential backend tests."""
 
+import os
+
 import pytest
 
 from mcp_core.storage.backends import (
@@ -100,6 +102,34 @@ def test_put_failure_keeps_old_blob(tmp_path, monkeypatch):
     cfg = tmp_path / ".demo-mcp" / "config.json"
     assert cfg.read_bytes() == b"old-blob"  # blob cũ nguyên vẹn
     assert list(cfg.parent.glob("*.tmp")) == []  # không rác tmp
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits not enforced on Windows")
+def test_put_narrows_preexisting_permissive_dir(tmp_path, monkeypatch):
+    # A pre-existing over-permissive plugin dir must be narrowed to 0o700:
+    # mkdir(exist_ok=True) is a no-op there, so only the explicit chmod
+    # guarantees the credential store stays owner-only (#829 invariant).
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    cfg_dir = tmp_path / ".wet-mcp"
+    cfg_dir.mkdir(mode=0o755)
+    backend = LocalFsBackend()
+    backend.put("wet/config", b"blob")
+    assert (cfg_dir.stat().st_mode & 0o777) == 0o700
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits not enforced on Windows")
+def test_put_creates_dir_owner_only_under_permissive_umask(tmp_path, monkeypatch):
+    # With umask 0 nothing is narrowed away, so the resulting dir mode must
+    # come from the explicit chmod rather than an inherited default.
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    old_umask = os.umask(0o000)
+    try:
+        backend = LocalFsBackend()
+        backend.put("wet/config", b"blob")
+    finally:
+        os.umask(old_umask)
+    cfg_dir = tmp_path / ".wet-mcp"
+    assert (cfg_dir.stat().st_mode & 0o777) == 0o700
 
 
 class _FakeHttp:
