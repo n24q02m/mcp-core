@@ -3,7 +3,7 @@ import logging
 import pytest
 from unittest.mock import patch, MagicMock
 from mcp_core.storage import VectorizeBackend, vectorize_backend_from_env
-from mcp_core.storage.vectorize import _HttpxHttp
+from mcp_core.storage.vectorize import _HttpxHttp, _MUTATION_BATCH
 
 
 def test_httpx_http_request():
@@ -134,6 +134,88 @@ def test_vectorize_delete_by_ids_failure():
     vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=Http())
     with pytest.raises(RuntimeError, match="VectorizeBackend delete_by_ids failed: HTTP 500"):
         vb.delete_by_ids(["u1:m1"])
+
+
+# ---------------------------------------------------------------------------
+# Mutation batching: upsert / delete_by_ids are sliced into <=100-item POSTs.
+# Unbatched, a large mutation -- wet's @modelcontextprotocol/sdk reindex with
+# 1875 chunks -- overflowed the worker's outbound route and died mid-request
+# ("Server disconnected without sending a response") landing nothing, even
+# though the documented binding cap is 1000: the live bisect on v3.15.1 pinned
+# the real failure between 382 and 1000 ids per call.
+# ---------------------------------------------------------------------------
+
+
+class RejectsOversizedMutationsHttp:
+    """Fake client enforcing the route's real per-request ceiling, so a
+    regression back to single-shot mutations fails HERE instead of only on a
+    deployed worker."""
+
+    MAX_ITEMS = 100
+
+    def __init__(self):
+        self.calls: list[tuple[str, int]] = []
+        self._n = 0
+
+    def request(self, method, url, data=None, headers=None):
+        if url.endswith("/upsert"):
+            lines = data.decode().splitlines()
+            assert len(lines) <= self.MAX_ITEMS, (
+                f"upsert sent {len(lines)} vectors in one request; the route dies past ~{self.MAX_ITEMS} items per call"
+            )
+            self._n += 1
+            self.calls.append(("upsert", len(lines)))
+            return (200, json.dumps({"mutationId": f"mu{self._n}"}).encode())
+        if url.endswith("/deleteByIds"):
+            ids = json.loads(data.decode())["ids"]
+            assert len(ids) <= self.MAX_ITEMS, (
+                f"deleteByIds sent {len(ids)} ids in one request; the route dies past ~{self.MAX_ITEMS} items per call"
+            )
+            self._n += 1
+            self.calls.append(("deleteByIds", len(ids)))
+            return (200, json.dumps({"mutationId": f"md{self._n}"}).encode())
+        raise AssertionError(f"unexpected request: {method} {url}")
+
+
+def test_vectorize_upsert_batches_1875_vectors():
+    http = RejectsOversizedMutationsHttp()
+    vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=http)
+    vectors = [{"id": f"u1:v{i}", "values": [float(i)]} for i in range(1875)]
+
+    res = vb.upsert(vectors)
+
+    sizes = [n for kind, n in http.calls if kind == "upsert"]
+    assert sizes == [_MUTATION_BATCH] * (1875 // _MUTATION_BATCH) + [1875 % _MUTATION_BATCH]
+    assert res == "mu19"  # last batch's mutationId
+
+
+def test_vectorize_upsert_exact_batch_is_one_request():
+    http = RejectsOversizedMutationsHttp()
+    vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=http)
+
+    vb.upsert([{"id": f"u1:v{i}", "values": [0.1]} for i in range(_MUTATION_BATCH)])
+
+    assert [n for _, n in http.calls] == [_MUTATION_BATCH]
+
+
+def test_vectorize_delete_by_ids_batches_1875_ids():
+    http = RejectsOversizedMutationsHttp()
+    vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=http)
+
+    res = vb.delete_by_ids([f"u1:m{i}" for i in range(1875)])
+
+    sizes = [n for kind, n in http.calls if kind == "deleteByIds"]
+    assert sizes == [_MUTATION_BATCH] * (1875 // _MUTATION_BATCH) + [1875 % _MUTATION_BATCH]
+    assert res == "md19"  # last batch's mutationId
+
+
+def test_vectorize_delete_by_ids_exact_batch_is_one_request():
+    http = RejectsOversizedMutationsHttp()
+    vb = VectorizeBackend(base_url="http://vectorize.internal", idx="i", http=http)
+
+    vb.delete_by_ids([f"u1:m{i}" for i in range(_MUTATION_BATCH)])
+
+    assert [n for _, n in http.calls] == [_MUTATION_BATCH]
 
 
 def test_vectorize_query_failure():

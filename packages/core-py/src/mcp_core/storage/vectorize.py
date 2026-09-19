@@ -24,6 +24,18 @@ logger = logging.getLogger(__name__)
 # Vectorize returns at most this many matches once values/metadata are requested.
 _MAX_TOP_K = 50
 
+# Vectors / ids carried by ONE upsert / deleteByIds request. The Workers binding
+# documents a 1000-per-call mutation cap (developers.cloudflare.com/vectorize/
+# platform/limits), but on wet's deployed worker (v3.15.1, 2026-09-18) a single
+# deleteByIds of 1000 ids still died mid-request -- the caller saw only "Server
+# disconnected without sending a response" -- while the same path cleared 382
+# ids fine (live bisect). The binding route crosses the container's outbound
+# interception layer, which kills oversized payloads regardless of the documented
+# cap -- the same root cause as the D1 parameter overflow. 100 matches the batch
+# unit the D1 parameter cap already imposes and sits 4-10x under the observed
+# failure threshold; extra round-trips are cheap next to an upsert's own latency.
+_MUTATION_BATCH = 100
+
 
 class _HttpxHttp:
     def request(self, method, url, data=None, headers=None):
@@ -43,22 +55,39 @@ class VectorizeBackend:
         return {"Authorization": f"Bearer {self._token}"} if self._token else {}
 
     def upsert(self, vectors: list[dict]) -> str:
-        ndjson = "\n".join([json.dumps(v) for v in vectors]).encode()
-        status, data = self._http.request("POST", f"{self.base_url}/upsert", ndjson, self._headers())
-        if status != 200:
-            raise RuntimeError(f"VectorizeBackend upsert failed: HTTP {status}")
-        return json.loads(data.decode()).get("mutationId", "")
+        # One POST per _MUTATION_BATCH vectors; ndjson body of {id, values, metadata}
+        # lines per the route contract in the module docstring. Unbatched, a large
+        # embedded index overflows the route and dies mid-request before anything
+        # lands. Empty input makes no request. Returns the LAST batch's mutationId:
+        # callers treat it as an opaque handle, and the final batch is the one that
+        # completes the mutation set.
+        mutation_id = ""
+        for start in range(0, len(vectors), _MUTATION_BATCH):
+            batch = vectors[start : start + _MUTATION_BATCH]
+            ndjson = "\n".join([json.dumps(v) for v in batch]).encode()
+            status, data = self._http.request("POST", f"{self.base_url}/upsert", ndjson, self._headers())
+            if status != 200:
+                raise RuntimeError(f"VectorizeBackend upsert failed: HTTP {status}")
+            mutation_id = json.loads(data.decode()).get("mutationId", "")
+        return mutation_id
 
     def delete_by_ids(self, ids: list[str]) -> str:
         # POST {base}/deleteByIds -> Response.json(await env.VECTORIZE.deleteByIds(ids)),
-        # i.e. the binding's {"mutationId": ...} straight through.
+        # i.e. the binding's {"mutationId": ...} straight through. One POST per
+        # _MUTATION_BATCH ids: a single call over a big version (1875 ids) exceeds
+        # what the route accepts and dies mid-request. Returns the LAST batch's
+        # mutationId (see upsert); empty input makes no request.
         if not ids:
             return ""
-        body = json.dumps({"ids": ids}).encode()
-        status, data = self._http.request("POST", f"{self.base_url}/deleteByIds", body, self._headers())
-        if status != 200:
-            raise RuntimeError(f"VectorizeBackend delete_by_ids failed: HTTP {status}")
-        return json.loads(data.decode()).get("mutationId", "")
+        mutation_id = ""
+        for start in range(0, len(ids), _MUTATION_BATCH):
+            batch = ids[start : start + _MUTATION_BATCH]
+            body = json.dumps({"ids": batch}).encode()
+            status, data = self._http.request("POST", f"{self.base_url}/deleteByIds", body, self._headers())
+            if status != 200:
+                raise RuntimeError(f"VectorizeBackend delete_by_ids failed: HTTP {status}")
+            mutation_id = json.loads(data.decode()).get("mutationId", "")
+        return mutation_id
 
     def query(self, vector: list[float], top_k: int, metadata_filter: dict | None = None) -> list[dict]:
         if top_k > _MAX_TOP_K:
