@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.24.16 (2026-09-19)
+
+### Bug Fixes
+
+- Batch Vectorize upsert/deleteByIds mutations at 100 per request
+  ([#832](https://github.com/n24q02m/mcp-core/pull/832),
+  [`9253cfd`](https://github.com/n24q02m/mcp-core/commit/9253cfdadb5004adc124a36f039d9530452850d5))
+
+
 ## v1.24.15 (2026-09-19)
 
 ### Bug Fixes
