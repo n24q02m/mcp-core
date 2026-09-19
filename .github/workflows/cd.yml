@@ -302,13 +302,17 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
-          TS_DOWNSTREAM="better-notion-mcp better-email-mcp better-godot-mcp better-workspace-mcp"
-          PY_DOWNSTREAM="better-telegram-mcp wet-mcp mnemo-mcp better-code-review-graph imagine-mcp"
-          # qwen3-embed dropped: archived 2026-09 (continues as fastretrieval);
-          # the installation can no longer see it and tracking issues in an
-          # archived repo are dead letter. Any other repo lost to the
-          # installation now degrades to a per-repo ::warning:: below instead
-          # of failing the job.
+          # Archived repos are pruned: a tracking/pin issue in an archived
+          # repo is dead letter (better-notion-mcp, better-email-mcp,
+          # better-godot-mcp, better-workspace-mcp, better-telegram-mcp,
+          # imagine-mcp; qwen3-embed earlier — continues as fastretrieval,
+          # re-admission is a separate owner decision). wet/mnemo/crg are
+          # the canonical post-rename names of wet-mcp/mnemo-mcp/
+          # better-code-review-graph. Any repo lost to the installation now
+          # degrades to a per-repo ::warning:: below instead of failing the
+          # job.
+          TS_DOWNSTREAM=""
+          PY_DOWNSTREAM="wet mnemo crg"
           TRACKING_DOWNSTREAM="web-core claude-plugins"
           CHANGELOG_URL="https://github.com/n24q02m/mcp-core/releases/tag/${TAG}"
 
