@@ -24,7 +24,7 @@ def _job_text(name: str) -> str:
 
 
 def _shell_assignment(text: str, name: str) -> set[str]:
-    match = re.search(rf'^\s*{re.escape(name)}="([^"]+)"$', text, re.MULTILINE)
+    match = re.search(rf'^\s*{re.escape(name)}="([^"]*)"$', text, re.MULTILINE)
     assert match is not None, f"missing downstream assignment: {name}"
     return set(match.group(1).split())
 
@@ -58,17 +58,14 @@ def test_issue_fanout_covers_pin_and_tracking_consumers() -> None:
     )
     tracking_repos = _shell_assignment(text, "TRACKING_DOWNSTREAM")
 
-    assert pin_repos == {
-        "better-notion-mcp",
-        "better-email-mcp",
-        "better-telegram-mcp",
-        "wet-mcp",
-        "mnemo-mcp",
-        "better-code-review-graph",
-        "better-godot-mcp",
-        "imagine-mcp",
-        "better-workspace-mcp",
-    }
+    assert pin_repos == {"wet", "mnemo", "crg"}
+    # Archived repos pruned 2026-09-19 (tracking/pin issues in an archived
+    # repo are dead letter): better-notion-mcp, better-email-mcp,
+    # better-godot-mcp, better-workspace-mcp, better-telegram-mcp,
+    # imagine-mcp — the TS list is now empty. wet/mnemo/crg are the
+    # canonical post-rename names of wet-mcp/mnemo-mcp/
+    # better-code-review-graph. fastretrieval stays out by owner decision
+    # (qwen3-embed precedent).
     # qwen3-embed archived 2026-09 (continues as fastretrieval); tracking
     # issues in an archived repo are dead letter and the installation cannot
     # see it anymore.
