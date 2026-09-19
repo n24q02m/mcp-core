@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.24.17 (2026-09-19)
+
+### Bug Fixes
+
+- Prune archived repos from downstream fan-out lists
+  ([#833](https://github.com/n24q02m/mcp-core/pull/833),
+  [`8124816`](https://github.com/n24q02m/mcp-core/commit/8124816c573165ddba7af8261ebb4e40b1b42a79))
+
+- Update release-cascade guard for pruned downstream lists
+  ([#833](https://github.com/n24q02m/mcp-core/pull/833),
+  [`8124816`](https://github.com/n24q02m/mcp-core/commit/8124816c573165ddba7af8261ebb4e40b1b42a79))
+
+
 ## v1.24.16 (2026-09-19)
 
 ### Bug Fixes
