@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.24.18 (2026-09-19)
+
+### Bug Fixes
+
+- **deps**: Update patch dependencies ([#834](https://github.com/n24q02m/mcp-core/pull/834),
+  [`8e60b46`](https://github.com/n24q02m/mcp-core/commit/8e60b465653651884741dfa561797a90950d965d))
+
+
 ## v1.24.17 (2026-09-19)
 
 ### Bug Fixes
