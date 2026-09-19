@@ -282,6 +282,11 @@ jobs:
         with:
           egress-policy: audit
 
+      # No `repositories:` pin on purpose: the installation-token API hard-fails 422
+      # when ANY listed repo is missing/inaccessible to the installation (the
+      # archived qwen3-embed repo killed this job — CD failures since #829). An
+      # installation-scoped token lets the fan-out below degrade per-repo failures
+      # to warnings instead.
       - name: Generate GitHub App Token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -289,11 +294,6 @@ jobs:
           app-id: ${{ vars.CI_APP_ID }}
           private-key: ${{ secrets.CI_APP_KEY }}
           owner: n24q02m
-          repositories: >-
-            better-notion-mcp,better-email-mcp,better-telegram-mcp,
-            wet-mcp,mnemo-mcp,better-code-review-graph,better-godot-mcp,
-            imagine-mcp,better-workspace-mcp,qwen3-embed,web-core,
-            claude-plugins
 
       - name: Create issues in downstream repos
         env:
@@ -304,7 +304,12 @@ jobs:
           set -euo pipefail
           TS_DOWNSTREAM="better-notion-mcp better-email-mcp better-godot-mcp better-workspace-mcp"
           PY_DOWNSTREAM="better-telegram-mcp wet-mcp mnemo-mcp better-code-review-graph imagine-mcp"
-          TRACKING_DOWNSTREAM="qwen3-embed web-core claude-plugins"
+          # qwen3-embed dropped: archived 2026-09 (continues as fastretrieval);
+          # the installation can no longer see it and tracking issues in an
+          # archived repo are dead letter. Any other repo lost to the
+          # installation now degrades to a per-repo ::warning:: below instead
+          # of failing the job.
+          TRACKING_DOWNSTREAM="web-core claude-plugins"
           CHANGELOG_URL="https://github.com/n24q02m/mcp-core/releases/tag/${TAG}"
 
           create_issue() {
