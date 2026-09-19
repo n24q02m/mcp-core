@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.24.15 (2026-09-19)
+
+### Bug Fixes
+
+- Tolerate downstream repos the CI App installation cannot see
+  ([#831](https://github.com/n24q02m/mcp-core/pull/831),
+  [`5139226`](https://github.com/n24q02m/mcp-core/commit/5139226d68f908ba7d67acc97b903d54914a2055))
+
+
 ## v1.24.14 (2026-09-18)
 
 ### Bug Fixes

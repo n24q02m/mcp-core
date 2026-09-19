@@ -165,7 +165,7 @@ wheels = [
 
 [[package]]
 name = "mcp-embedding-daemon"
-version = "1.24.14"
+version = "1.24.15"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
