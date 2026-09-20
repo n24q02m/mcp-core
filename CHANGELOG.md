@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.24.19 (2026-09-20)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#839](https://github.com/n24q02m/mcp-core/pull/839),
+  [`365891e`](https://github.com/n24q02m/mcp-core/commit/365891ecc1bba077001ff7e6eceb14b3f61cce61))
+
+- **deps**: Update filelock to >=4.0.1 ([#838](https://github.com/n24q02m/mcp-core/pull/838),
+  [`7a4f6bd`](https://github.com/n24q02m/mcp-core/commit/7a4f6bde49a7be489a24b4a21948833836694d87))
+
+
 ## v1.24.18 (2026-09-19)
 
 ### Bug Fixes
