@@ -35,9 +35,12 @@ export async function getMode(serverName: string): Promise<ServerMode> {
   }
 
   // Has keys other than _mode -> configured
-  const nonModeKeys = Object.keys(config).filter((k) => k !== MODE_KEY)
-  if (nonModeKeys.length > 0) {
-    return 'configured'
+  // Optimization: use for..in to return early and avoid O(N) array allocation
+  // from Object.keys().filter()
+  for (const k in config) {
+    if (k !== MODE_KEY && Object.hasOwn(config, k)) {
+      return 'configured'
+    }
   }
 
   return null
