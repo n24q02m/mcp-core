@@ -216,7 +216,8 @@ body { font-family: system-ui, sans-serif; background: #0d0d0d; color: #eee;
 h1 { margin-top: 0; }
 .code { font-size: 2rem; font-family: ui-monospace, monospace;
          letter-spacing: 0.25em; padding: 1rem 1.5rem; background: #000;
-         border-radius: 8px; border: 1px solid #444; margin: 1.5rem 0; }
+         border-radius: 8px; border: 1px solid #444; margin: 1.5rem 0;
+         user-select: all; cursor: copy; }
 a { color: #4ea1ff; }
 .status { margin-top: 1.5rem; color: #888; font-size: 0.9rem; }
 </style>
@@ -225,7 +226,7 @@ a { color: #4ea1ff; }
 <div class="card">
   <h1>Authorize ${safeName}</h1>
   <p>Visit the URL below and enter this code:</p>
-  <div class="code">${safeCode}</div>
+  <div class="code" title="Click to select">${safeCode}</div>
   <p><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a></p>
   <p class="status" id="status" role="alert" aria-live="polite" aria-atomic="true">Waiting for you to approve...</p>
 </div>
