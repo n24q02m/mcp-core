@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.25.0 (2026-09-21)
+
+### Bug Fixes
+
+- Optimize mode check to avoid array allocation
+  ([#840](https://github.com/n24q02m/mcp-core/pull/840),
+  [`34252b9`](https://github.com/n24q02m/mcp-core/commit/34252b95ac197b6ab057493fb3edc840693866a8))
+
+### Features
+
+- Add user-select all to oauth device codes ([#837](https://github.com/n24q02m/mcp-core/pull/837),
+  [`864a019`](https://github.com/n24q02m/mcp-core/commit/864a019e3dfdbe8e69d0f22c2e8d38efeaa109df))
+
+
 ## v1.24.19 (2026-09-20)
 
 ### Bug Fixes
