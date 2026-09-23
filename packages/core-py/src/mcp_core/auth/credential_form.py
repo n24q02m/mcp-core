@@ -150,6 +150,8 @@ _MODEL_CHAIN_SCRIPT = """
                 chip.className = "mc-chip";
                 chip.setAttribute("draggable", "true");
                 chip.setAttribute("title", "Drag to reorder");
+                chip.setAttribute("aria-label", "Drag to reorder " + m);
+                chip.setAttribute("tabindex", "0");
                 chip.dataset.model = m;
                 var ord = document.createElement("span");
                 ord.className = "mc-order";
@@ -390,6 +392,7 @@ _FORM_SHELL_CSS = """        *, *::before, *::after {
         .model-chain:focus-within { border-color: #4a6fa5; box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2); }
         .mc-chips { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
         .mc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; background: #23233a; border: 1px solid #34344a; border-radius: 6px; font-size: 13px; cursor: grab; }
+        .mc-chip:focus-visible { outline: 2px solid #4a6fa5; outline-offset: 2px; border-radius: 6px; }
         .mc-chip.dragging { opacity: 0.4; }
         .mc-chip .mc-order { color: #8a8aa5; font-variant-numeric: tabular-nums; }
         .mc-chip button { background: none; border: none; color: #b56; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
