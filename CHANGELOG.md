@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v1.25.5 (2026-09-24)
+
+### Bug Fixes
+
+- Cover timing_safe_equal + raise lock-contention helper timeout to 30s
+  ([#848](https://github.com/n24q02m/mcp-core/pull/848),
+  [`119836d`](https://github.com/n24q02m/mcp-core/commit/119836d56e6b6b052df5f37129a2be3cbc4c4868))
+
+- Document semver policy in README ([#849](https://github.com/n24q02m/mcp-core/pull/849),
+  [`b1dbe7a`](https://github.com/n24q02m/mcp-core/commit/b1dbe7af2421bc53e45781776d4921ac72cefc3f))
+
+- **deps**: Lock file maintenance ([#851](https://github.com/n24q02m/mcp-core/pull/851),
+  [`997f555`](https://github.com/n24q02m/mcp-core/commit/997f55585dba012c58fdeea440e3394571758e3a))
+
+- **deps**: Update patch dependencies ([#850](https://github.com/n24q02m/mcp-core/pull/850),
+  [`8ff545f`](https://github.com/n24q02m/mcp-core/commit/8ff545fa965403c9ddb0f8d6138573f0b6663cce))
+
+
 ## v1.25.4 (2026-09-22)
 
 ### Bug Fixes
