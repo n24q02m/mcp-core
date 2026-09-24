@@ -54,6 +54,7 @@
 - [Documentation](#documentation)
 - [Design Philosophy](#design-philosophy)
 - [Development](#development)
+- [Versioning](#versioning)
 - [License](#license)
 
 mcp-core is the shared foundation for the n24q02m MCP servers: a Streamable
@@ -342,6 +343,14 @@ bun run test
 bun run check
 bun run build
 ```
+
+## Versioning
+
+Releases follow [semantic versioning](https://semver.org/) and are cut
+automatically by semantic-release from `main`. All three packages share one
+version number. Breaking changes bump the major version and are recorded in
+[CHANGELOG.md](CHANGELOG.md) and the
+[migration guide](https://mcp.n24q02m.com/servers/mcp-core/migration/).
 
 ## License
 
