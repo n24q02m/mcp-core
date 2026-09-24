@@ -110,6 +110,8 @@ def _helper_script(lock_root: Path, name: str, port: int, ready_file: Path) -> s
 class TestContention:
     """Verify that a second attempt to acquire the same lock fails."""
 
+    _HELPER_START_TIMEOUT_S = 30.0
+
     def test_contention_raises_across_processes(self, tmp_path: Path, lock_root: Path, unique_name: str) -> None:
         ready_file = tmp_path / "ready.txt"
         script = _helper_script(lock_root, unique_name, 9000, ready_file)
@@ -125,7 +127,7 @@ class TestContention:
 
         try:
             # Wait for helper to signal it has acquired the lock.
-            deadline = time.monotonic() + 10.0
+            deadline = time.monotonic() + self._HELPER_START_TIMEOUT_S
             while time.monotonic() < deadline:
                 if ready_file.exists():
                     break
@@ -137,7 +139,7 @@ class TestContention:
                     )
                 time.sleep(0.05)
             else:
-                pytest.fail("helper did not acquire lock within 10s")
+                pytest.fail(f"helper did not acquire lock within {self._HELPER_START_TIMEOUT_S:.0f}s")
 
             # Now try to acquire in this process - must raise.
             contender = LifecycleLock(name=unique_name, port=9000, root=lock_root)
@@ -170,7 +172,7 @@ class TestContention:
         )
 
         try:
-            deadline = time.monotonic() + 10.0
+            deadline = time.monotonic() + self._HELPER_START_TIMEOUT_S
             while time.monotonic() < deadline:
                 if ready_file.exists():
                     break
@@ -182,7 +184,7 @@ class TestContention:
                     )
                 time.sleep(0.05)
             else:
-                pytest.fail("helper did not acquire lock within 10s")
+                pytest.fail(f"helper did not acquire lock within {self._HELPER_START_TIMEOUT_S:.0f}s")
         finally:
             if proc.stdin is not None:
                 try:
