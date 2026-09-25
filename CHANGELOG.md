@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.25.6 (2026-09-25)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#854](https://github.com/n24q02m/mcp-core/pull/854),
+  [`f4ed86f`](https://github.com/n24q02m/mcp-core/commit/f4ed86f57db5afdb6ee82ac8023d4055ee33d640))
+
+- **deps**: Update patch dependencies ([#853](https://github.com/n24q02m/mcp-core/pull/853),
+  [`4be8075`](https://github.com/n24q02m/mcp-core/commit/4be8075d65659fd6dedb0a74ff7c266ba78fdca1))
+
+
 ## v1.25.5 (2026-09-24)
 
 ### Bug Fixes
