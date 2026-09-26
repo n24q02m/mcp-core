@@ -9,7 +9,7 @@
  */
 
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import envPaths from 'env-paths'
 
@@ -96,8 +96,9 @@ export async function acquireSessionLock(
 export async function writeSessionLock(serverName: string, info: SessionInfo): Promise<void> {
   const path = lockPath(serverName)
   const dir = dirname(path)
-  if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true, mode: 0o700 })
+  await mkdir(dir, { recursive: true, mode: 0o700 })
+  if (process.platform !== 'win32') {
+    await chmod(dir, 0o700)
   }
 
   const data: SessionInfoJson = {
