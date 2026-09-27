@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.25.8 (2026-09-27)
+
+### Bug Fixes
+
+- **deps**: Lock file maintenance ([#859](https://github.com/n24q02m/mcp-core/pull/859),
+  [`cbdb9d7`](https://github.com/n24q02m/mcp-core/commit/cbdb9d77a3328ede02b874582b355425c50dfbf5))
+
+- **deps**: Update litellm to >=1.102.0 ([#858](https://github.com/n24q02m/mcp-core/pull/858),
+  [`528be54`](https://github.com/n24q02m/mcp-core/commit/528be5461721eadc7b51f7240f595f90245885e0))
+
+
 ## v1.25.7 (2026-09-26)
 
 ### Bug Fixes
