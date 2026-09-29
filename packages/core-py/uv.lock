@@ -1090,7 +1090,7 @@ dev = [
     { name = "pytest-timeout", specifier = ">=2.4.0" },
     { name = "ruff", specifier = ">=0.16.8" },
     { name = "telethon", specifier = ">=1.45.0" },
-    { name = "ty", specifier = ">=0.0.82" },
+    { name = "ty", specifier = ">=0.0.83" },
 ]
 
 [[package]]
