@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.25.11 (2026-09-29)
+
+### Bug Fixes
+
+- **deps**: Update patch dependencies to >=1.43.100
+  ([#864](https://github.com/n24q02m/mcp-core/pull/864),
+  [`072b356`](https://github.com/n24q02m/mcp-core/commit/072b356f94d62b7994654242307c3cebace560e3))
+
+
 ## v1.25.10 (2026-09-29)
 
 ### Bug Fixes
