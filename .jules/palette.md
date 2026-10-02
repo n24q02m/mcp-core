@@ -42,3 +42,6 @@ Note on dates: three entries above carried impossible dates (`$(date +%Y-%m-%d)`
 ## 2026-10-24 - Instantly selectable device codes
 **Learning:** Users often struggle to precisely select short alphanumeric codes (like OAuth device codes) rendered as plain text, leading to partial copies and failed auth flows.
 **Action:** Always apply `user-select: all;` and `cursor: copy;` to short, non-editable codes that users are expected to copy. This allows one-click selection of the entire string, significantly reducing friction in cross-device or out-of-band auth flows.
+## 2026-11-12 - Draggable Elements Accessibility
+**Learning:** Dynamically created draggable elements (like `.mc-chip` in `credential_form.py`) natively lack keyboard focusability since HTML5 drag and drop is not fully keyboard navigable out-of-the-box. Without focus states and explicit aria labels, screen readers miss them entirely, and keyboard users cannot navigate to them.
+**Action:** When implementing custom draggable items (e.g. elements with `cursor: grab`), always add `tabindex="0"`, an explicit `aria-label`, and a corresponding `:focus-visible` CSS outline to ensure they are discoverable and focusable by all users.
