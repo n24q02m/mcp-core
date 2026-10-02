@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "fastapi>=0.141.1",
-    "uvicorn>=0.53.0",
+    "uvicorn>=0.54.0",
     "onnxruntime>=1.30.0",
     "numpy>=2.5.3",
     "httpx>=0.28.1",
@@ -59,7 +59,7 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.8",
+    "ruff>=0.16.9",
     "ty>=0.0.84",
 ]
 
