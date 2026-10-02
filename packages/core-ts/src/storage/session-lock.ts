@@ -9,7 +9,7 @@
  */
 
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import envPaths from 'env-paths'
 
@@ -20,9 +20,11 @@ const DEFAULT_MAX_AGE_MS = 600_000
 
 // Allow overriding lock directory for testing
 let lockDirOverride: string | null = null
+let _initDone = false
 
 export function setLockDir(path: string | null): void {
   lockDirOverride = path
+  _initDone = false
 }
 
 function getLockDir(): string {
@@ -96,8 +98,12 @@ export async function acquireSessionLock(
 export async function writeSessionLock(serverName: string, info: SessionInfo): Promise<void> {
   const path = lockPath(serverName)
   const dir = dirname(path)
-  if (!existsSync(dir)) {
+  if (!_initDone) {
     await mkdir(dir, { recursive: true, mode: 0o700 })
+    if (process.platform !== 'win32') {
+      await chmod(dir, 0o700)
+    }
+    _initDone = true
   }
 
   const data: SessionInfoJson = {
