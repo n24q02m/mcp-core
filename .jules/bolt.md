@@ -30,3 +30,7 @@
 ## 2024-05-24 - Optimize Object key filtering
 **Learning:** Using `Object.keys(obj).filter(...)` to check for the presence of certain keys creates unnecessary intermediate arrays and forces an O(N) iteration over all keys.
 **Action:** When you only need to know if any key other than a specific key exists, use a `for...in` loop that can `break` or `return` early. This avoids allocations and runs significantly faster.
+
+## 2025-05-05 - Optimize Set-Cookie Header Generation
+**Learning:** In TypeScript, constructing HTTP `Set-Cookie` headers incrementally in a hot path using an array (`push`) followed by `join('; ')` causes unnecessary memory allocations and garbage collection overhead. Since the string is small and built incrementally, direct string concatenation is significantly faster.
+**Action:** In high-frequency paths (like `cookie` middleware), prefer direct string concatenation (`+=`) over array building and joining to minimize GC pressure.

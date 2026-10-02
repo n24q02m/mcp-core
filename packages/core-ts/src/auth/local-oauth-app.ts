@@ -972,20 +972,19 @@ export async function createLocalOAuthApp(options: LocalOAuthAppOptions): Promis
       },
       cookie: (name: unknown, value: unknown, options: unknown) => {
         const opts = (options ?? {}) as Record<string, unknown>
-        const parts: string[] = [`${String(name)}=${String(value)}`]
+        let next = `${String(name)}=${String(value)}`
         if (opts.maxAge !== undefined) {
-          parts.push(`Max-Age=${Math.floor(Number(opts.maxAge) / 1000)}`)
+          next += `; Max-Age=${Math.floor(Number(opts.maxAge) / 1000)}`
         }
-        if (opts.httpOnly === true) parts.push('HttpOnly')
-        if (opts.secure === true) parts.push('Secure')
+        if (opts.httpOnly === true) next += '; HttpOnly'
+        if (opts.secure === true) next += '; Secure'
         if (typeof opts.sameSite === 'string') {
           // Capitalise SameSite values (lax → Lax, strict → Strict).
           const v = opts.sameSite as string
-          parts.push(`SameSite=${v.charAt(0).toUpperCase() + v.slice(1)}`)
+          next += `; SameSite=${v.charAt(0).toUpperCase() + v.slice(1)}`
         }
-        parts.push('Path=/')
+        next += '; Path=/'
         const existing = headers['Set-Cookie']
-        const next = parts.join('; ')
         headers['Set-Cookie'] = existing !== undefined ? `${existing}, ${next}` : next
         return adapter
       },
