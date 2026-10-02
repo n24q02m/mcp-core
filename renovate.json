@@ -15,6 +15,11 @@
   },
   "packageRules": [
     {
+      "description": "Hold every update for 7 days so a malicious or yanked release is caught before it lands",
+      "matchPackageNames": ["*"],
+      "minimumReleaseAge": "7 days"
+    },
+    {
       "description": "Group minor updates for review (prod scope by default)",
       "matchUpdateTypes": ["minor"],
       "groupName": "minor dependencies",
@@ -58,7 +63,8 @@
     {
       "description": "Pin GitHub Actions to SHA",
       "matchManagers": ["github-actions"],
-      "pinDigests": true
+      "pinDigests": true,
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Pin PSR to v10 — block Renovate downgrades",
@@ -89,7 +95,8 @@
       "description": "Disable runtime updates from mise",
       "matchManagers": ["mise"],
       "matchDepNames": ["python", "node", "java"],
-      "enabled": false
+      "enabled": false,
+      "minimumReleaseAge": "7 days"
     },
     {
       "description": "Hold pydantic-settings below 2.15 until the MCP SDK rebuilds Settings",
