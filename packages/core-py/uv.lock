@@ -1084,7 +1084,7 @@ requires-dist = [
     { name = "filelock", specifier = ">=4.0.3" },
     { name = "httpcore", specifier = ">=1.0.9" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.102.0" },
+    { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.102.1" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "mcp", specifier = ">=1.30.0,<2" },
     { name = "platformdirs", specifier = ">=4.11.11" },

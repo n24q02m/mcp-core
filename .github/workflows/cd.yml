@@ -60,7 +60,7 @@ jobs:
       # config_file/prerelease inputs as the real step, run against the same untouched
       # checkout, so the computed version is identical.
       # semgrep: @v1 is an intentional moving major tag on a first-party fork action (fork-velocity + instant fleet hotfixes)
-      - uses: n24q02m/better-semantic-release@c102741e544c9733760b09d59144f799c51cff8a # v1.7.3
+      - uses: n24q02m/better-semantic-release@4bab853128d17c7d8d0173c79883624e77a3ead6 # v1.12.0
         id: dryrun
         with:
           github_token: ${{ steps.app-token.outputs.token }}
@@ -164,7 +164,7 @@ jobs:
           exit "$FAILED"
 
       # semgrep: @v1 is an intentional moving major tag on a first-party fork action (fork-velocity + instant fleet hotfixes)
-      - uses: n24q02m/better-semantic-release@c102741e544c9733760b09d59144f799c51cff8a # v1.7.3
+      - uses: n24q02m/better-semantic-release@4bab853128d17c7d8d0173c79883624e77a3ead6 # v1.12.0
         id: release
         with:
           github_token: ${{ steps.app-token.outputs.token }}
@@ -172,7 +172,7 @@ jobs:
           prerelease: ${{ env.RELEASE_TYPE == 'beta' }}
           prerelease_token: beta
 
-      - uses: python-semantic-release/publish-action@6d89e2de8d40ecb3717316ecbbf15a6fa8ea9039 # v10.6.2
+      - uses: python-semantic-release/publish-action@99d4062dd393b5a7a62c5fe9ed78fb364b5674f2 # v10.7.0
         if: steps.release.outputs.released == 'true'
         with:
           github_token: ${{ steps.app-token.outputs.token }}
@@ -255,7 +255,7 @@ jobs:
         with:
           ref: ${{ needs.release.outputs.tag }}
 
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       - name: Build and publish
         working-directory: packages/${{ matrix.package }}
