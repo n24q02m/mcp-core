@@ -28,7 +28,7 @@ dependencies = [
     "mcp>=1.30.0,<2",
     "httpx>=0.28.1",
     "httpcore>=1.0.9",
-    "cryptography>=50.0.1",
+    "cryptography>=50.0.2",
     "authlib>=1.8.0",
     "starlette>=1.7.0",
     # Pydantic kept open >=2.12.5,<3 so downstream plugins (telegram/imagine/
@@ -47,15 +47,15 @@ dependencies = [
     # and litellm's own <3.0) to let downstream servers resolve 2.15+.
     "pydantic-settings>=2.14.2,<3",
     "loguru>=0.7.3",
-    "platformdirs>=4.12.1",
+    "platformdirs>=4.12.2",
     "tomli-w>=1.2.0",
-    "filelock>=4.0.5",
+    "filelock>=4.0.7",
 ]
 
 [project.optional-dependencies]
 # litellm>=1.83.0: CVE-2026-35030 fixed in 1.83.0; 1.82.7-1.82.8 were removed
 # from PyPI (supply-chain incident). Library mode only — NEVER litellm[proxy].
-llm = ["litellm>=1.103.0"]
+llm = ["litellm>=1.103.1"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
