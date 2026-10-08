@@ -20,6 +20,8 @@ import { dirname, join } from 'node:path'
 // intercept internal calls (ESM bindings make plain references unmockable).
 import * as self from './cache.js'
 
+const _initDirs = new Set<string>()
+
 export function cacheDir(): string {
   return join(homedir(), '.config', 'mcp', 'cache')
 }
@@ -33,10 +35,17 @@ export function cacheFilename(serverName: string, port: number, srvVersion: stri
 
 export function atomicWrite(path: string, content: string): void {
   const dir = dirname(path)
-  if (dir && !existsSync(dir)) {
-    mkdirSync(dir, { recursive: true, mode: 0o700 })
-    if (process.platform !== 'win32') {
-      chmodSync(dir, 0o700)
+  if (dir) {
+    let created = false
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true, mode: 0o700 })
+      created = true
+    }
+    if (created || !_initDirs.has(dir)) {
+      if (process.platform !== 'win32') {
+        chmodSync(dir, 0o700)
+      }
+      _initDirs.add(dir)
     }
   }
   const tmp = `${path}.tmp`
