@@ -42,3 +42,6 @@ Note on dates: three entries above carried impossible dates (`$(date +%Y-%m-%d)`
 ## 2026-10-24 - Instantly selectable device codes
 **Learning:** Users often struggle to precisely select short alphanumeric codes (like OAuth device codes) rendered as plain text, leading to partial copies and failed auth flows.
 **Action:** Always apply `user-select: all;` and `cursor: copy;` to short, non-editable codes that users are expected to copy. This allows one-click selection of the entire string, significantly reducing friction in cross-device or out-of-band auth flows.
+## 2024-10-08 - Accessible drag and drop elements
+**Learning:** HTML5 drag-and-drop elements (like elements with `draggable="true"`) lack native focusability, meaning they are unreachable via keyboard navigation.
+**Action:** When implementing custom dynamically created draggable elements (e.g., elements with `cursor: grab`), always add `tabindex="0"` and a corresponding `:focus-visible` CSS outline to ensure they are discoverable and focusable via keyboard navigation.
