@@ -49,13 +49,13 @@ dependencies = [
     "loguru>=0.7.3",
     "platformdirs>=4.12.2",
     "tomli-w>=1.2.0",
-    "filelock>=4.0.7",
+    "filelock>=4.0.8",
 ]
 
 [project.optional-dependencies]
 # litellm>=1.83.0: CVE-2026-35030 fixed in 1.83.0; 1.82.7-1.82.8 were removed
 # from PyPI (supply-chain incident). Library mode only — NEVER litellm[proxy].
-llm = ["litellm>=1.103.1"]
+llm = ["litellm>=1.103.2"]
 
 [project.urls]
 Homepage = "https://github.com/n24q02m/mcp-core"
@@ -71,7 +71,7 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.16.9",
+    "ruff>=0.16.10",
     "telethon>=1.45.0",
     "ty>=0.0.84",
 ]
