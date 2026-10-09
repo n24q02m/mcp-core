@@ -1080,7 +1080,7 @@ requires-dist = [
     { name = "authlib", specifier = ">=1.8.0" },
     { name = "cryptography", specifier = ">=50.0.2" },
     { name = "fastmcp", specifier = ">=3.4.7,<4" },
-    { name = "filelock", specifier = ">=4.0.8" },
+    { name = "filelock", specifier = ">=4.0.9" },
     { name = "httpcore", specifier = ">=1.0.9" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.103.2" },
