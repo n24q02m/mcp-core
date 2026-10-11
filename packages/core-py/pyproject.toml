@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     # Transport adapters use the MCP SDK 1.x FastMCP/Streamable HTTP API.
     # FastMCP 4 resolves MCP SDK 2, which removes those imported modules.
-    "fastmcp>=3.4.7,<4",
+    "fastmcp>=3.4.8,<4",
     "mcp>=1.30.0,<2",
     "httpx>=0.28.1",
     "httpcore>=1.0.9",
@@ -47,7 +47,7 @@ dependencies = [
     # and litellm's own <3.0) to let downstream servers resolve 2.15+.
     "pydantic-settings>=2.14.2,<3",
     "loguru>=0.7.3",
-    "platformdirs>=4.12.2",
+    "platformdirs>=4.12.3",
     "tomli-w>=1.2.0",
     "filelock>=4.0.9",
 ]
