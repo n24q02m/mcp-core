@@ -42,3 +42,6 @@ Note on dates: three entries above carried impossible dates (`$(date +%Y-%m-%d)`
 ## 2026-10-24 - Instantly selectable device codes
 **Learning:** Users often struggle to precisely select short alphanumeric codes (like OAuth device codes) rendered as plain text, leading to partial copies and failed auth flows.
 **Action:** Always apply `user-select: all;` and `cursor: copy;` to short, non-editable codes that users are expected to copy. This allows one-click selection of the entire string, significantly reducing friction in cross-device or out-of-band auth flows.
+## 2026-10-13 - Keyboard navigation for dynamically created draggable elements
+**Learning:** When implementing dynamically generated draggable elements (like `.mc-chip` in `credential_form.py`) they lack native focusability, rendering them completely inaccessible to keyboard users (meaning they cannot tab to them or interact with them).
+**Action:** Always add `tabindex="0"` during element creation (e.g. `chip.setAttribute("tabindex", "0");`) and include an explicit `:focus-visible` CSS rule outlining the element to restore keyboard focus visibility and support.
