@@ -73,7 +73,7 @@ dev = [
     "pytest-timeout>=2.4.0",
     "ruff>=0.16.10",
     "telethon>=1.45.0",
-    "ty>=0.0.84",
+    "ty>=0.0.85",
 ]
 
 [tool.hatch.build.targets.wheel]
