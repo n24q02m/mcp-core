@@ -9,7 +9,7 @@
  */
 
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import envPaths from 'env-paths'
 
@@ -97,7 +97,14 @@ export async function writeSessionLock(serverName: string, info: SessionInfo): P
   const path = lockPath(serverName)
   const dir = dirname(path)
   if (!existsSync(dir)) {
+    // Explicitly enforce restrictive directory permissions (owner-only)
+    // to prevent TOCTOU vulnerabilities and bypass overly permissive system umasks.
     await mkdir(dir, { recursive: true, mode: 0o700 })
+  }
+
+  if (process.platform !== 'win32') {
+    // Also enforce via chmod for existing directories that might have broad permissions
+    await chmod(dir, 0o700)
   }
 
   const data: SessionInfoJson = {

@@ -7,7 +7,7 @@
  * KV) while stdio/VM deployments keep the on-disk layout via LocalFsBackend.
  */
 
-import { mkdir, readFile, unlink } from 'node:fs/promises'
+import { chmod, mkdir, readFile, unlink } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { atomicWriteFile } from './atomic-write.js'
 import { getHomeDir } from './home-dir.js'
@@ -90,7 +90,13 @@ export class LocalFsBackend implements CredentialBackend {
 
   async put(key: string, blob: Buffer): Promise<void> {
     const path = keyToPath(key)
+    // Explicitly enforce restrictive directory permissions (owner-only)
+    // to prevent TOCTOU vulnerabilities and bypass overly permissive system umasks.
     await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+    if (process.platform !== 'win32') {
+      // Also enforce via chmod for existing directories that might have broad permissions
+      await chmod(dirname(path), 0o700)
+    }
     await atomicWriteFile(path, blob)
   }
 
