@@ -999,10 +999,13 @@
             var f = (filter || "").toLowerCase();
             if (f) options = options.filter(function (m) { return m.toLowerCase().indexOf(f) !== -1; });
             var current = getChips(w);
-            options.slice(0, 50).forEach(function (m) {
+            options.slice(0, 50).forEach(function (m, index) {
                 var lbl = document.createElement("label");
                 var cb = document.createElement("input");
                 cb.type = "checkbox";
+                var cbId = "mc-cb-" + w.getAttribute("data-key") + "-" + index;
+                cb.id = cbId;
+                lbl.setAttribute("for", cbId);
                 cb.checked = current.indexOf(m) !== -1;
                 cb.addEventListener("change", function () {
                     var models = getChips(w);

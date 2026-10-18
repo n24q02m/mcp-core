@@ -45,3 +45,6 @@ Note on dates: three entries above carried impossible dates (`$(date +%Y-%m-%d)`
 ## 2026-10-13 - Keyboard navigation for dynamically created draggable elements
 **Learning:** When implementing dynamically generated draggable elements (like `.mc-chip` in `credential_form.py`) they lack native focusability, rendering them completely inaccessible to keyboard users (meaning they cannot tab to them or interact with them).
 **Action:** Always add `tabindex="0"` during element creation (e.g. `chip.setAttribute("tabindex", "0");`) and include an explicit `:focus-visible` CSS rule outlining the element to restore keyboard focus visibility and support.
+## 2023-10-18 - Avoid Implicit Labeling in Dynamic Forms
+**Learning:** Relying solely on implicit labeling (nesting `<input>` directly inside `<label>` without `for` and `id` attributes) can be problematic for certain assistive technologies. This is especially true for dynamically generated list items or dropdowns.
+**Action:** Always explicitly link `<label>` elements to their corresponding `<input>` elements using matching `for` and `id` attributes, even when creating them dynamically via JavaScript.
