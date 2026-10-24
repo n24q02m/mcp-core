@@ -24,6 +24,8 @@ export function cacheDir(): string {
   return join(homedir(), '.config', 'mcp', 'cache')
 }
 
+const _initDone = new Set<string>()
+
 export function cacheFilename(serverName: string, port: number, srvVersion: string, coreVersion: string): string {
   const safeName = serverName.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/\.\./g, '__')
   const safeSrvVersion = srvVersion.replace(/[^a-zA-Z0-9.-]/g, '_').replace(/\.\./g, '__')
@@ -33,10 +35,13 @@ export function cacheFilename(serverName: string, port: number, srvVersion: stri
 
 export function atomicWrite(path: string, content: string): void {
   const dir = dirname(path)
-  if (dir && !existsSync(dir)) {
-    mkdirSync(dir, { recursive: true, mode: 0o700 })
-    if (process.platform !== 'win32') {
+  if (dir) {
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true, mode: 0o700 })
+    }
+    if (process.platform !== 'win32' && !_initDone.has(dir)) {
       chmodSync(dir, 0o700)
+      _initDone.add(dir)
     }
   }
   const tmp = `${path}.tmp`

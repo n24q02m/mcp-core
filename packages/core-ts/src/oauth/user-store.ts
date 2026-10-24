@@ -4,7 +4,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { chmodSync, mkdirSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import Database from 'better-sqlite3'
 
@@ -13,6 +13,8 @@ export interface IUserCredentialStore {
   getCredentials(userId: string): Record<string, string> | null
   deleteCredentials(userId: string): void
 }
+
+const _initDone = new Set<string>()
 
 export class SqliteUserStore implements IUserCredentialStore {
   private db: Database.Database
@@ -29,9 +31,13 @@ export class SqliteUserStore implements IUserCredentialStore {
     // Ensure directory exists with strict permissions (owner-only access).
     // 0o700 = owner read+write+exec only; group/other denied. This is the
     // secure default for a credential store directory.
-    mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 })
-    if (process.platform !== 'win32') {
-      chmodSync(dirname(dbPath), 0o700)
+    const dir = dirname(dbPath)
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true, mode: 0o700 })
+    }
+    if (process.platform !== 'win32' && !_initDone.has(dir)) {
+      chmodSync(dir, 0o700)
+      _initDone.add(dir)
     }
 
     this.db = new Database(dbPath)

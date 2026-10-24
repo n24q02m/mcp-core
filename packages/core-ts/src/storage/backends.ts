@@ -7,10 +7,13 @@
  * KV) while stdio/VM deployments keep the on-disk layout via LocalFsBackend.
  */
 
-import { mkdir, readFile, unlink } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { chmod, mkdir, readFile, unlink } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import { atomicWriteFile } from './atomic-write.js'
 import { getHomeDir } from './home-dir.js'
+
+const _initDone = new Set<string>()
 
 /** Stores opaque ciphertext blobs keyed by a string. */
 export interface CredentialBackend {
@@ -90,7 +93,14 @@ export class LocalFsBackend implements CredentialBackend {
 
   async put(key: string, blob: Buffer): Promise<void> {
     const path = keyToPath(key)
-    await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+    const dir = dirname(path)
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true, mode: 0o700 })
+    }
+    if (process.platform !== 'win32' && !_initDone.has(dir)) {
+      await chmod(dir, 0o700)
+      _initDone.add(dir)
+    }
     await atomicWriteFile(path, blob)
   }
 

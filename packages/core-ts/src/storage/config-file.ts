@@ -75,6 +75,8 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   throw new Error('Unreachable')
 }
 
+const _initDone = new Set<string>()
+
 // Cache the derived file key to avoid expensive PBKDF2 iterations on every config read/write.
 // This significantly speeds up successive configuration accesses within the same process.
 let cachedKey: CryptoKey | null = null
@@ -152,9 +154,10 @@ async function saveStore(store: ConfigStore): Promise<void> {
   const dir = dirname(configPath)
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true, mode: 0o700 })
-    if (process.platform !== 'win32') {
-      await chmod(dir, 0o700)
-    }
+  }
+  if (process.platform !== 'win32' && !_initDone.has(dir)) {
+    await chmod(dir, 0o700)
+    _initDone.add(dir)
   }
 
   let salt = cachedSalt

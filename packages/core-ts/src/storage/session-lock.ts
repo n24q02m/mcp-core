@@ -9,7 +9,7 @@
  */
 
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import envPaths from 'env-paths'
 
@@ -32,6 +32,8 @@ function getLockDir(): string {
 function lockPath(serverName: string): string {
   return join(getLockDir(), `relay-session-${serverName}.lock`)
 }
+
+const _initDone = new Set<string>()
 
 export interface SessionInfo {
   sessionId: string
@@ -98,6 +100,10 @@ export async function writeSessionLock(serverName: string, info: SessionInfo): P
   const dir = dirname(path)
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true, mode: 0o700 })
+  }
+  if (process.platform !== 'win32' && !_initDone.has(dir)) {
+    await chmod(dir, 0o700)
+    _initDone.add(dir)
   }
 
   const data: SessionInfoJson = {

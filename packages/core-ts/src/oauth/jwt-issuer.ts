@@ -28,6 +28,8 @@ import { join } from 'node:path'
 import * as jose from 'jose'
 import { deriveJwtSigningSeed } from '../crypto/kdf.js'
 
+const _initDone = new Set<string>()
+
 const DEFAULT_KEYS_DIR = join(homedir(), '.mcp-core', 'jwt-keys')
 
 // RFC 8410 PKCS8 DER prefix for an Ed25519 private key. Prepended to the
@@ -87,9 +89,12 @@ export class JWTIssuer {
   }
 
   private async loadOrGenerateRsaKeys(): Promise<void> {
-    mkdirSync(this.keysDir, { recursive: true, mode: 0o700 })
-    if (process.platform !== 'win32') {
+    if (!existsSync(this.keysDir)) {
+      mkdirSync(this.keysDir, { recursive: true, mode: 0o700 })
+    }
+    if (process.platform !== 'win32' && !_initDone.has(this.keysDir)) {
       chmodSync(this.keysDir, 0o700)
+      _initDone.add(this.keysDir)
     }
 
     if (existsSync(this.privateKeyPath) && existsSync(this.publicKeyPath)) {

@@ -16,6 +16,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { chmod, mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { atomicWriteFile } from './atomic-write.js'
@@ -23,6 +24,8 @@ import { backendFromEnv, type CredentialBackend } from './backends.js'
 import { getHomeDir } from './home-dir.js'
 
 export { setHomeDirForTesting } from './home-dir.js'
+
+const _initDone = new Set<string>()
 
 export function credPath(pluginName: string, sub: string | null): string {
   // Underscore is allowed because the OAuth AS mints sub = token_urlsafe(), whose
@@ -53,9 +56,12 @@ async function loadOrGenMachineKey(pluginName: string): Promise<Buffer> {
     // Explicitly chmod(0o700) after mkdir to guarantee the credential store directory
     // is restricted to owner-only access, mitigating a TOCTOU race condition
     // against permissive system default umasks or existing overly-permissive directories.
-    await mkdir(dir, { recursive: true, mode: 0o700 })
-    if (process.platform !== 'win32') {
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true, mode: 0o700 })
+    }
+    if (process.platform !== 'win32' && !_initDone.has(dir)) {
       await chmod(dir, 0o700)
+      _initDone.add(dir)
     }
 
     await atomicWriteFile(secretPath, key)

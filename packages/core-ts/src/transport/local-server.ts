@@ -21,6 +21,8 @@ import type { AddressInfo } from 'node:net'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
+let _mcp_lockDirInit = false
+
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
@@ -489,9 +491,12 @@ export async function runHttpServer(
 
   const proxyToken = jwtIssuer ? await jwtIssuer.issueAccessToken('proxy', 31536000) : ''
   const lockDirPath = path.join(os.homedir(), '.config', 'mcp', 'locks')
-  fs.mkdirSync(lockDirPath, { recursive: true, mode: 0o700 })
-  if (process.platform !== 'win32') {
+  if (!fs.existsSync(lockDirPath)) {
+    fs.mkdirSync(lockDirPath, { recursive: true, mode: 0o700 })
+  }
+  if (process.platform !== 'win32' && !_mcp_lockDirInit) {
     fs.chmodSync(lockDirPath, 0o700)
+    _mcp_lockDirInit = true
   }
   const lockFile = writeLockFile(options.serverName, actualPort, proxyToken, lockDirPath)
 
